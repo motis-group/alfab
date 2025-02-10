@@ -1,53 +1,17 @@
-name: Deploy Costing App
-
-on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'web-app/**'
-      - '.github/workflows/**'
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'web-app/package.json'
-
-      - name: Install dependencies
-        working-directory: web-app
-        run: npm install
-
-      - name: Build NextJS app
-        working-directory: web-app
-        run: npm run build
-        env:
-          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
-
-      - name: Install sshpass
-        run: sudo apt-get install -y sshpass
-
-      - name: Deploy to server
+- name: Deploy to server
         env:
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
           REMOTE_PASSWORD: ${{ secrets.REMOTE_PASSWORD }}
-          REMOTE_PATH: /var/www/alfab/
+          REMOTE_PATH: /var/www/alfab
           APP_PATH: web-app
         run: |
-          # Create .env file
-          echo "NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}" > $APP_PATH/.env
+          # First fix the hostname issue
+          sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
+            if ! grep -q 'alfab-1' /etc/hosts; then
+              echo '127.0.0.1 alfab-1' | sudo tee -a /etc/hosts
+            fi
+          "
 
           # Stop existing service and clear directory
           sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
@@ -60,7 +24,6 @@ jobs:
           sshpass -p $REMOTE_PASSWORD scp -o StrictHostKeyChecking=no -r \
             $APP_PATH/.next \
             $APP_PATH/package*.json \
-            $APP_PATH/.env \
             $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/
 
           # Update service file
