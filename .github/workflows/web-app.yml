@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths:
-      - 'web-app/**' # Watch all changes in web-app directory
-      - '.github/workflows/**' # Also trigger on workflow changes
+      - 'web-app/**'
+      - '.github/workflows/**'
 
 jobs:
   deploy:
@@ -14,7 +14,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3 # Updated to v3
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -23,14 +23,14 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: 'web-app/costing/package-lock.json' # Specify the path
+          cache-dependency-path: 'web-app/package-lock.json'
 
       - name: Install dependencies
-        working-directory: web-app/costing
+        working-directory: web-app
         run: npm install
 
       - name: Build NextJS app
-        working-directory: web-app/costing
+        working-directory: web-app
         run: npm run build
         env:
           NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
@@ -44,75 +44,77 @@ jobs:
           REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
           REMOTE_PASSWORD: ${{ secrets.REMOTE_PASSWORD }}
           REMOTE_PATH: /var/www/costing-app
-          APP_PATH: web-app/costing
+          APP_PATH: web-app
         run: |
           # Create .env file
           echo "NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}" > $APP_PATH/.env
 
-          # Deploy to remote server
-          echo "Deploying to remote server..."
-          if ! sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "mkdir -p $REMOTE_PATH"; then
-            echo "::error::Failed to create remote directory!"
-            exit 1
-          fi
+          # Stop existing service and clear directory
+          sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
+            sudo systemctl stop nextjs || true
+            sudo rm -rf $REMOTE_PATH/*
+            mkdir -p $REMOTE_PATH
+          "
 
           # Copy built files to server
-          if ! sshpass -p $REMOTE_PASSWORD scp -o StrictHostKeyChecking=no -r $APP_PATH/.next/* $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/; then
-            echo "::error::Failed to copy files to remote server!"
-            exit 1
-          fi
+          sshpass -p $REMOTE_PASSWORD scp -o StrictHostKeyChecking=no -r \
+            $APP_PATH/.next \
+            $APP_PATH/package*.json \
+            $APP_PATH/.env \
+            $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/
 
-          # Copy package files and install dependencies
-          if ! sshpass -p $REMOTE_PASSWORD scp -o StrictHostKeyChecking=no $APP_PATH/package*.json $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/; then
-            echo "::error::Failed to copy package files!"
-            exit 1
-          fi
+          # Update service file
+          SYSTEMD_SERVICE="[Unit]
+          Description=Next.js application
+          After=network.target
 
-          # Install production dependencies on server
-          if ! sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "cd $REMOTE_PATH && npm install --production"; then
-            echo "::error::Failed to install dependencies on server!"
-            exit 1
-          fi
+          [Service]
+          Type=simple
+          User=www-data
+          WorkingDirectory=$REMOTE_PATH
+          ExecStart=/usr/bin/npm start
+          Restart=on-failure
+          Environment=NODE_ENV=production
+          Environment=PORT=10000
 
-          # Copy .env file
-          if ! sshpass -p $REMOTE_PASSWORD scp -o StrictHostKeyChecking=no $APP_PATH/.env $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/; then
-            echo "::error::Failed to copy .env file!"
-            exit 1
-          fi
+          [Install]
+          WantedBy=multi-user.target"
+
+          echo "$SYSTEMD_SERVICE" | sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "sudo tee /etc/systemd/system/nextjs.service"
 
           # Update nginx configuration
           NGINX_CONFIG="server {
               listen 80;
-              server_name costing.yourdomain.com;  # Replace with your domain
+              server_name alfabvic.com.au;
               
               location / {
-                  proxy_pass http://localhost:3000;
+                  proxy_pass http://localhost:10000;
                   proxy_http_version 1.1;
                   proxy_set_header Upgrade \$http_upgrade;
                   proxy_set_header Connection 'upgrade';
                   proxy_set_header Host \$host;
                   proxy_cache_bypass \$http_upgrade;
               }
+
+              location /_next/static/ {
+                  alias $REMOTE_PATH/.next/static/;
+                  expires 365d;
+                  access_log off;
+              }
           }"
 
-          echo "$NGINX_CONFIG" | sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "cat > /etc/nginx/sites-available/costing"
+          echo "$NGINX_CONFIG" | sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "sudo tee /etc/nginx/sites-available/nextjs"
 
-          # Enable site and check nginx config
-          if ! sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "ln -sf /etc/nginx/sites-available/costing /etc/nginx/sites-enabled/ && nginx -t"; then
-            echo "::error::Nginx configuration test failed!"
-            exit 1
-          fi
-
-          # Start/restart the NextJS app using PM2
-          if ! sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "cd $REMOTE_PATH && pm2 restart costing-app || pm2 start npm --name 'costing-app' -- start"; then
-            echo "::error::Failed to start NextJS app!"
-            exit 1
-          fi
-
-          # Restart nginx
-          if ! sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "systemctl restart nginx"; then
-            echo "::error::Failed to restart nginx!"
-            exit 1
-          fi
+          # Set permissions and install dependencies
+          sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
+            sudo chown -R www-data:www-data $REMOTE_PATH
+            cd $REMOTE_PATH
+            sudo -u www-data npm install --production
+            sudo systemctl daemon-reload
+            sudo systemctl enable nextjs
+            sudo systemctl restart nextjs
+            sudo ln -sf /etc/nginx/sites-available/nextjs /etc/nginx/sites-enabled/
+            sudo nginx -t && sudo systemctl restart nginx
+          "
 
           echo "Deployment completed successfully!"
