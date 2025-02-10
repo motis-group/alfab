@@ -99,7 +99,7 @@ function Input({ caretChars, isBlink = true, label, placeholder, onChange, type,
       <div className={styles.inputContainer}>
         <div className={Utilities.classNames(styles.displayed, isPlaceholderVisible && styles.placeholder)}>
           {beforeCaretText}
-          {!isPlaceholderVisible && <span className={Utilities.classNames(styles.block, isBlink && styles.blink)}>{caretChars || ''}</span>}
+          {!isPlaceholderVisible && <span className={Utilities.classNames(styles.block, isBlink && isFocused && styles.blink)}>{caretChars || ''}</span>}
           {!isPlaceholderVisible && afterCaretText}
         </div>
         <input id={inputId} ref={inputRef} className={styles.hidden} value={text} aria-placeholder={placeholder} type={type} onFocus={onHandleFocus} onBlur={onHandleBlur} onChange={onHandleChange} onSelect={onHandleSelect} onClick={onHandleClick} onKeyDown={onHandleKeyDown} {...rest} />

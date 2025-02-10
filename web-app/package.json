@@ -16,7 +16,9 @@
     "next": "^15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "sass": "1.83.4"
+    "sass": "1.83.4",
+    "@supabase/auth-helpers-nextjs": "latest",
+    "@supabase/supabase-js": "latest"
   },
   "devDependencies": {
     "@types/node": "^22.12.0",

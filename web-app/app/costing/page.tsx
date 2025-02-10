@@ -27,10 +27,31 @@ import Text from '@components/Text';
 import { useState, useEffect } from 'react';
 import { GlassType, EdgeworkType, GlassThickness, ShapeType, GlassSpecification, CostBreakdown, calculateCost, getAvailableThicknesses, getAvailableGlassTypes, glassTypeToRGB, SavedCalculation, generateCalculationId } from './utils/calculations';
 import { useRouter } from 'next/navigation';
+import DropdownMenuTrigger from '@components/DropdownMenuTrigger';
+import DefaultActionBar from '@components/page/DefaultActionBar';
 
 const glassThicknesses: GlassThickness[] = [4, 5, 6, 8, 10, 12];
 
 const edgeWorkOptions: EdgeworkType[] = ['ROUGH ARRIS', 'FLAT GRIND - STRAIGHT', 'FLAT GRIND - CURVED', 'FLAT POLISH - STRAIGHT', 'FLAT POLISH - CURVED'];
+
+const navigationItems = [
+  { icon: '⊹', children: 'Glass Costing', href: '/costing' },
+  { icon: '⊹', children: 'Client Management', href: '/costing/clients' },
+  { icon: '⊹', children: 'Pricing Rules', href: '/costing/settings' },
+  { icon: '⊹', children: 'Component Library', href: '/' },
+];
+
+interface CostBreakdown {
+  baseGlass: number;
+  edgework: number;
+  holes: number;
+  shape: number;
+  ceramic: number;
+  markup: number;
+  total: number;
+}
+
+const STORAGE_KEY = 'alfabglass_saved_calculations';
 
 export default function CostingDashboard() {
   const router = useRouter();
@@ -53,6 +74,7 @@ export default function CostingDashboard() {
     holes: 0,
     shape: 0,
     ceramic: 0,
+    markup: 20,
     total: 0,
   });
 
@@ -63,6 +85,7 @@ export default function CostingDashboard() {
   const [calculationName, setCalculationName] = useState('');
   const [selectedClient, setSelectedClient] = useState('');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [markupPercent, setMarkupPercent] = useState(20);
 
   useEffect(() => {
     // Recalculate costs whenever specifications change
@@ -84,15 +107,26 @@ export default function CostingDashboard() {
 
   // Load saved calculations from localStorage on mount
   useEffect(() => {
-    const saved = localStorage.getItem('savedCalculations');
-    if (saved) {
-      setSavedCalculations(JSON.parse(saved));
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsedData = JSON.parse(saved);
+        setSavedCalculations(parsedData);
+      }
+    } catch (error) {
+      console.error('Error loading saved calculations:', error);
+      // Initialize with empty array if there's an error
+      setSavedCalculations([]);
     }
   }, []);
 
-  // Save calculations to localStorage when updated
+  // Save calculations to localStorage whenever they change
   useEffect(() => {
-    localStorage.setItem('savedCalculations', JSON.stringify(savedCalculations));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(savedCalculations));
+    } catch (error) {
+      console.error('Error saving calculations:', error);
+    }
   }, [savedCalculations]);
 
   const handleSpecChange = (field: keyof GlassSpecification, value: any) => {
@@ -115,20 +149,31 @@ export default function CostingDashboard() {
   };
 
   const handleSaveCalculation = () => {
-    if (!calculationName || !selectedClient) return;
+    if (!calculationName) return;
 
-    const newCalculation: SavedCalculation = {
-      id: generateCalculationId(),
-      name: calculationName,
-      client: selectedClient,
-      specification: { ...spec },
-      cost: { ...costs },
-      date: new Date().toISOString(),
-    };
+    const subtotal = costs.baseGlass + costs.edgework + costs.holes + costs.shape + costs.ceramic;
+    const totalWithMarkup = subtotal * (1 + markupPercent / 100);
 
-    setSavedCalculations((prev) => [...prev, newCalculation]);
-    setCalculationName('');
-    setShowSaveDialog(false);
+    try {
+      const newCalculation: SavedCalculation = {
+        id: generateCalculationId(),
+        name: calculationName,
+        client: selectedClient || 'No Client',
+        specification: { ...spec },
+        cost: {
+          ...costs,
+          markup: subtotal * (markupPercent / 100),
+          total: totalWithMarkup,
+        },
+        date: new Date().toISOString(),
+      };
+
+      setSavedCalculations((prev) => [...prev, newCalculation]);
+      setCalculationName('');
+      setShowSaveDialog(false);
+    } catch (error) {
+      console.error('Error saving calculation:', error);
+    }
   };
 
   const handleLoadCalculation = (calc: SavedCalculation) => {
@@ -136,33 +181,31 @@ export default function CostingDashboard() {
     setSelectedClient(calc.client);
   };
 
+  const handleDeleteCalculation = (id: string) => {
+    try {
+      setSavedCalculations((prev) => prev.filter((c) => c.id !== id));
+    } catch (error) {
+      console.error('Error deleting calculation:', error);
+      // Could add user notification here
+    }
+  };
+
   return (
     <DefaultLayout previewPixelSRC="/pixel.gif">
-      <Navigation logo="⬡" left={<ActionButton>GLASS COSTING</ActionButton>} right={<ActionButton>SIGN OUT</ActionButton>} />
+      <br />
+      <br />
+      <Navigation
+        logo="⬡"
+        left={
+          <DropdownMenuTrigger items={navigationItems}>
+            <ActionButton>GLASS COSTING</ActionButton>
+          </DropdownMenuTrigger>
+        }
+        right={<ActionButton>SIGN OUT</ActionButton>}
+      />
 
       <Grid>
-        <Row>
-          ALFABGLASS COSTING DASHBOARD <Badge>v1.0</Badge>
-        </Row>
-
-        <ActionBar
-          items={[
-            {
-              hotkey: '⌘+N',
-              body: 'New Quote',
-            },
-            {
-              hotkey: '⌘+C',
-              body: 'Manage Clients',
-              onClick: () => router.push('/costing/clients'),
-            },
-            {
-              hotkey: '⌘+S',
-              body: 'Pricing Rules',
-              onClick: () => router.push('/costing/settings'),
-            },
-          ]}
-        />
+        <DefaultActionBar />
 
         <CardDouble title="NEW GLASS SPECIFICATION">
           <RowSpaceBetween>
@@ -182,6 +225,10 @@ export default function CostingDashboard() {
           <Text>DIMENSIONS</Text>
           <Input label="LENGTH (MM)" type="number" name="length" value={spec.width.toString()} onChange={(e) => handleSpecChange('width', parseFloat(e.target.value))} />
           <Input label="WIDTH (MM)" type="number" name="width" value={spec.height.toString()} onChange={(e) => handleSpecChange('height', parseFloat(e.target.value))} />
+
+          <Text>PRICING</Text>
+          <Input label="MARKUP (%)" type="number" name="markup" value={markupPercent.toString()} onChange={(e) => setMarkupPercent(Number(e.target.value))} isBlink={false} />
+          <br />
 
           <Text>EDGEWORK</Text>
           <Select name="edgework" options={edgeWorkOptions} defaultValue={spec.edgework} onChange={(value) => handleSpecChange('edgework', value)} placeholder="Select edgework type..." />
@@ -236,8 +283,16 @@ export default function CostingDashboard() {
                 <TableColumn>${costs.ceramic.toFixed(2)}</TableColumn>
               </TableRow>
               <TableRow>
+                <TableColumn>Subtotal</TableColumn>
+                <TableColumn>${(costs.baseGlass + costs.edgework + costs.holes + costs.shape + costs.ceramic).toFixed(2)}</TableColumn>
+              </TableRow>
+              <TableRow>
+                <TableColumn>Markup ({markupPercent}%)</TableColumn>
+                <TableColumn>${((costs.baseGlass + costs.edgework + costs.holes + costs.shape + costs.ceramic) * (markupPercent / 100)).toFixed(2)}</TableColumn>
+              </TableRow>
+              <TableRow>
                 <TableColumn>TOTAL</TableColumn>
-                <TableColumn>${costs.total.toFixed(2)}</TableColumn>
+                <TableColumn>${((costs.baseGlass + costs.edgework + costs.holes + costs.shape + costs.ceramic) * (1 + markupPercent / 100)).toFixed(2)}</TableColumn>
               </TableRow>
             </Table>
           </Card>
@@ -278,9 +333,7 @@ export default function CostingDashboard() {
                   <RowSpaceBetween>
                     <ActionButton onClick={() => handleLoadCalculation(calc)}>Load</ActionButton>
                     <ActionButton
-                      onClick={() => {
-                        setSavedCalculations((prev) => prev.filter((c) => c.id !== calc.id));
-                      }}
+                      onClick={() => handleDeleteCalculation(calc.id)}
                     >
                       Delete
                     </ActionButton>
@@ -290,6 +343,25 @@ export default function CostingDashboard() {
             ))}
           </Table>
         </Card>
+
+        <RowSpaceBetween></RowSpaceBetween>
+
+        <Row>
+          <ActionBar
+            items={[
+              {
+                hotkey: '⌘+C',
+                body: 'Clients',
+                onClick: () => router.push('/costing/clients'),
+              },
+              {
+                hotkey: '⌘+S',
+                body: 'Rules',
+                onClick: () => router.push('/costing/settings'),
+              },
+            ]}
+          />
+        </Row>
       </Grid>
     </DefaultLayout>
   );

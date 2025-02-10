@@ -38,6 +38,26 @@ jobs:
       - name: Install sshpass
         run: sudo apt-get install -y sshpass
 
+      - name: Setup Docker and Docker Compose on server
+        env:
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+          REMOTE_PASSWORD: ${{ secrets.REMOTE_PASSWORD }}
+        run: |
+          sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
+            # Install Docker if not present
+            if ! command -v docker &> /dev/null; then
+              curl -fsSL https://get.docker.com -o get-docker.sh
+              sudo sh get-docker.sh
+            fi
+
+            # Install Docker Compose if not present
+            if ! command -v docker-compose &> /dev/null; then
+              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+            fi
+          "
+
       - name: Deploy to server
         env:
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
@@ -46,16 +66,6 @@ jobs:
           REMOTE_PATH: /var/www/alfab/
           APP_PATH: web-app
         run: |
-          # Create .env file
-          echo "NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}" > $APP_PATH/.env
-
-          # Add hostname to /etc/hosts if needed
-          sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
-            if ! grep -q \"\$(hostname)\" /etc/hosts; then
-              echo \"127.0.0.1 \$(hostname)\" | sudo tee -a /etc/hosts
-            fi
-          "
-
           # Stop existing service and clear directory
           sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
             sudo systemctl stop nextjs || true
@@ -125,4 +135,142 @@ jobs:
             sudo nginx -t && sudo systemctl restart nginx
           "
 
-          echo "Deployment completed!"
+      - name: Deploy Supabase
+        env:
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+          REMOTE_PASSWORD: ${{ secrets.REMOTE_PASSWORD }}
+          REMOTE_PATH: /var/www/alfab
+          SUPABASE_PATH: /var/www/supabase
+        run: |
+          # Create and copy Supabase configuration
+          sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
+            sudo mkdir -p $SUPABASE_PATH
+            cd $SUPABASE_PATH
+          "
+
+          # Copy Supabase configuration files
+          sshpass -p $REMOTE_PASSWORD scp -o StrictHostKeyChecking=no -r \
+            docker-compose.yml \
+            .env.example \
+            $REMOTE_USER@$REMOTE_HOST:$SUPABASE_PATH/
+
+          # Setup and start Supabase, then get the anon key
+          sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
+            cd $SUPABASE_PATH
+            cp .env.example .env
+            
+            # Generate a secure JWT secret and anon key
+            JWT_SECRET=$(openssl rand -base64 32)
+            ANON_KEY=$(echo -n '{\"role\":\"anon\"}' | openssl dgst -sha256 -hmac \"$JWT_SECRET\" -binary | base64)
+            
+            # Update the .env file with the generated keys
+            sed -i \"s/your_jwt_secret_here/$JWT_SECRET/g\" .env
+            sed -i \"s/your_anon_key_here/$ANON_KEY/g\" .env
+            
+            # Start Supabase
+            sudo docker-compose up -d
+            
+            # Output the anon key for reference
+            echo \"Your Supabase Anon Key: $ANON_KEY\"
+          "
+
+          # Before the Nginx configuration section, add password creation
+          sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
+            # Create htpasswd file for basic auth
+            sudo apt-get install -y apache2-utils
+            sudo htpasswd -cb /etc/nginx/.htpasswd admin your_secure_password
+          "
+
+          # Add Nginx configuration for Supabase API
+          SUPABASE_NGINX_CONFIG="server {
+              listen 80;
+              server_name api.alfabvic.com.au;
+
+              # SSL configuration (recommended for production)
+              # listen 443 ssl;
+              # ssl_certificate /path/to/your/fullchain.pem;
+              # ssl_certificate_key /path/to/your/privkey.pem;
+              
+              # Security headers
+              add_header X-Frame-Options \"SAMEORIGIN\" always;
+              add_header X-XSS-Protection \"1; mode=block\" always;
+              add_header X-Content-Type-Options \"nosniff\" always;
+              add_header Referrer-Policy \"no-referrer-when-downgrade\" always;
+              add_header Content-Security-Policy \"default-src 'self' http: https: data: blob: 'unsafe-inline'\" always;
+
+              # Supabase REST API
+              location /rest/v1/ {
+                  proxy_pass http://localhost:8000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade \$http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host \$host;
+                  proxy_cache_bypass \$http_upgrade;
+                  
+                  # CORS headers
+                  add_header 'Access-Control-Allow-Origin' 'http://alfabvic.com.au' always;
+                  add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
+                  add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
+                  add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+                  
+                  if (\$request_method = 'OPTIONS') {
+                      add_header 'Access-Control-Max-Age' 1728000;
+                      add_header 'Content-Type' 'text/plain; charset=utf-8';
+                      add_header 'Content-Length' 0;
+                      return 204;
+                  }
+              }
+
+              # Supabase Auth
+              location /auth/ {
+                  proxy_pass http://localhost:8000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade \$http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host \$host;
+                  proxy_cache_bypass \$http_upgrade;
+                  
+                  # CORS headers (same as above)
+                  add_header 'Access-Control-Allow-Origin' 'http://alfabvic.com.au' always;
+                  add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
+                  add_header 'Access-Control-Allow-Headers' 'DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization' always;
+                  add_header 'Access-Control-Expose-Headers' 'Content-Length,Content-Range' always;
+                  
+                  if (\$request_method = 'OPTIONS') {
+                      add_header 'Access-Control-Max-Age' 1728000;
+                      add_header 'Content-Type' 'text/plain; charset=utf-8';
+                      add_header 'Content-Length' 0;
+                      return 204;
+                  }
+              }
+
+              # Supabase Studio (with basic auth)
+              location /studio/ {
+                  auth_basic \"Restricted Access\";
+                  auth_basic_user_file /etc/nginx/.htpasswd;
+                  
+                  proxy_pass http://localhost:3000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade \$http_upgrade;
+                  proxy_set_header Connection 'upgrade';
+                  proxy_set_header Host \$host;
+                  proxy_cache_bypass \$http_upgrade;
+              }
+
+              # Error pages
+              error_page 500 502 503 504 /50x.html;
+              location = /50x.html {
+                  root /usr/share/nginx/html;
+              }
+          }"
+
+          echo "$SUPABASE_NGINX_CONFIG" | sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "sudo tee /etc/nginx/sites-available/supabase"
+
+          # Enable the Supabase Nginx configuration
+          sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
+            sudo ln -sf /etc/nginx/sites-available/supabase /etc/nginx/sites-enabled/
+            sudo nginx -t && sudo systemctl restart nginx
+          "
+
+      echo "Deployment completed!"
