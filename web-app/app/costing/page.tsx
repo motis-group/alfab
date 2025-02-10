@@ -140,7 +140,7 @@ export default function CostingDashboard() {
 
       <Grid>
         <Row>
-          GLASS COSTING DASHBOARD <Badge>v1.0</Badge>
+          ALFABGLASS COSTING DASHBOARD <Badge>v1.0</Badge>
         </Row>
 
         <ActionBar
