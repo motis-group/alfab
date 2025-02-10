@@ -41,16 +41,6 @@ const navigationItems = [
   { icon: '⊹', children: 'Component Library', href: '/' },
 ];
 
-interface CostBreakdown {
-  baseGlass: number;
-  edgework: number;
-  holes: number;
-  shape: number;
-  ceramic: number;
-  markup: number;
-  total: number;
-}
-
 const STORAGE_KEY = 'alfabglass_saved_calculations';
 
 export default function CostingDashboard() {
@@ -74,7 +64,6 @@ export default function CostingDashboard() {
     holes: 0,
     shape: 0,
     ceramic: 0,
-    markup: 20,
     total: 0,
   });
 
@@ -161,8 +150,11 @@ export default function CostingDashboard() {
         client: selectedClient || 'No Client',
         specification: { ...spec },
         cost: {
-          ...costs,
-          markup: subtotal * (markupPercent / 100),
+          baseGlass: costs.baseGlass,
+          edgework: costs.edgework,
+          holes: costs.holes,
+          shape: costs.shape,
+          ceramic: costs.ceramic,
           total: totalWithMarkup,
         },
         date: new Date().toISOString(),
@@ -332,11 +324,7 @@ export default function CostingDashboard() {
                 <TableColumn>
                   <RowSpaceBetween>
                     <ActionButton onClick={() => handleLoadCalculation(calc)}>Load</ActionButton>
-                    <ActionButton
-                      onClick={() => handleDeleteCalculation(calc.id)}
-                    >
-                      Delete
-                    </ActionButton>
+                    <ActionButton onClick={() => handleDeleteCalculation(calc.id)}>Delete</ActionButton>
                   </RowSpaceBetween>
                 </TableColumn>
               </TableRow>
