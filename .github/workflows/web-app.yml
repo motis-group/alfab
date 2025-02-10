@@ -1,15 +1,58 @@
-- name: Deploy to server
+name: Deploy Costing App
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'web-app/**'
+      - '.github/workflows/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'web-app/package.json'
+
+      - name: Install dependencies
+        working-directory: web-app
+        run: npm install
+
+      - name: Build NextJS app
+        working-directory: web-app
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+
+      - name: Install sshpass
+        run: sudo apt-get install -y sshpass
+
+      - name: Deploy to server
         env:
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
           REMOTE_PASSWORD: ${{ secrets.REMOTE_PASSWORD }}
-          REMOTE_PATH: /var/www/alfab
+          REMOTE_PATH: /var/www/alfab/
           APP_PATH: web-app
         run: |
-          # First fix the hostname issue
+          # Create .env file
+          echo "NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}" > $APP_PATH/.env
+
+          # Add hostname to /etc/hosts if needed
           sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
-            if ! grep -q 'alfab-1' /etc/hosts; then
-              echo '127.0.0.1 alfab-1' | sudo tee -a /etc/hosts
+            if ! grep -q \"\$(hostname)\" /etc/hosts; then
+              echo \"127.0.0.1 \$(hostname)\" | sudo tee -a /etc/hosts
             fi
           "
 
@@ -18,12 +61,13 @@
             sudo systemctl stop nextjs || true
             sudo rm -rf $REMOTE_PATH/*
             mkdir -p $REMOTE_PATH
-          "
+          " || echo "Warning: Service stop/directory clear step had issues but continuing..."
 
           # Copy built files to server
           sshpass -p $REMOTE_PASSWORD scp -o StrictHostKeyChecking=no -r \
             $APP_PATH/.next \
             $APP_PATH/package*.json \
+            $APP_PATH/.env \
             $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/
 
           # Update service file
@@ -70,14 +114,15 @@
 
           # Set permissions and restart services
           sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
+            set -x  # Enable command echoing for debugging
             sudo chown -R www-data:www-data $REMOTE_PATH
             cd $REMOTE_PATH
             npm install --production --no-audit
             sudo systemctl daemon-reload
-            sudo systemctl enable nextjs
-            sudo systemctl restart nextjs
-            sudo ln -sf /etc/nginx/sites-available/nextjs /etc/nginx/sites-enabled/
+            sudo systemctl enable nextjs || echo 'Warning: Enable service had issues'
+            sudo systemctl restart nextjs || echo 'Warning: Restart service had issues'
+            sudo ln -sf /etc/nginx/sites-available/nextjs /etc/nginx/sites-enabled/ || echo 'Warning: Nginx symlink had issues'
             sudo nginx -t && sudo systemctl restart nginx
           "
 
-          echo "Deployment completed successfully!"
+          echo "Deployment completed!"
