@@ -26,12 +26,14 @@ import TableColumn from '@components/TableColumn';
 import Text from '@components/Text';
 import { useState, useEffect } from 'react';
 import { GlassType, EdgeworkType, GlassThickness, ShapeType, GlassSpecification, CostBreakdown, calculateCost, getAvailableThicknesses, getAvailableGlassTypes, glassTypeToRGB, SavedCalculation, generateCalculationId } from './utils/calculations';
+import { useRouter } from 'next/navigation';
 
 const glassThicknesses: GlassThickness[] = [4, 5, 6, 8, 10, 12];
 
 const edgeWorkOptions: EdgeworkType[] = ['ROUGH ARRIS', 'FLAT GRIND - STRAIGHT', 'FLAT GRIND - CURVED', 'FLAT POLISH - STRAIGHT', 'FLAT POLISH - CURVED'];
 
 export default function CostingDashboard() {
+  const router = useRouter();
   const [spec, setSpec] = useState<GlassSpecification>({
     width: 0,
     height: 0,
@@ -135,7 +137,7 @@ export default function CostingDashboard() {
   };
 
   return (
-    <DefaultLayout>
+    <DefaultLayout previewPixelSRC="/pixel.gif">
       <Navigation logo="⬡" left={<ActionButton>GLASS COSTING</ActionButton>} right={<ActionButton>SIGN OUT</ActionButton>} />
 
       <Grid>
@@ -152,29 +154,29 @@ export default function CostingDashboard() {
             {
               hotkey: '⌘+C',
               body: 'Manage Clients',
-              href: '/costing/clients',
+              onClick: () => router.push('/costing/clients'),
             },
             {
               hotkey: '⌘+S',
               body: 'Pricing Rules',
-              href: '/costing/settings',
+              onClick: () => router.push('/costing/settings'),
             },
           ]}
         />
 
         <CardDouble title="NEW GLASS SPECIFICATION">
           <RowSpaceBetween>
-            <Select name="client" options={['Acme Glass Co', 'BuildRight Inc', 'Modern Facades LLC']} value={selectedClient} onChange={(value) => setSelectedClient(value)} placeholder="Select Client..." />
+            <Select name="client" options={['Acme Glass Co', 'BuildRight Inc', 'Modern Facades LLC']} defaultValue={selectedClient} onChange={(value) => setSelectedClient(value)} placeholder="Select Client..." />
             <ActionButton>+ New Client</ActionButton>
           </RowSpaceBetween>
           <br />
 
           <Text>GLASS THICKNESS (MM)</Text>
-          <Select name="thickness" options={getAvailableThicknesses(spec.glassType).map((t) => t.toString())} value={spec.thickness.toString()} onChange={(value) => handleSpecChange('thickness', parseInt(value))} placeholder="Select thickness..." />
+          <Select name="thickness" options={getAvailableThicknesses(spec.glassType).map((t) => t.toString())} defaultValue={spec.thickness.toString()} onChange={(value) => handleSpecChange('thickness', parseInt(value))} placeholder="Select thickness..." />
           <br />
 
           <Text>GLASS TYPE</Text>
-          <Select name="glass_type" options={getAvailableGlassTypes(spec.thickness)} value={spec.glassType} onChange={(value) => handleSpecChange('glassType', value)} placeholder="Select glass type..." />
+          <Select name="glass_type" options={getAvailableGlassTypes(spec.thickness)} defaultValue={spec.glassType} onChange={(value) => handleSpecChange('glassType', value)} placeholder="Select glass type..." />
           <br />
 
           <Text>DIMENSIONS</Text>
@@ -182,14 +184,14 @@ export default function CostingDashboard() {
           <Input label="WIDTH (MM)" type="number" name="width" value={spec.height.toString()} onChange={(e) => handleSpecChange('height', parseFloat(e.target.value))} />
 
           <Text>EDGEWORK</Text>
-          <Select name="edgework" options={edgeWorkOptions} value={spec.edgework} onChange={(value) => handleSpecChange('edgework', value)} placeholder="Select edgework type..." />
+          <Select name="edgework" options={edgeWorkOptions} defaultValue={spec.edgework} onChange={(value) => handleSpecChange('edgework', value)} placeholder="Select edgework type..." />
           <br />
 
           <Text>ADDITIONAL OPTIONS</Text>
-          <Checkbox name="ceramic_band" checked={spec.ceramicBand} onChange={(e) => handleSpecChange('ceramicBand', e.target.checked)}>
+          <Checkbox name="ceramic_band" defaultChecked={spec.ceramicBand} onChange={(e) => handleSpecChange('ceramicBand', e.target.checked)}>
             Ceramic Banding
           </Checkbox>
-          <Checkbox name="holes" checked={spec.holes} onChange={(e) => handleSpecChange('holes', e.target.checked)}>
+          <Checkbox name="holes" defaultChecked={spec.holes} onChange={(e) => handleSpecChange('holes', e.target.checked)}>
             Include Holes
           </Checkbox>
 
@@ -198,7 +200,6 @@ export default function CostingDashboard() {
           <Text>SHAPE TYPE</Text>
           <RadioButtonGroup
             defaultValue={spec.shape}
-            value={spec.shape}
             onChange={(value) => handleSpecChange('shape', value)}
             options={[
               { value: 'RECTANGLE', label: 'Rectangle' },

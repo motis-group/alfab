@@ -143,7 +143,7 @@ export default async function SettingsPage() {
               <TableColumn colSpan={2}>$63.68 flat rate</TableColumn>
             </TableRow>
             <TableRow>
-              <TableColumn>Ceramic Banding (>1.5m²)</TableColumn>
+              <TableColumn>Ceramic Banding ({'>'}1.5m²)</TableColumn>
               <TableColumn colSpan={2}>$63.68 per m²</TableColumn>
             </TableRow>
           </Table>
@@ -165,4 +165,4 @@ export default async function SettingsPage() {
       </Grid>
     </DefaultLayout>
   );
-} 
+}

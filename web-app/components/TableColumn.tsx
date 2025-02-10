@@ -1,16 +1,14 @@
 'use client';
 
-import styles from '@components/TableColumn.module.scss';
-
 import * as React from 'react';
 
-type TableColumnProps = React.HTMLAttributes<HTMLTableCellElement> & {
+interface TableColumnProps extends React.TdHTMLAttributes<HTMLTableCellElement> {
   children?: React.ReactNode;
-};
+}
 
-const TableColumn: React.FC<TableColumnProps> = ({ children, ...rest }) => {
+const TableColumn: React.FC<TableColumnProps> = ({ children, style, ...props }) => {
   return (
-    <td className={styles.root} {...rest}>
+    <td style={style} {...props}>
       {children}
     </td>
   );
