@@ -5,15 +5,16 @@ on:
     branches:
       - main
     paths:
-      - 'web-app'  # Only trigger on changes to web-app
+      - 'web-app/**' # Watch all changes in web-app directory
+      - '.github/workflows/**' # Also trigger on workflow changes
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3 # Updated to v3
         with:
           fetch-depth: 0
 
@@ -22,6 +23,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: 'web-app/costing/package-lock.json' # Specify the path
 
       - name: Install dependencies
         working-directory: web-app/costing
