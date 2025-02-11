@@ -46,6 +46,7 @@ jobs:
           REMOTE_PATH: /var/www/alfab/
           APP_PATH: web-app
         run: |
+
           # Stop existing service and clear directory
           sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
             sudo systemctl stop nextjs || true
@@ -57,6 +58,7 @@ jobs:
           sshpass -p $REMOTE_PASSWORD scp -o StrictHostKeyChecking=no -r \
             $APP_PATH/.next \
             $APP_PATH/package*.json \
+            $APP_PATH/.env \
             $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/
 
           # Update service file
