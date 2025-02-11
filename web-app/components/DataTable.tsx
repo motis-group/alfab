@@ -5,7 +5,7 @@ import styles from '@components/DataTable.module.scss';
 import * as React from 'react';
 
 interface TableProps {
-  data: string[][];
+  data: (string | React.ReactNode)[][];
 }
 
 interface RGBAColor {
@@ -30,7 +30,7 @@ function interpolateColor(color1: RGBAColor, color2: RGBAColor, factor: number):
 
 const DataTable: React.FC<TableProps> = ({ data }) => {
   const tableRef = React.useRef<HTMLTableElement>(null);
-  const prevDataRef = React.useRef<string[][]>(data);
+  const prevDataRef = React.useRef<(string | React.ReactNode)[][]>(data);
 
   React.useEffect(() => {
     const rows = tableRef.current?.querySelectorAll<HTMLTableRowElement>('tr') || [];
@@ -39,7 +39,9 @@ const DataTable: React.FC<TableProps> = ({ data }) => {
       if (!cells) continue;
       for (let j = 0; j < data[i].length; j++) {
         const cell = cells[j];
-        const changed = prevDataRef.current[i]?.[j] !== data[i][j];
+        const prevValue = String(prevDataRef.current[i]?.[j] || '');
+        const currentValue = String(data[i][j] || '');
+        const changed = prevValue !== currentValue;
         if (cell && changed) {
           cell.classList.remove(styles.changed);
           void cell.offsetWidth;
@@ -105,7 +107,7 @@ const DataTable: React.FC<TableProps> = ({ data }) => {
               }
               return (
                 <td key={colIndex} className={styles.column} style={{ backgroundColor }}>
-                  {cellContent}
+                  {React.isValidElement(cellContent) ? cellContent : cellContent}
                 </td>
               );
             })}

@@ -1,6 +1,6 @@
 {
-  "name": "srcl",
-  "description": "SRCL is an open-source React component and style repository that helps you build web applications, desktop applications, and static websites with terminal aesthetics.",
+  "name": "alfab-web-app",
+  "description": "Alfab Web App",
   "engines": {
     "node": ">=18"
   },
@@ -16,9 +16,7 @@
     "next": "^15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "sass": "1.83.4",
-    "@supabase/auth-helpers-nextjs": "latest",
-    "@supabase/supabase-js": "latest"
+    "sass": "1.83.4"
   },
   "devDependencies": {
     "@types/node": "^22.12.0",

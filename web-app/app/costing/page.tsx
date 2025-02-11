@@ -29,6 +29,7 @@ import { GlassType, EdgeworkType, GlassThickness, ShapeType, GlassSpecification,
 import { useRouter } from 'next/navigation';
 import DropdownMenuTrigger from '@components/DropdownMenuTrigger';
 import DefaultActionBar from '@components/page/DefaultActionBar';
+import DataTable from '@components/DataTable';
 
 const glassThicknesses: GlassThickness[] = [4, 5, 6, 8, 10, 12];
 
@@ -306,7 +307,7 @@ export default function CostingDashboard() {
           )}
         </CardDouble>
 
-        <Card title="SAVED QUOTES">
+        <Card title="QUOTES">
           <Table>
             <TableRow>
               <TableColumn style={{ width: '20ch' }}>NAME</TableColumn>
@@ -330,6 +331,11 @@ export default function CostingDashboard() {
               </TableRow>
             ))}
           </Table>
+          <br />
+          <RowSpaceBetween>
+            <Text>GRAND TOTAL</Text>
+            <Text>${savedCalculations.reduce((sum, calc) => sum + calc.cost.total, 0).toFixed(2)}</Text>
+          </RowSpaceBetween>
         </Card>
 
         <RowSpaceBetween></RowSpaceBetween>

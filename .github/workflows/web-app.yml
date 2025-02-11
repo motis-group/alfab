@@ -50,16 +50,21 @@ jobs:
           # Stop existing service and clear directory
           sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
             sudo systemctl stop nextjs || true
-            sudo rm -rf $REMOTE_PATH/*
-            mkdir -p $REMOTE_PATH
-          " || echo "Warning: Service stop/directory clear step had issues but continuing..."
-
-          # Copy built files to server
-          sshpass -p $REMOTE_PASSWORD scp -o StrictHostKeyChecking=no -r \
-            $APP_PATH/.next \
-            $APP_PATH/package*.json \
-            $APP_PATH/.env \
-            $REMOTE_USER@$REMOTE_HOST:$REMOTE_PATH/
+            cd $REMOTE_PATH
+            if [ -d .git ]; then
+              git reset --hard
+              git pull
+            else
+              cd ..
+              sudo rm -rf $REMOTE_PATH/*
+              git clone https://github.com/marzella/alfab.git .
+            fi
+            cd web-app
+            npm install --production --no-audit
+            npm run build
+            sudo chown -R www-data:www-data .
+            sudo systemctl restart nextjs || echo 'Warning: Restart service had issues'
+          " || echo "Warning: Deployment steps had issues but continuing..."
 
           # Update service file
           SYSTEMD_SERVICE="[Unit]
@@ -69,7 +74,7 @@ jobs:
           [Service]
           Type=simple
           User=www-data
-          WorkingDirectory=$REMOTE_PATH
+          WorkingDirectory=$REMOTE_PATH/web-app
           ExecStart=/usr/bin/npm start
           Restart=on-failure
           Environment=NODE_ENV=production
@@ -83,7 +88,7 @@ jobs:
           # Update nginx configuration
           NGINX_CONFIG="server {
               listen 80;
-              server_name alfabvic.com.au;
+              server_name alfabvic.com.au 103.125.218.118;
               
               location / {
                   proxy_pass http://localhost:10000;
@@ -95,7 +100,7 @@ jobs:
               }
 
               location /_next/static/ {
-                  alias $REMOTE_PATH/.next/static/;
+                  alias $REMOTE_PATH/web-app/.next/static/;
                   expires 365d;
                   access_log off;
               }
