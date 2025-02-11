@@ -112,7 +112,7 @@ jobs:
           sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
             set -x  # Enable command echoing for debugging
             sudo chown -R www-data:www-data $REMOTE_PATH
-            cd $REMOTE_PATH
+            cd $REMOTE_PATH/web-app
             npm install --production --no-audit
             sudo systemctl daemon-reload
             sudo systemctl enable nextjs || echo 'Warning: Enable service had issues'
