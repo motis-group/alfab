@@ -76,6 +76,8 @@ export default function CostingDashboard() {
   const [selectedClient, setSelectedClient] = useState('');
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [markupPercent, setMarkupPercent] = useState(20);
+  const [editingQuoteId, setEditingQuoteId] = useState<string | null>(null);
+  const [editingQuoteName, setEditingQuoteName] = useState('');
 
   useEffect(() => {
     // Recalculate costs whenever specifications change
@@ -145,23 +147,48 @@ export default function CostingDashboard() {
     const totalWithMarkup = subtotal * (1 + markupPercent / 100);
 
     try {
-      const newCalculation: SavedCalculation = {
-        id: generateCalculationId(),
-        name: calculationName,
-        client: selectedClient || 'No Client',
-        specification: { ...spec },
-        cost: {
-          baseGlass: costs.baseGlass,
-          edgework: costs.edgework,
-          holes: costs.holes,
-          shape: costs.shape,
-          ceramic: costs.ceramic,
-          total: totalWithMarkup,
-        },
-        date: new Date().toISOString(),
-      };
-
-      setSavedCalculations((prev) => [...prev, newCalculation]);
+      if (editingQuoteId) {
+        // Update existing quote with all properties
+        setSavedCalculations((prev) =>
+          prev.map((calc) =>
+            calc.id === editingQuoteId
+              ? {
+                  ...calc,
+                  name: calculationName,
+                  specification: { ...spec },
+                  cost: {
+                    baseGlass: costs.baseGlass,
+                    edgework: costs.edgework,
+                    holes: costs.holes,
+                    shape: costs.shape,
+                    ceramic: costs.ceramic,
+                    total: totalWithMarkup,
+                  },
+                  date: new Date().toISOString(),
+                }
+              : calc
+          )
+        );
+        setEditingQuoteId(null);
+      } else {
+        // Create new quote
+        const newCalculation: SavedCalculation = {
+          id: generateCalculationId(),
+          name: calculationName,
+          client: selectedClient || 'No Client',
+          specification: { ...spec },
+          cost: {
+            baseGlass: costs.baseGlass,
+            edgework: costs.edgework,
+            holes: costs.holes,
+            shape: costs.shape,
+            ceramic: costs.ceramic,
+            total: totalWithMarkup,
+          },
+          date: new Date().toISOString(),
+        };
+        setSavedCalculations((prev) => [...prev, newCalculation]);
+      }
       setCalculationName('');
       setShowSaveDialog(false);
     } catch (error) {
@@ -169,9 +196,12 @@ export default function CostingDashboard() {
     }
   };
 
-  const handleLoadCalculation = (calc: SavedCalculation) => {
-    setSpec(calc.specification);
-    setSelectedClient(calc.client);
+  const handleEditQuote = (quote: SavedCalculation) => {
+    setEditingQuoteId(quote.id);
+    setCalculationName(quote.name);
+    setSpec(quote.specification);
+    setSelectedClient(quote.client);
+    setShowSaveDialog(true);
   };
 
   const handleDeleteCalculation = (id: string) => {
@@ -201,11 +231,11 @@ export default function CostingDashboard() {
         <DefaultActionBar />
 
         <CardDouble title="NEW GLASS SPECIFICATION">
-          <RowSpaceBetween>
+          {/* <RowSpaceBetween>
             <Select name="client" options={['Acme Glass Co', 'BuildRight Inc', 'Modern Facades LLC']} defaultValue={selectedClient} onChange={(value) => setSelectedClient(value)} placeholder="Select Client..." />
             <ActionButton>+ New Client</ActionButton>
           </RowSpaceBetween>
-          <br />
+          <br /> */}
 
           <Text>GLASS THICKNESS (MM)</Text>
           <Select name="thickness" options={getAvailableThicknesses(spec.glassType).map((t) => t.toString())} defaultValue={spec.thickness.toString()} onChange={(value) => handleSpecChange('thickness', parseInt(value))} placeholder="Select thickness..." />
@@ -296,12 +326,20 @@ export default function CostingDashboard() {
           </RowSpaceBetween>
 
           {showSaveDialog && (
-            <Card title="SAVE QUOTE">
+            <Card title={editingQuoteId ? 'EDIT QUOTE' : 'SAVE QUOTE'}>
               <Input label="QUOTE NAME" name="quote_name" value={calculationName} onChange={(e) => setCalculationName(e.target.value)} placeholder="Enter a name for this quote..." />
               <br />
               <RowSpaceBetween>
-                <ActionButton onClick={handleSaveCalculation}>Save</ActionButton>
-                <ActionButton onClick={() => setShowSaveDialog(false)}>Cancel</ActionButton>
+                <ActionButton onClick={handleSaveCalculation}>{editingQuoteId ? 'Update' : 'Save'}</ActionButton>
+                <ActionButton
+                  onClick={() => {
+                    setShowSaveDialog(false);
+                    setEditingQuoteId(null);
+                    setCalculationName('');
+                  }}
+                >
+                  Cancel
+                </ActionButton>
               </RowSpaceBetween>
             </Card>
           )}
@@ -310,21 +348,19 @@ export default function CostingDashboard() {
         <Card title="QUOTES">
           <Table>
             <TableRow>
-              <TableColumn style={{ width: '20ch' }}>NAME</TableColumn>
-              <TableColumn style={{ width: '20ch' }}>CLIENT</TableColumn>
-              <TableColumn style={{ width: '15ch' }}>DATE</TableColumn>
-              <TableColumn style={{ width: '15ch' }}>PRICE</TableColumn>
+              <TableColumn style={{ width: '25ch' }}>NAME</TableColumn>
+              <TableColumn style={{ width: '20ch' }}>DATE</TableColumn>
+              <TableColumn style={{ width: '20ch' }}>PRICE</TableColumn>
               <TableColumn>ACTIONS</TableColumn>
             </TableRow>
             {savedCalculations.map((calc) => (
               <TableRow key={calc.id}>
                 <TableColumn>{calc.name}</TableColumn>
-                <TableColumn>{calc.client}</TableColumn>
                 <TableColumn>{new Date(calc.date).toLocaleDateString()}</TableColumn>
                 <TableColumn>${calc.cost.total.toFixed(2)}</TableColumn>
                 <TableColumn>
                   <RowSpaceBetween>
-                    <ActionButton onClick={() => handleLoadCalculation(calc)}>Load</ActionButton>
+                    <ActionButton onClick={() => handleEditQuote(calc)}>Edit</ActionButton>
                     <ActionButton onClick={() => handleDeleteCalculation(calc.id)}>Delete</ActionButton>
                   </RowSpaceBetween>
                 </TableColumn>

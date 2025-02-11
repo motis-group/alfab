@@ -57,7 +57,7 @@ jobs:
             else
               cd ..
               sudo rm -rf $REMOTE_PATH/*
-              git clone https://github.com/marzella/alfab.git .
+              git clone https://github.com/motis-group/alfab.git .
             fi
             cd web-app
             npm install --production --no-audit
@@ -107,6 +107,18 @@ jobs:
           }"
 
           echo "$NGINX_CONFIG" | sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "sudo tee /etc/nginx/sites-available/nextjs"
+
+          # Renew SSL certificates with Certbot
+          sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
+            set -x  # Enable command echoing for debugging
+            # Install certbot if not already installed
+            if ! command -v certbot &> /dev/null; then
+              sudo apt-get update
+              sudo apt-get install -y certbot python3-certbot-nginx
+            fi
+            # Renew certificates and reload nginx
+            sudo certbot renew --nginx --non-interactive || echo 'Warning: Certificate renewal had issues'
+          "
 
           # Set permissions and restart services
           sshpass -p $REMOTE_PASSWORD ssh -o StrictHostKeyChecking=no $REMOTE_USER@$REMOTE_HOST "
