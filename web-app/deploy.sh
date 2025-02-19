@@ -34,6 +34,7 @@ ExecStart=/usr/bin/npm start
 Restart=on-failure
 Environment=NODE_ENV=production
 Environment=PORT=10000
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 [Install]
 WantedBy=multi-user.target"
@@ -64,18 +65,38 @@ echo "📦 Deploying application..."
 # Stop existing service and update codebase
 run_remote_cmd "
     sudo systemctl stop nextjs || true
+    
+    # Fix git ownership and directory permissions
+    sudo chown -R $REMOTE_USER:$REMOTE_USER $REMOTE_PATH
+    sudo chmod -R 755 $REMOTE_PATH
+    
+    # Configure git safety
+    git config --global --add safe.directory $REMOTE_PATH
+    
     cd $REMOTE_PATH
     if [ -d .git ]; then
-        git reset --hard
-        git pull
+        sudo git reset --hard
+        sudo git pull
     else
         cd ..
         sudo rm -rf $REMOTE_PATH/*
-        git clone https://github.com/motis-group/alfab.git .
+        sudo git clone https://github.com/motis-group/alfab.git .
     fi
+    
     cd web-app
-    npm install --production --no-audit
-    npm run build
+    
+    # Ensure node_modules exists and has correct permissions
+    sudo mkdir -p node_modules
+    sudo chown -R $REMOTE_USER:$REMOTE_USER node_modules
+    
+    # Install dependencies and build
+    sudo npm install --production=false --no-audit  # We need dev dependencies for building
+    sudo npm run build
+    
+    # After build, we can remove dev dependencies
+    sudo npm prune --production
+    
+    # Set final permissions
     sudo chown -R www-data:www-data ."
 
 echo "⚙️ Configuring services..."
@@ -89,21 +110,21 @@ echo "🔒 Setting up SSL..."
 # Install and configure SSL
 run_remote_cmd "
     if ! command -v certbot &> /dev/null; then
-        apt-get update
-        apt-get install -y certbot python3-certbot-nginx
+        sudo apt-get update
+        sudo apt-get install -y certbot python3-certbot-nginx
     fi
-    certbot renew --nginx --non-interactive || echo 'Warning: Certificate renewal had issues'"
+    sudo certbot renew --nginx --non-interactive || echo 'Warning: Certificate renewal had issues'"
 
 echo "🔄 Restarting services..."
 
 # Final setup and service restart
 run_remote_cmd "
-    chown -R www-data:www-data $REMOTE_PATH
+    sudo chown -R www-data:www-data $REMOTE_PATH
     cd $REMOTE_PATH/web-app
-    systemctl daemon-reload
-    systemctl enable nextjs
-    systemctl restart nextjs
-    ln -sf /etc/nginx/sites-available/nextjs /etc/nginx/sites-enabled/
-    nginx -t && systemctl restart nginx"
+    sudo systemctl daemon-reload
+    sudo systemctl enable nextjs
+    sudo systemctl restart nextjs
+    sudo ln -sf /etc/nginx/sites-available/nextjs /etc/nginx/sites-enabled/
+    sudo nginx -t && sudo systemctl restart nginx"
 
 echo "✅ Deployment completed successfully!"
