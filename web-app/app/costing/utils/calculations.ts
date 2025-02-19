@@ -9,6 +9,7 @@ export interface CostBreakdown {
   holes: number;
   shape: number;
   ceramic: number;
+  scanning: number;
   total: number;
 }
 
@@ -23,6 +24,7 @@ export interface GlassSpecification {
   holes: boolean;
   numHoles: number;
   radiusCorners: boolean;
+  scanning: boolean;
 }
 
 // Glass colors/types mapped to their RGB values for UI
@@ -47,7 +49,7 @@ const basePrices: Record<GlassType, Partial<Record<GlassThickness, number>>> = {
   Green: {
     4: 102.19,
     5: 104.61,
-    6: 109.50,
+    6: 109.5,
     8: 242.79,
     10: 267.62,
     12: 292.06,
@@ -55,7 +57,7 @@ const basePrices: Record<GlassType, Partial<Record<GlassThickness, number>>> = {
   Grey: {
     4: 102.19,
     5: 104.61,
-    6: 109.50,
+    6: 109.5,
     8: 242.79,
     10: 267.62,
     12: 292.06,
@@ -102,9 +104,7 @@ export function getAvailableThicknesses(glassType: GlassType): GlassThickness[] 
 }
 
 export function calculateArea(width: number, height: number, shape: ShapeType): number {
-  const areaInMm = shape === 'TRIANGLE' 
-    ? (width * height) / 2 
-    : width * height;
+  const areaInMm = shape === 'TRIANGLE' ? (width * height) / 2 : width * height;
   return areaInMm / 1_000_000; // Convert to m²
 }
 
@@ -122,7 +122,7 @@ export function calculatePerimeter(width: number, height: number, shape: ShapeTy
 export function calculateCost(spec: GlassSpecification): CostBreakdown {
   const area = calculateArea(spec.width, spec.height, spec.shape);
   const perimeter = calculatePerimeter(spec.width, spec.height, spec.shape);
-  
+
   // Initialize cost breakdown
   const costs: CostBreakdown = {
     baseGlass: 0,
@@ -130,6 +130,7 @@ export function calculateCost(spec: GlassSpecification): CostBreakdown {
     holes: 0,
     shape: 0,
     ceramic: 0,
+    scanning: 0,
     total: 0,
   };
 
@@ -162,6 +163,11 @@ export function calculateCost(spec: GlassSpecification): CostBreakdown {
     costs.ceramic = area <= 1.5 ? 63.68 : 63.68 * area;
   }
 
+  // Calculate scanning cost
+  if (spec.scanning) {
+    costs.scanning = 90;
+  }
+
   // Calculate total
   costs.total = Object.values(costs).reduce((sum, cost) => sum + cost, 0) - costs.total;
 
@@ -181,4 +187,4 @@ export interface SavedCalculation {
 // Add helper function to generate ID
 export function generateCalculationId(): string {
   return Math.random().toString(36).substring(2, 15);
-} 
+}

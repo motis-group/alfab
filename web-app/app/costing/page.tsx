@@ -57,6 +57,7 @@ export default function CostingDashboard() {
     holes: false,
     numHoles: 0,
     radiusCorners: false,
+    scanning: false,
   });
 
   const [costs, setCosts] = useState<CostBreakdown>({
@@ -65,6 +66,7 @@ export default function CostingDashboard() {
     holes: 0,
     shape: 0,
     ceramic: 0,
+    scanning: 0,
     total: 0,
   });
 
@@ -143,7 +145,7 @@ export default function CostingDashboard() {
   const handleSaveCalculation = () => {
     if (!calculationName) return;
 
-    const subtotal = costs.baseGlass + costs.edgework + costs.holes + costs.shape + costs.ceramic;
+    const subtotal = costs.baseGlass + costs.edgework + costs.holes + costs.shape + costs.ceramic + costs.scanning;
     const totalWithMarkup = subtotal * (1 + markupPercent / 100);
 
     try {
@@ -162,6 +164,7 @@ export default function CostingDashboard() {
                     holes: costs.holes,
                     shape: costs.shape,
                     ceramic: costs.ceramic,
+                    scanning: costs.scanning,
                     total: totalWithMarkup,
                   },
                   date: new Date().toISOString(),
@@ -183,6 +186,7 @@ export default function CostingDashboard() {
             holes: costs.holes,
             shape: costs.shape,
             ceramic: costs.ceramic,
+            scanning: costs.scanning,
             total: totalWithMarkup,
           },
           date: new Date().toISOString(),
@@ -264,6 +268,9 @@ export default function CostingDashboard() {
           <Checkbox name="holes" defaultChecked={spec.holes} onChange={(e) => handleSpecChange('holes', e.target.checked)}>
             Include Holes
           </Checkbox>
+          <Checkbox name="scanning" defaultChecked={spec.scanning} onChange={(e) => handleSpecChange('scanning', e.target.checked)}>
+            Scanning
+          </Checkbox>
 
           <Input label="NUMBER OF HOLES" type="number" name="num_holes" value={spec.numHoles.toString()} onChange={(e) => handleSpecChange('numHoles', parseInt(e.target.value))} disabled={!spec.holes} placeholder="Enter number of holes..." />
 
@@ -306,16 +313,20 @@ export default function CostingDashboard() {
                 <TableColumn>${costs.ceramic.toFixed(2)}</TableColumn>
               </TableRow>
               <TableRow>
+                <TableColumn>Scanning</TableColumn>
+                <TableColumn>${costs.scanning.toFixed(2)}</TableColumn>
+              </TableRow>
+              <TableRow>
                 <TableColumn>Subtotal</TableColumn>
-                <TableColumn>${(costs.baseGlass + costs.edgework + costs.holes + costs.shape + costs.ceramic).toFixed(2)}</TableColumn>
+                <TableColumn>${(costs.baseGlass + costs.edgework + costs.holes + costs.shape + costs.ceramic + costs.scanning).toFixed(2)}</TableColumn>
               </TableRow>
               <TableRow>
                 <TableColumn>Markup ({markupPercent}%)</TableColumn>
-                <TableColumn>${((costs.baseGlass + costs.edgework + costs.holes + costs.shape + costs.ceramic) * (markupPercent / 100)).toFixed(2)}</TableColumn>
+                <TableColumn>${((costs.baseGlass + costs.edgework + costs.holes + costs.shape + costs.ceramic + costs.scanning) * (markupPercent / 100)).toFixed(2)}</TableColumn>
               </TableRow>
               <TableRow>
                 <TableColumn>TOTAL</TableColumn>
-                <TableColumn>${((costs.baseGlass + costs.edgework + costs.holes + costs.shape + costs.ceramic) * (1 + markupPercent / 100)).toFixed(2)}</TableColumn>
+                <TableColumn>${((costs.baseGlass + costs.edgework + costs.holes + costs.shape + costs.ceramic + costs.scanning) * (1 + markupPercent / 100)).toFixed(2)}</TableColumn>
               </TableRow>
             </Table>
           </Card>
