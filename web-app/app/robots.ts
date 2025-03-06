@@ -4,9 +4,8 @@ export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: '*',
-      allow: '/',
-      disallow: '/api/',
+      allow: '/'
     },
-    sitemap: 'https://sacred.computer/sitemap.xml',
+    sitemap: 'https://alfabvic.com.au/sitemap.xml',
   };
 }

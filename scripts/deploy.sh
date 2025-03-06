@@ -11,12 +11,12 @@ set -x # Enable command echoing for debugging
 
 # Function to run remote commands via SSH
 run_remote_cmd() {
-  sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no "$REMOTE_USER@$REMOTE_HOST" "$1"
+    sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no "$REMOTE_USER@$REMOTE_HOST" "$1"
 }
 
 # Function to copy file content to remote server
 copy_to_remote() {
-  echo "$1" | run_remote_cmd "sudo tee $2"
+    echo "$1" | run_remote_cmd "sudo tee $2"
 }
 
 echo "🚀 Starting deployment process..."
@@ -38,27 +38,6 @@ Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 [Install]
 WantedBy=multi-user.target"
-
-# Setup nginx configuration
-NGINX_CONFIG="server {
-    listen 80;
-    server_name alfabvic.com.au 103.125.218.118;
-    
-    location / {
-        proxy_pass http://localhost:10000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
-    }
-
-    location /_next/static/ {
-        alias $REMOTE_PATH/web-app/.next/static/;
-        expires 365d;
-        access_log off;
-    }
-}"
 
 echo "📦 Deploying application..."
 
@@ -101,19 +80,8 @@ run_remote_cmd "
 
 echo "⚙️ Configuring services..."
 
-# Update service and nginx configurations
+# Update service configuration
 copy_to_remote "$SYSTEMD_SERVICE" "/etc/systemd/system/nextjs.service"
-copy_to_remote "$NGINX_CONFIG" "/etc/nginx/sites-available/nextjs"
-
-echo "🔒 Setting up SSL..."
-
-# Install and configure SSL
-run_remote_cmd "
-    if ! command -v certbot &> /dev/null; then
-        sudo apt-get update
-        sudo apt-get install -y certbot python3-certbot-nginx
-    fi
-    sudo certbot renew --nginx --non-interactive || echo 'Warning: Certificate renewal had issues'"
 
 echo "🔄 Restarting services..."
 
@@ -123,8 +91,6 @@ run_remote_cmd "
     cd $REMOTE_PATH/web-app
     sudo systemctl daemon-reload
     sudo systemctl enable nextjs
-    sudo systemctl restart nextjs
-    sudo ln -sf /etc/nginx/sites-available/nextjs /etc/nginx/sites-enabled/
-    sudo nginx -t && sudo systemctl restart nginx"
+    sudo systemctl restart nextjs"
 
 echo "✅ Deployment completed successfully!"
