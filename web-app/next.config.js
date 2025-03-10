@@ -13,6 +13,7 @@ const nextConfig = {
       '@styles': path.join(__dirname, 'styles'),
       '@common': path.join(__dirname, 'common'),
       '@': path.join(__dirname),
+      '@utils': path.join(__dirname, 'utils'),
     };
     return config;
   },

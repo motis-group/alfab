@@ -25,6 +25,9 @@
       ],
       "@modules/*": [
         "./modules/*"
+      ],
+      "@utils/*": [
+        "./utils/*"
       ]
     },
     "target": "es5",

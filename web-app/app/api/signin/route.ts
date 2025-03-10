@@ -1,7 +1,6 @@
 import { NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import * as crypto from 'crypto';
 
 export const runtime = 'edge';
 
@@ -57,7 +56,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate a session token
-    const sessionToken = crypto.randomBytes(32).toString('hex');
+    const randomBytes = new Uint8Array(32);
+    crypto.getRandomValues(randomBytes);
+    const sessionToken = Array.from(randomBytes)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
 
     const responseHeaders = new Headers(headers);
     // Set the session cookie

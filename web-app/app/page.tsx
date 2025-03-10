@@ -25,7 +25,7 @@ import TableRow from '@components/TableRow';
 import TableColumn from '@components/TableColumn';
 import Text from '@components/Text';
 import { useState, useEffect } from 'react';
-import { GlassType, EdgeworkType, GlassThickness, ShapeType, GlassSpecification, CostBreakdown, calculateCost, getAvailableThicknesses, getAvailableGlassTypes, glassTypeToRGB, SavedCalculation, generateCalculationId } from '@/utils/calculations';
+import { GlassType, EdgeworkType, GlassThickness, ShapeType, GlassSpecification, CostBreakdown, calculateCost, getAvailableThicknesses, getAvailableGlassTypes, glassTypeToRGB, SavedCalculation, generateCalculationId } from '@utils/calculations';
 import { useRouter } from 'next/navigation';
 import DropdownMenuTrigger from '@components/DropdownMenuTrigger';
 import DefaultActionBar from '@components/page/DefaultActionBar';
