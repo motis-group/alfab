@@ -250,7 +250,7 @@ export default function CostingDashboard() {
           <br />
 
           <Text>DIMENSIONS</Text>
-          <Input label="LENGTH (MM)" type="number" name="length" value={spec.width.toString()} onChange={(e) => handleSpecChange('width', parseFloat(e.target.value))} />
+          <Input label="HEIGHT (MM)" type="number" name="length" value={spec.width.toString()} onChange={(e) => handleSpecChange('width', parseFloat(e.target.value))} />
           <Input label="WIDTH (MM)" type="number" name="width" value={spec.height.toString()} onChange={(e) => handleSpecChange('height', parseFloat(e.target.value))} />
 
           <Text>PRICING</Text>
