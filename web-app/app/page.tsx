@@ -37,6 +37,7 @@ const edgeWorkOptions: EdgeworkType[] = ['ROUGH ARRIS', 'FLAT GRIND - STRAIGHT',
 
 const navigationItems = [
   { icon: '⊹', children: 'Glass Costing', href: '/costing' },
+  { icon: '⊹', children: 'Doors', href: '/doors' },
   { icon: '⊹', children: 'Client Management', href: '/costing/clients' },
   { icon: '⊹', children: 'Pricing Rules', href: '/costing/settings' },
   { icon: '⊹', children: 'Component Library', href: '/' },
