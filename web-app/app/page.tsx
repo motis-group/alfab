@@ -30,6 +30,7 @@ import { useRouter } from 'next/navigation';
 import DropdownMenuTrigger from '@components/DropdownMenuTrigger';
 import DefaultActionBar from '@components/page/DefaultActionBar';
 import DataTable from '@components/DataTable';
+import { createClient } from '@utils/supabase/client';
 
 const glassThicknesses: GlassThickness[] = [4, 5, 6, 8, 10, 12];
 
@@ -43,7 +44,7 @@ const navigationItems = [
   { icon: '⊹', children: 'Component Library', href: '/' },
 ];
 
-const STORAGE_KEY = 'alfabglass_saved_calculations';
+const TABLE_NAME = 'quotes';
 
 export default function CostingDashboard() {
   const router = useRouter();
@@ -100,29 +101,23 @@ export default function CostingDashboard() {
     }
   }, [spec.thickness]);
 
-  // Load saved calculations from localStorage on mount
+  // Load saved calculations from Supabase on mount
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsedData = JSON.parse(saved);
-        setSavedCalculations(parsedData);
-      }
-    } catch (error) {
-      console.error('Error loading saved calculations:', error);
-      // Initialize with empty array if there's an error
-      setSavedCalculations([]);
-    }
-  }, []);
+    const fetchQuotes = async () => {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.from(TABLE_NAME).select('*').order('date', { ascending: false });
 
-  // Save calculations to localStorage whenever they change
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(savedCalculations));
-    } catch (error) {
-      console.error('Error saving calculations:', error);
-    }
-  }, [savedCalculations]);
+        if (error) throw error;
+        if (data) setSavedCalculations(data);
+      } catch (error) {
+        console.error('Error loading saved calculations:', error);
+        setSavedCalculations([]);
+      }
+    };
+
+    fetchQuotes();
+  }, []);
 
   const handleSpecChange = (field: keyof GlassSpecification, value: any) => {
     setSpec((prev) => {
@@ -143,15 +138,38 @@ export default function CostingDashboard() {
     });
   };
 
-  const handleSaveCalculation = () => {
+  const handleSaveCalculation = async () => {
     if (!calculationName) return;
 
     const subtotal = costs.baseGlass + costs.edgework + costs.holes + costs.shape + costs.ceramic + costs.scanning;
     const totalWithMarkup = subtotal * (1 + markupPercent / 100);
 
     try {
+      const supabase = createClient();
+
       if (editingQuoteId) {
         // Update existing quote with all properties
+        const { error } = await supabase
+          .from(TABLE_NAME)
+          .update({
+            name: calculationName,
+            specification: { ...spec },
+            cost: {
+              baseGlass: costs.baseGlass,
+              edgework: costs.edgework,
+              holes: costs.holes,
+              shape: costs.shape,
+              ceramic: costs.ceramic,
+              scanning: costs.scanning,
+              total: totalWithMarkup,
+            },
+            date: new Date().toISOString(),
+          })
+          .eq('id', editingQuoteId);
+
+        if (error) throw error;
+
+        // Update local state
         setSavedCalculations((prev) =>
           prev.map((calc) =>
             calc.id === editingQuoteId
@@ -175,9 +193,8 @@ export default function CostingDashboard() {
         );
         setEditingQuoteId(null);
       } else {
-        // Create new quote
-        const newCalculation: SavedCalculation = {
-          id: generateCalculationId(),
+        // Create new quote - remove id property to let Supabase generate it
+        const newCalculation = {
           name: calculationName,
           client: selectedClient || 'No Client',
           specification: { ...spec },
@@ -192,8 +209,18 @@ export default function CostingDashboard() {
           },
           date: new Date().toISOString(),
         };
-        setSavedCalculations((prev) => [...prev, newCalculation]);
+
+        // Insert and get the new data with server-generated ID
+        const { data, error } = await supabase.from(TABLE_NAME).insert(newCalculation).select();
+
+        if (error) throw error;
+
+        // Update local state with the returned data (which includes the DB-generated ID)
+        if (data && data.length > 0) {
+          setSavedCalculations((prev) => [...prev, data[0]]);
+        }
       }
+
       setCalculationName('');
       setShowSaveDialog(false);
     } catch (error) {
@@ -209,12 +236,17 @@ export default function CostingDashboard() {
     setShowSaveDialog(true);
   };
 
-  const handleDeleteCalculation = (id: string) => {
+  const handleDeleteCalculation = async (id: string) => {
     try {
+      const supabase = createClient();
+      const { error } = await supabase.from(TABLE_NAME).delete().eq('id', id);
+
+      if (error) throw error;
+
+      // Update local state
       setSavedCalculations((prev) => prev.filter((c) => c.id !== id));
     } catch (error) {
       console.error('Error deleting calculation:', error);
-      // Could add user notification here
     }
   };
 

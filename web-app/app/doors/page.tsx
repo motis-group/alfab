@@ -30,6 +30,7 @@ import { useRouter } from 'next/navigation';
 import DropdownMenuTrigger from '@components/DropdownMenuTrigger';
 import DefaultActionBar from '@components/page/DefaultActionBar';
 import DataTable from '@components/DataTable';
+import { createClient } from '@utils/supabase/client';
 
 const glassThicknesses: GlassThickness[] = [4, 5, 6, 8, 10, 12];
 
@@ -42,15 +43,15 @@ const navigationItems = [
   { icon: '⊹', children: 'Component Library', href: '/' },
 ];
 
-// Make sure the storage key is unique to avoid conflicts
-const STORAGE_KEY = 'alfabdoors_saved_doors_v1';
+// Replace localStorage key with Supabase table name
+const TABLE_NAME = 'doors';
 
 // Door interface
 interface Door {
-  id: string;
+  id?: string;
   price: number;
-  orderDate: string;
-  deliveryDate: string;
+  order_date: string;
+  delivery_date: string;
   client: string;
   notes: string;
 }
@@ -60,17 +61,15 @@ export default function DoorsDashboard() {
 
   // State for the form
   const [doorData, setDoorData] = useState<Door>({
-    id: '',
     price: 0,
-    orderDate: new Date().toISOString().split('T')[0],
-    deliveryDate: '',
+    order_date: new Date().toISOString().split('T')[0],
+    delivery_date: '',
     client: '',
     notes: '',
   });
 
-  // State for saved doors with initial load flag
+  // State for saved doors
   const [doors, setDoors] = useState<Door[]>([]);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   // State for showing the add/edit form
   const [showForm, setShowForm] = useState(false);
@@ -78,49 +77,23 @@ export default function DoorsDashboard() {
   // State for tracking if we're editing or adding
   const [isEditing, setIsEditing] = useState(false);
 
-  // Load saved doors from localStorage on mount with better error handling
+  // Load saved doors from Supabase on mount
   useEffect(() => {
-    try {
-      console.log('Attempting to load doors from localStorage');
-      const saved = localStorage.getItem(STORAGE_KEY);
-      console.log('Raw localStorage data:', saved);
+    const fetchDoors = async () => {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase.from(TABLE_NAME).select('*').order('order_date', { ascending: false });
 
-      if (saved) {
-        const parsedData = JSON.parse(saved);
-        console.log('Parsed doors data:', parsedData);
-        setDoors(parsedData);
-        console.log('Doors loaded successfully');
-      } else {
-        console.log('No saved doors found in localStorage');
+        if (error) throw error;
+        if (data) setDoors(data);
+      } catch (error) {
+        console.error('Error loading saved doors:', error);
         setDoors([]);
       }
-    } catch (error) {
-      console.error('Error loading saved doors:', error);
-      // Initialize with empty array if there's an error
-      setDoors([]);
-    } finally {
-      // Mark initial load as complete
-      setIsInitialLoad(false);
-    }
+    };
+
+    fetchDoors();
   }, []);
-
-  // Save doors to localStorage whenever they change with improved logging
-  // Only save if it's not the initial load
-  useEffect(() => {
-    if (!isInitialLoad) {
-      try {
-        console.log('Saving doors to localStorage:', doors);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(doors));
-        console.log('Doors saved successfully');
-
-        // Verify the save worked
-        const savedData = localStorage.getItem(STORAGE_KEY);
-        console.log('Verification - data in localStorage:', savedData);
-      } catch (error) {
-        console.error('Error saving doors:', error);
-      }
-    }
-  }, [doors, isInitialLoad]);
 
   const handleInputChange = (field: keyof Door, value: any) => {
     setDoorData((prev) => ({
@@ -129,26 +102,53 @@ export default function DoorsDashboard() {
     }));
   };
 
-  const handleSaveDoor = () => {
+  const handleSaveDoor = async () => {
     try {
-      if (isEditing) {
+      const supabase = createClient();
+
+      if (isEditing && doorData.id) {
         // Update existing door
+        const { error } = await supabase
+          .from(TABLE_NAME)
+          .update({
+            price: doorData.price,
+            order_date: doorData.order_date,
+            delivery_date: doorData.delivery_date,
+            client: doorData.client,
+            notes: doorData.notes,
+          })
+          .eq('id', doorData.id);
+
+        if (error) throw error;
+
+        // Update local state
         setDoors((prev) => prev.map((door) => (door.id === doorData.id ? { ...doorData } : door)));
       } else {
-        // Create new door with unique ID
-        const newDoor: Door = {
-          ...doorData,
-          id: Math.random().toString(36).substring(2, 9),
+        // Create new door without id (Supabase will generate)
+        const newDoor = {
+          price: doorData.price,
+          order_date: doorData.order_date,
+          delivery_date: doorData.delivery_date,
+          client: doorData.client,
+          notes: doorData.notes,
         };
-        setDoors((prev) => [...prev, newDoor]);
+
+        // Insert and get the new data with server-generated ID
+        const { data, error } = await supabase.from(TABLE_NAME).insert(newDoor).select();
+
+        if (error) throw error;
+
+        // Update local state with the returned data
+        if (data && data.length > 0) {
+          setDoors((prev) => [...prev, data[0]]);
+        }
       }
 
       // Reset form
       setDoorData({
-        id: '',
         price: 0,
-        orderDate: new Date().toISOString().split('T')[0],
-        deliveryDate: '',
+        order_date: new Date().toISOString().split('T')[0],
+        delivery_date: '',
         client: '',
         notes: '',
       });
@@ -165,8 +165,14 @@ export default function DoorsDashboard() {
     setShowForm(true);
   };
 
-  const handleDeleteDoor = (id: string) => {
+  const handleDeleteDoor = async (id: string) => {
     try {
+      const supabase = createClient();
+      const { error } = await supabase.from(TABLE_NAME).delete().eq('id', id);
+
+      if (error) throw error;
+
+      // Update local state
       setDoors((prev) => prev.filter((door) => door.id !== id));
     } catch (error) {
       console.error('Error deleting door:', error);
@@ -197,10 +203,9 @@ export default function DoorsDashboard() {
               setIsEditing(false);
               setShowForm(true);
               setDoorData({
-                id: '',
                 price: 0,
-                orderDate: new Date().toISOString().split('T')[0],
-                deliveryDate: '',
+                order_date: new Date().toISOString().split('T')[0],
+                delivery_date: '',
                 client: '',
                 notes: '',
               });
@@ -223,8 +228,8 @@ export default function DoorsDashboard() {
             <br />
 
             <Text>DATES</Text>
-            <Input label="ORDER DATE" type="date" name="orderDate" value={doorData.orderDate} onChange={(e) => handleInputChange('orderDate', e.target.value)} />
-            <Input label="DELIVERY DATE" type="date" name="deliveryDate" value={doorData.deliveryDate} onChange={(e) => handleInputChange('deliveryDate', e.target.value)} />
+            <Input label="ORDER DATE" type="date" name="order_date" value={doorData.order_date} onChange={(e) => handleInputChange('order_date', e.target.value)} />
+            <Input label="DELIVERY DATE" type="date" name="delivery_date" value={doorData.delivery_date} onChange={(e) => handleInputChange('delivery_date', e.target.value)} />
             <br />
 
             <Text>CLIENT</Text>
@@ -258,13 +263,13 @@ export default function DoorsDashboard() {
             {doors.map((door) => (
               <TableRow key={door.id}>
                 <TableColumn>${door.price.toFixed(2)}</TableColumn>
-                <TableColumn>{new Date(door.orderDate).toLocaleDateString()}</TableColumn>
-                <TableColumn>{door.deliveryDate ? new Date(door.deliveryDate).toLocaleDateString() : 'Not set'}</TableColumn>
+                <TableColumn>{new Date(door.order_date).toLocaleDateString()}</TableColumn>
+                <TableColumn>{door.delivery_date ? new Date(door.delivery_date).toLocaleDateString() : 'Not set'}</TableColumn>
                 <TableColumn>{door.client || 'No Client'}</TableColumn>
                 <TableColumn>
                   <RowSpaceBetween>
                     <ActionButton onClick={() => handleEditDoor(door)}>Edit</ActionButton>
-                    <ActionButton onClick={() => handleDeleteDoor(door.id)}>Delete</ActionButton>
+                    <ActionButton onClick={() => handleDeleteDoor(door.id!)}>Delete</ActionButton>
                   </RowSpaceBetween>
                 </TableColumn>
               </TableRow>
@@ -299,10 +304,9 @@ export default function DoorsDashboard() {
                   setIsEditing(false);
                   setShowForm(true);
                   setDoorData({
-                    id: '',
                     price: 0,
-                    orderDate: new Date().toISOString().split('T')[0],
-                    deliveryDate: '',
+                    order_date: new Date().toISOString().split('T')[0],
+                    delivery_date: '',
                     client: '',
                     notes: '',
                   });
