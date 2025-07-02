@@ -27,13 +27,7 @@ type GlassThickness = 4 | 5 | 6 | 8 | 10 | 12;
 
 const glassThicknesses: GlassThickness[] = [4, 5, 6, 8, 10, 12];
 
-const edgeWorkOptions: EdgeworkType[] = [
-  'ROUGH ARRIS',
-  'FLAT GRIND - STRAIGHT',
-  'FLAT GRIND - CURVED',
-  'FLAT POLISH - STRAIGHT',
-  'FLAT POLISH - CURVED'
-];
+const edgeWorkOptions: EdgeworkType[] = ['ROUGH ARRIS', 'FLAT GRIND - STRAIGHT', 'FLAT GRIND - CURVED', 'FLAT POLISH - STRAIGHT', 'FLAT POLISH - CURVED'];
 
 export default async function TemplatesPage() {
   return (
@@ -65,54 +59,29 @@ export default async function TemplatesPage() {
         <CardDouble title="NEW TEMPLATE">
           <Input label="TEMPLATE NAME" name="template_name" placeholder="Enter template name..." />
           <Input label="DESCRIPTION" name="description" placeholder="Enter template description..." />
-          
+
           <Text>GLASS TYPE</Text>
-          <Select
-            name="glass_type"
-            options={[
-              'CLEAR',
-              'TINTED',
-              'BRONZE',
-              'SUPER GREY',
-              'WHITE PATTERNED',
-              'DARK GREY'
-            ]}
-            placeholder="Select glass type..."
-          />
+          <Select name="glass_type" options={['CLEAR', 'TINTED', 'BRONZE', 'SUPER GREY', 'WHITE PATTERNED', 'DARK GREY']} placeholder="Select glass type..." />
           <br />
 
           <Text>GLASS THICKNESS (MM)</Text>
-          <Select
-            name="thickness"
-            options={glassThicknesses.map(t => t.toString())}
-            placeholder="Select thickness..."
-          />
+          <Select name="thickness" options={glassThicknesses.map((t) => t.toString())} placeholder="Select thickness..." />
           <br />
 
           <Text>DIMENSIONS</Text>
           <Input label="LENGTH (MM)" type="number" name="length" />
           <Input label="WIDTH (MM)" type="number" name="width" />
-          
+
           <Text>EDGEWORK</Text>
-          <Select
-            name="edgework"
-            options={edgeWorkOptions}
-            placeholder="Select edgework type..."
-          />
+          <Select name="edgework" options={edgeWorkOptions} placeholder="Select edgework type..." />
           <br />
 
           <Text>ADDITIONAL OPTIONS</Text>
           <Checkbox name="ceramic_full_cover">Ceramic Full Cover</Checkbox>
           <Checkbox name="ceramic_banding">Ceramic Banding</Checkbox>
           <Checkbox name="holes">Include Holes</Checkbox>
-          
-          <Input 
-            label="NUMBER OF HOLES" 
-            type="number" 
-            name="num_holes" 
-            placeholder="Enter number of holes..."
-            disabled={true}
-          />
+
+          <Input label="NUMBER OF HOLES" type="number" name="num_holes" placeholder="Enter number of holes..." disabled={true} />
 
           <Text>SHAPE TYPE</Text>
           <RadioButtonGroup
@@ -123,7 +92,7 @@ export default async function TemplatesPage() {
               { value: 'COMPLEX', label: 'Complex Shape' },
             ]}
           />
-          
+
           <br />
           <RowSpaceBetween>
             <ActionButton>Save Template</ActionButton>
@@ -190,11 +159,11 @@ export default async function TemplatesPage() {
           <ActionListItem icon="⭢" href="/costing/clients">
             Manage Clients
           </ActionListItem>
-          <ActionListItem icon="⭢" href="/costing/settings">
+          <ActionListItem icon="⭢" href="/settings">
             Pricing Rules
           </ActionListItem>
         </Card>
       </Grid>
     </DefaultLayout>
   );
-} 
+}

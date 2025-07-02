@@ -50,10 +50,10 @@ export default async function ClientsPage() {
           <Input label="CONTACT NAME" name="contact_name" placeholder="Enter primary contact name..." />
           <Input label="EMAIL" type="email" name="email" placeholder="Enter contact email..." />
           <Input label="PHONE" name="phone" placeholder="Enter contact phone..." />
-          
+
           <Text>DEFAULT MARKUP PERCENTAGE</Text>
           <NumberRangeSlider defaultValue={30} min={0} max={100} step={1} />
-          
+
           <br />
           <RowSpaceBetween>
             <ActionButton>Save Client</ActionButton>
@@ -107,11 +107,11 @@ export default async function ClientsPage() {
           <ActionListItem icon="⭢" href="/costing/templates">
             View Templates
           </ActionListItem>
-          <ActionListItem icon="⭢" href="/costing/settings">
+          <ActionListItem icon="⭢" href="/settings">
             Pricing Rules
           </ActionListItem>
         </Card>
       </Grid>
     </DefaultLayout>
   );
-} 
+}

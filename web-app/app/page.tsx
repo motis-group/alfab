@@ -40,7 +40,7 @@ const navigationItems = [
   { icon: '⊹', children: 'Glass Costing', href: '/costing' },
   { icon: '⊹', children: 'Doors', href: '/doors' },
   { icon: '⊹', children: 'Client Management', href: '/costing/clients' },
-  { icon: '⊹', children: 'Pricing Rules', href: '/costing/settings' },
+  { icon: '⊹', children: 'Pricing Settings', href: '/settings' },
   { icon: '⊹', children: 'Component Library', href: '/' },
 ];
 
@@ -431,7 +431,7 @@ export default function CostingDashboard() {
               {
                 hotkey: '⌘+S',
                 body: 'Rules',
-                onClick: () => router.push('/costing/settings'),
+                onClick: () => router.push('/settings'),
               },
             ]}
           />
