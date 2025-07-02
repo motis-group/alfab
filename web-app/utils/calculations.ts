@@ -36,8 +36,8 @@ export const glassTypeToRGB: Record<GlassType, string> = {
   'Super Grey': 'rgba(32, 32, 32, 0.2)',
 };
 
-// Base glass prices per m² based on type and thickness
-const basePrices: Record<GlassType, Partial<Record<GlassThickness, number>>> = {
+// Default base glass prices per m² based on type and thickness
+export const defaultBasePrices: Record<GlassType, Partial<Record<GlassThickness, number>>> = {
   Clear: {
     4: 83.96,
     5: 87.59,
@@ -70,8 +70,8 @@ const basePrices: Record<GlassType, Partial<Record<GlassThickness, number>>> = {
   },
 };
 
-// Edgework prices per meter based on thickness range
-const edgeworkPrices: Record<EdgeworkType, Record<'4-6' | '8-12', number>> = {
+// Default edgework prices per meter based on thickness range
+export const defaultEdgeworkPrices: Record<EdgeworkType, Record<'4-6' | '8-12', number>> = {
   'ROUGH ARRIS': { '4-6': 0, '8-12': 0 },
   'FLAT GRIND - STRAIGHT': { '4-6': 4.31, '8-12': 7.59 },
   'FLAT GRIND - CURVED': { '4-6': 8.85, '8-12': 17.67 },
@@ -99,7 +99,7 @@ export function getAvailableGlassTypes(thickness: GlassThickness): GlassType[] {
 }
 
 // Get available thicknesses for a given glass type
-export function getAvailableThicknesses(glassType: GlassType): GlassThickness[] {
+export function getAvailableThicknesses(glassType: GlassType, basePrices = defaultBasePrices): GlassThickness[] {
   return Object.keys(basePrices[glassType]).map(Number) as GlassThickness[];
 }
 
@@ -119,9 +119,29 @@ export function calculatePerimeter(width: number, height: number, shape: ShapeTy
   return perimeterInMm / 1_000; // Convert to meters
 }
 
-export function calculateCost(spec: GlassSpecification): CostBreakdown {
+export interface CustomPricingData {
+  basePrices?: Record<GlassType, Partial<Record<GlassThickness, number>>>;
+  edgeworkPrices?: Record<EdgeworkType, Record<'4-6' | '8-12', number>>;
+  otherPrices?: {
+    holePrice4to6?: number;
+    holePrice8to12?: number;
+    shapeSimple4to6?: number;
+    shapeSimple8to12?: number;
+    shapeComplex4to6?: number;
+    shapeComplex8to12?: number;
+    ceramicBanding?: number;
+    scanning?: number;
+  };
+}
+
+export function calculateCost(spec: GlassSpecification, customPricing?: CustomPricingData): CostBreakdown {
   const area = calculateArea(spec.width, spec.height, spec.shape);
   const perimeter = calculatePerimeter(spec.width, spec.height, spec.shape);
+
+  // Use custom pricing or defaults
+  const basePrices = customPricing?.basePrices || defaultBasePrices;
+  const edgeworkPrices = customPricing?.edgeworkPrices || defaultEdgeworkPrices;
+  const otherPrices = customPricing?.otherPrices || {};
 
   // Initialize cost breakdown
   const costs: CostBreakdown = {
@@ -147,25 +167,33 @@ export function calculateCost(spec: GlassSpecification): CostBreakdown {
 
   // Calculate holes cost
   if (spec.holes) {
-    const holePrice = spec.thickness <= 6 ? 6.33 : 8.85;
+    const holePrice4to6 = otherPrices.holePrice4to6 ?? 6.33;
+    const holePrice8to12 = otherPrices.holePrice8to12 ?? 8.85;
+    const holePrice = spec.thickness <= 6 ? holePrice4to6 : holePrice8to12;
     costs.holes = holePrice * spec.numHoles;
   }
 
   // Calculate shape cost
   if (spec.shape === 'COMPLEX') {
-    costs.shape = spec.thickness <= 6 ? 12.65 : 25.27;
+    const shapeComplex4to6 = otherPrices.shapeComplex4to6 ?? 12.65;
+    const shapeComplex8to12 = otherPrices.shapeComplex8to12 ?? 25.27;
+    costs.shape = spec.thickness <= 6 ? shapeComplex4to6 : shapeComplex8to12;
   } else if (spec.shape === 'SIMPLE') {
-    costs.shape = spec.thickness <= 6 ? 7.59 : 12.65;
+    const shapeSimple4to6 = otherPrices.shapeSimple4to6 ?? 7.59;
+    const shapeSimple8to12 = otherPrices.shapeSimple8to12 ?? 12.65;
+    costs.shape = spec.thickness <= 6 ? shapeSimple4to6 : shapeSimple8to12;
   }
 
   // Calculate ceramic banding cost
   if (spec.ceramicBand) {
-    costs.ceramic = area <= 1.5 ? 63.68 : 63.68 * area;
+    const ceramicBanding = otherPrices.ceramicBanding ?? 63.68;
+    costs.ceramic = area <= 1.5 ? ceramicBanding : ceramicBanding * area;
   }
 
   // Calculate scanning cost
   if (spec.scanning) {
-    costs.scanning = 90;
+    const scanning = otherPrices.scanning ?? 90;
+    costs.scanning = scanning;
   }
 
   // Calculate total

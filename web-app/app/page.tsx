@@ -31,6 +31,7 @@ import DropdownMenuTrigger from '@components/DropdownMenuTrigger';
 import DefaultActionBar from '@components/page/DefaultActionBar';
 import DataTable from '@components/DataTable';
 import { createClient } from '@utils/supabase/client';
+import { usePricing } from '@components/PricingProvider';
 
 const glassThicknesses: GlassThickness[] = [4, 5, 6, 8, 10, 12];
 
@@ -48,6 +49,7 @@ const TABLE_NAME = 'quotes';
 
 export default function CostingDashboard() {
   const router = useRouter();
+  const { pricingData } = usePricing();
   const [spec, setSpec] = useState<GlassSpecification>({
     width: 0,
     height: 0,
@@ -86,12 +88,12 @@ export default function CostingDashboard() {
   useEffect(() => {
     // Recalculate costs whenever specifications change
     try {
-      const newCosts = calculateCost(spec);
+      const newCosts = calculateCost(spec, pricingData);
       setCosts(newCosts);
     } catch (error) {
       console.error('Calculation error:', error);
     }
-  }, [spec]);
+  }, [spec, pricingData]);
 
   useEffect(() => {
     // When thickness changes, ensure glass type is valid for new thickness
@@ -275,7 +277,7 @@ export default function CostingDashboard() {
           <br /> */}
 
           <Text>GLASS THICKNESS (MM)</Text>
-          <Select name="thickness" options={getAvailableThicknesses(spec.glassType).map((t) => t.toString())} defaultValue={spec.thickness.toString()} onChange={(value) => handleSpecChange('thickness', parseInt(value))} placeholder="Select thickness..." />
+          <Select name="thickness" options={getAvailableThicknesses(spec.glassType, pricingData.basePrices).map((t) => t.toString())} defaultValue={spec.thickness.toString()} onChange={(value) => handleSpecChange('thickness', parseInt(value))} placeholder="Select thickness..." />
           <br />
 
           <Text>GLASS TYPE</Text>

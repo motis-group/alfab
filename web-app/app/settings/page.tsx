@@ -24,6 +24,7 @@ import { useRouter } from 'next/navigation';
 import DropdownMenuTrigger from '@components/DropdownMenuTrigger';
 import DefaultActionBar from '@components/page/DefaultActionBar';
 import { GlassType, EdgeworkType, GlassThickness } from '@utils/calculations';
+import { usePricing } from '@components/PricingProvider';
 
 const navigationItems = [
   { icon: '⊹', children: 'Glass Costing', href: '/' },
@@ -33,76 +34,21 @@ const navigationItems = [
   { icon: '⊹', children: 'Component Library', href: '/examples' },
 ];
 
-// Default pricing data structure
-const defaultBasePrices: Record<GlassType, Partial<Record<GlassThickness, number>>> = {
-  Clear: {
-    4: 83.96,
-    5: 87.59,
-    6: 92.47,
-    8: 200.63,
-    10: 221.78,
-    12: 270.74,
-  },
-  Green: {
-    4: 102.19,
-    5: 104.61,
-    6: 109.5,
-    8: 242.79,
-    10: 267.62,
-    12: 292.06,
-  },
-  Grey: {
-    4: 102.19,
-    5: 104.61,
-    6: 109.5,
-    8: 242.79,
-    10: 267.62,
-    12: 292.06,
-  },
-  'Dark Grey': {
-    5: 128.97,
-  },
-  'Super Grey': {
-    6: 198.12,
-  },
-};
-
-const defaultEdgeworkPrices: Record<EdgeworkType, Record<'4-6' | '8-12', number>> = {
-  'ROUGH ARRIS': { '4-6': 0, '8-12': 0 },
-  'FLAT GRIND - STRAIGHT': { '4-6': 4.31, '8-12': 7.59 },
-  'FLAT GRIND - CURVED': { '4-6': 8.85, '8-12': 17.67 },
-  'FLAT POLISH - STRAIGHT': { '4-6': 4.56, '8-12': 8.85 },
-  'FLAT POLISH - CURVED': { '4-6': 12.66, '8-12': 25.27 },
-};
-
-interface OtherPrices {
-  holePrice4to6: number;
-  holePrice8to12: number;
-  shapeSimple4to6: number;
-  shapeSimple8to12: number;
-  shapeComplex4to6: number;
-  shapeComplex8to12: number;
-  ceramicBanding: number;
-  scanning: number;
-}
-
-const defaultOtherPrices: OtherPrices = {
-  holePrice4to6: 6.33,
-  holePrice8to12: 8.85,
-  shapeSimple4to6: 7.59,
-  shapeSimple8to12: 12.65,
-  shapeComplex4to6: 12.65,
-  shapeComplex8to12: 25.27,
-  ceramicBanding: 63.68,
-  scanning: 90,
-};
-
 export default function PricingSettings() {
   const router = useRouter();
-  const [basePrices, setBasePrices] = useState(defaultBasePrices);
-  const [edgeworkPrices, setEdgeworkPrices] = useState(defaultEdgeworkPrices);
-  const [otherPrices, setOtherPrices] = useState(defaultOtherPrices);
+  const { pricingData, updatePricingData, resetToDefaults } = usePricing();
+  const [basePrices, setBasePrices] = useState(pricingData.basePrices);
+  const [edgeworkPrices, setEdgeworkPrices] = useState(pricingData.edgeworkPrices);
+  const [otherPrices, setOtherPrices] = useState(pricingData.otherPrices);
   const [hasChanges, setHasChanges] = useState(false);
+
+  // Update local state when pricing context changes
+  useEffect(() => {
+    setBasePrices(pricingData.basePrices);
+    setEdgeworkPrices(pricingData.edgeworkPrices);
+    setOtherPrices(pricingData.otherPrices);
+    setHasChanges(false);
+  }, [pricingData]);
 
   const updateBasePrice = (glassType: GlassType, thickness: GlassThickness, value: string) => {
     const numValue = parseFloat(value) || 0;
@@ -128,7 +74,7 @@ export default function PricingSettings() {
     setHasChanges(true);
   };
 
-  const updateOtherPrice = (field: keyof OtherPrices, value: string) => {
+  const updateOtherPrice = (field: keyof typeof otherPrices, value: string) => {
     const numValue = parseFloat(value) || 0;
     setOtherPrices((prev) => ({
       ...prev,
@@ -138,16 +84,16 @@ export default function PricingSettings() {
   };
 
   const handleSave = () => {
-    // TODO: Save to backend/localStorage
-    console.log('Saving pricing settings...', { basePrices, edgeworkPrices, otherPrices });
+    updatePricingData({
+      basePrices,
+      edgeworkPrices,
+      otherPrices,
+    });
     setHasChanges(false);
-    // You would typically save to a database or local storage here
   };
 
   const handleReset = () => {
-    setBasePrices(defaultBasePrices);
-    setEdgeworkPrices(defaultEdgeworkPrices);
-    setOtherPrices(defaultOtherPrices);
+    resetToDefaults();
     setHasChanges(false);
   };
 
