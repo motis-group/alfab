@@ -15,12 +15,13 @@ env:
   APP_DIR: /opt/alfab/current
   SECRET_ID: alfab/prod/database
   REMOTE_PATH: /var/www/alfab
+  DEPLOY_DOMAIN: www.alfabvic.com.au
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      HAS_SSM: ${{ secrets.AWS_DEPLOY_ROLE_ARN != '' && secrets.ALFAB_DEPLOY_BUCKET != '' && secrets.ALFAB_EC2_INSTANCE_ID != '' }}
+      HAS_SSM: ${{ secrets.AWS_DEPLOY_ROLE_ARN != '' && secrets.ALFAB_DEPLOY_BUCKET != '' }}
       HAS_SSH: ${{ secrets.REMOTE_USER != '' && secrets.REMOTE_HOST != '' && secrets.REMOTE_PASSWORD != '' }}
 
     steps:
@@ -49,15 +50,40 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Discover deploy targets
+        id: discover_targets
+        if: env.HAS_SSM == 'true' && steps.configure_aws.outcome == 'success'
+        continue-on-error: true
+        env:
+          DEPLOY_DOMAIN: ${{ env.DEPLOY_DOMAIN }}
+          FALLBACK_INSTANCE_ID: ${{ secrets.ALFAB_EC2_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/discover-deploy-targets.sh
+          scripts/discover-deploy-targets.sh
+
       - name: Deploy with SSM
         id: ssm_deploy
         if: env.HAS_SSM == 'true' && steps.configure_aws.outcome == 'success'
         continue-on-error: true
         env:
           DEPLOY_BUCKET: ${{ secrets.ALFAB_DEPLOY_BUCKET }}
-          EC2_INSTANCE_ID: ${{ secrets.ALFAB_EC2_INSTANCE_ID }}
+          TARGET_INSTANCE_IDS: ${{ steps.discover_targets.outputs.instance_ids }}
+          FALLBACK_INSTANCE_ID: ${{ secrets.ALFAB_EC2_INSTANCE_ID }}
         run: |
           set -euo pipefail
+
+          target_instance_ids="${TARGET_INSTANCE_IDS:-}"
+          if [[ -z "${target_instance_ids}" && -n "${FALLBACK_INSTANCE_ID:-}" ]]; then
+            target_instance_ids="${FALLBACK_INSTANCE_ID}"
+          fi
+
+          if [[ -z "${target_instance_ids}" ]]; then
+            echo "No EC2 instance IDs available for SSM deployment." >&2
+            exit 1
+          fi
+
+          echo "Target instances: ${target_instance_ids}"
 
           tar \
             --exclude='.git' \
@@ -84,48 +110,79 @@ jobs:
 
           jq -Rs '{commands:[.]}' /tmp/ssm-deploy.sh > /tmp/ssm-params.json
 
-          command_id="$(aws ssm send-command \
-            --region "${AWS_REGION}" \
-            --instance-ids "${EC2_INSTANCE_ID}" \
-            --document-name AWS-RunShellScript \
-            --comment "Deploy ALFAB from GitHub Actions" \
-            --parameters file:///tmp/ssm-params.json \
-            --query 'Command.CommandId' \
-            --output text)"
+          success_count=0
 
-          echo "SSM command: ${command_id}"
+          for instance_id in ${target_instance_ids}; do
+            echo "Deploying to instance ${instance_id}"
 
-          status="Pending"
-          for _ in {1..180}; do
-            status="$(aws ssm get-command-invocation \
+            command_id="$(aws ssm send-command \
               --region "${AWS_REGION}" \
-              --command-id "${command_id}" \
-              --instance-id "${EC2_INSTANCE_ID}" \
-              --query 'Status' \
+              --instance-ids "${instance_id}" \
+              --document-name AWS-RunShellScript \
+              --comment "Deploy ALFAB from GitHub Actions" \
+              --parameters file:///tmp/ssm-params.json \
+              --query 'Command.CommandId' \
               --output text 2>/dev/null || true)"
 
-            echo "Current SSM status: ${status}"
+            if [[ -z "${command_id}" || "${command_id}" == "None" ]]; then
+              echo "Could not start SSM command for ${instance_id}."
+              continue
+            fi
 
-            case "${status}" in
-              Success|Failed|Cancelled|TimedOut)
-                break
-                ;;
-            esac
+            echo "SSM command for ${instance_id}: ${command_id}"
 
-            sleep 5
+            status="Pending"
+            for _ in {1..180}; do
+              status="$(aws ssm get-command-invocation \
+                --region "${AWS_REGION}" \
+                --command-id "${command_id}" \
+                --instance-id "${instance_id}" \
+                --query 'Status' \
+                --output text 2>/dev/null || true)"
+
+              echo "${instance_id} status: ${status}"
+
+              case "${status}" in
+                Success|Failed|Cancelled|TimedOut)
+                  break
+                  ;;
+              esac
+
+              sleep 5
+            done
+
+            invocation_json="$(aws ssm get-command-invocation \
+              --region "${AWS_REGION}" \
+              --command-id "${command_id}" \
+              --instance-id "${instance_id}" \
+              --query '{InstanceId:InstanceId,Status:Status,ResponseCode:ResponseCode,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+              --output json 2>/dev/null || true)"
+
+            echo "${invocation_json}"
+
+            final_status="$(echo "${invocation_json}" | jq -r '.Status // empty')"
+            if [[ "${final_status}" == "Success" ]]; then
+              success_count=$((success_count + 1))
+              echo "SSM deployment succeeded on ${instance_id}."
+            else
+              echo "SSM deployment failed on ${instance_id}."
+            fi
           done
 
-          aws ssm get-command-invocation \
-            --region "${AWS_REGION}" \
-            --command-id "${command_id}" \
-            --instance-id "${EC2_INSTANCE_ID}" \
-            --query '{Status:Status,ResponseCode:ResponseCode,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
-            --output json
-
-          if [[ "${status}" != "Success" ]]; then
-            echo "Deployment failed with status ${status}." >&2
+          if [[ "${success_count}" -eq 0 ]]; then
+            echo "SSM deployment failed on all target instances." >&2
             exit 1
           fi
+
+      - name: Invalidate CloudFront cache
+        if: steps.ssm_deploy.outcome == 'success' && steps.discover_targets.outputs.distribution_id != ''
+        continue-on-error: true
+        env:
+          DIST_ID: ${{ steps.discover_targets.outputs.distribution_id }}
+        run: |
+          set -euo pipefail
+          echo "Invalidating CloudFront distribution ${DIST_ID}"
+          aws cloudfront create-invalidation --distribution-id "${DIST_ID}" --paths '/*'
 
       - name: Install sshpass
         if: env.HAS_SSH == 'true'
@@ -155,9 +212,12 @@ jobs:
         run: |
           set -euo pipefail
 
+          sleep 10
+
           status="$(curl -sS -o /tmp/smoke_api_db.out -w '%{http_code}' --max-time 20 \
-            -X POST "https://www.alfabvic.com.au/api/db?smoke=${GITHUB_SHA}" \
+            -X POST "https://${DEPLOY_DOMAIN}/api/db?smoke=${GITHUB_SHA}" \
             -H 'Content-Type: application/json' \
+            -H 'Cache-Control: no-cache' \
             --data '{"table":"customers","action":"select","columns":"*"}' || true)"
 
           echo "Smoke status: ${status}"
@@ -165,6 +225,14 @@ jobs:
 
           if [[ "${status}" == "404" || "${status}" == "000" ]]; then
             echo "Production API route is still unavailable (status ${status})." >&2
+            exit 1
+          fi
+
+          curl -sS --max-time 20 "https://${DEPLOY_DOMAIN}/doors?smoke=${GITHUB_SHA}" -H 'Cache-Control: no-cache' > /tmp/smoke_doors.out
+          sed -n '1,60p' /tmp/smoke_doors.out || true
+
+          if grep -q 'style="width:100%;padding:0.6rem"' /tmp/smoke_doors.out; then
+            echo "Prod is still serving stale dropdown markup." >&2
             exit 1
           fi
 
@@ -176,6 +244,10 @@ jobs:
           echo "HAS_SSM=${HAS_SSM}"
           echo "HAS_SSH=${HAS_SSH}"
           echo "configure_aws=${{ steps.configure_aws.outcome }}"
+          echo "discover_targets=${{ steps.discover_targets.outcome }}"
+          echo "distribution_id=${{ steps.discover_targets.outputs.distribution_id }}"
+          echo "origin_domains=${{ steps.discover_targets.outputs.origin_domains }}"
+          echo "instance_ids=${{ steps.discover_targets.outputs.instance_ids }}"
           echo "ssm_deploy=${{ steps.ssm_deploy.outcome }}"
           echo "ssh_deploy=${{ steps.ssh_deploy.outcome }}"
           echo "smoke=${{ steps.smoke.outcome }}"
