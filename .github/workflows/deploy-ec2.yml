@@ -57,6 +57,8 @@ jobs:
         env:
           DEPLOY_DOMAIN: ${{ env.DEPLOY_DOMAIN }}
           FALLBACK_INSTANCE_ID: ${{ secrets.ALFAB_EC2_INSTANCE_ID }}
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+          DISCOVERY_REGIONS: ${{ env.AWS_REGION }} us-west-2 us-east-1
         run: |
           set -euo pipefail
           chmod +x scripts/discover-deploy-targets.sh
@@ -68,22 +70,22 @@ jobs:
         continue-on-error: true
         env:
           DEPLOY_BUCKET: ${{ secrets.ALFAB_DEPLOY_BUCKET }}
-          TARGET_INSTANCE_IDS: ${{ steps.discover_targets.outputs.instance_ids }}
+          TARGET_INSTANCE_TARGETS: ${{ steps.discover_targets.outputs.instance_targets }}
           FALLBACK_INSTANCE_ID: ${{ secrets.ALFAB_EC2_INSTANCE_ID }}
         run: |
           set -euo pipefail
 
-          target_instance_ids="${TARGET_INSTANCE_IDS:-}"
-          if [[ -z "${target_instance_ids}" && -n "${FALLBACK_INSTANCE_ID:-}" ]]; then
-            target_instance_ids="${FALLBACK_INSTANCE_ID}"
+          target_instance_targets="${TARGET_INSTANCE_TARGETS:-}"
+          if [[ -z "${target_instance_targets}" && -n "${FALLBACK_INSTANCE_ID:-}" ]]; then
+            target_instance_targets="${AWS_REGION}:${FALLBACK_INSTANCE_ID}"
           fi
 
-          if [[ -z "${target_instance_ids}" ]]; then
-            echo "No EC2 instance IDs available for SSM deployment." >&2
+          if [[ -z "${target_instance_targets}" ]]; then
+            echo "No EC2 targets available for SSM deployment." >&2
             exit 1
           fi
 
-          echo "Target instances: ${target_instance_ids}"
+          echo "Target instances: ${target_instance_targets}"
 
           tar \
             --exclude='.git' \
@@ -112,11 +114,24 @@ jobs:
 
           success_count=0
 
-          for instance_id in ${target_instance_ids}; do
-            echo "Deploying to instance ${instance_id}"
+          for target in ${target_instance_targets}; do
+            instance_region="${AWS_REGION}"
+            instance_id="${target}"
+
+            if [[ "${target}" == *:* ]]; then
+              instance_region="${target%%:*}"
+              instance_id="${target##*:}"
+            fi
+
+            if [[ -z "${instance_region}" || -z "${instance_id}" ]]; then
+              echo "Skipping malformed target: ${target}"
+              continue
+            fi
+
+            echo "Deploying to instance ${instance_id} in ${instance_region}"
 
             command_id="$(aws ssm send-command \
-              --region "${AWS_REGION}" \
+              --region "${instance_region}" \
               --instance-ids "${instance_id}" \
               --document-name AWS-RunShellScript \
               --comment "Deploy ALFAB from GitHub Actions" \
@@ -125,22 +140,22 @@ jobs:
               --output text 2>/dev/null || true)"
 
             if [[ -z "${command_id}" || "${command_id}" == "None" ]]; then
-              echo "Could not start SSM command for ${instance_id}."
+              echo "Could not start SSM command for ${instance_id} in ${instance_region}."
               continue
             fi
 
-            echo "SSM command for ${instance_id}: ${command_id}"
+            echo "SSM command for ${instance_id} (${instance_region}): ${command_id}"
 
             status="Pending"
             for _ in {1..180}; do
               status="$(aws ssm get-command-invocation \
-                --region "${AWS_REGION}" \
+                --region "${instance_region}" \
                 --command-id "${command_id}" \
                 --instance-id "${instance_id}" \
                 --query 'Status' \
                 --output text 2>/dev/null || true)"
 
-              echo "${instance_id} status: ${status}"
+              echo "${instance_id} (${instance_region}) status: ${status}"
 
               case "${status}" in
                 Success|Failed|Cancelled|TimedOut)
@@ -152,20 +167,20 @@ jobs:
             done
 
             invocation_json="$(aws ssm get-command-invocation \
-              --region "${AWS_REGION}" \
+              --region "${instance_region}" \
               --command-id "${command_id}" \
               --instance-id "${instance_id}" \
               --query '{InstanceId:InstanceId,Status:Status,ResponseCode:ResponseCode,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
               --output json 2>/dev/null || true)"
 
-            echo "${invocation_json}"
+            echo "${invocation_json}" | jq --arg region "${instance_region}" '. + {Region:$region}'
 
             final_status="$(echo "${invocation_json}" | jq -r '.Status // empty')"
             if [[ "${final_status}" == "Success" ]]; then
               success_count=$((success_count + 1))
-              echo "SSM deployment succeeded on ${instance_id}."
+              echo "SSM deployment succeeded on ${instance_id} (${instance_region})."
             else
-              echo "SSM deployment failed on ${instance_id}."
+              echo "SSM deployment failed on ${instance_id} (${instance_region})."
             fi
           done
 
@@ -247,6 +262,8 @@ jobs:
           echo "discover_targets=${{ steps.discover_targets.outcome }}"
           echo "distribution_id=${{ steps.discover_targets.outputs.distribution_id }}"
           echo "origin_domains=${{ steps.discover_targets.outputs.origin_domains }}"
+          echo "discovery_regions=${{ steps.discover_targets.outputs.discovery_regions }}"
+          echo "instance_targets=${{ steps.discover_targets.outputs.instance_targets }}"
           echo "instance_ids=${{ steps.discover_targets.outputs.instance_ids }}"
           echo "ssm_deploy=${{ steps.ssm_deploy.outcome }}"
           echo "ssh_deploy=${{ steps.ssh_deploy.outcome }}"
