@@ -1,4 +1,4 @@
-name: Deploy EC2
+name: Deploy Production
 
 on:
   push:
@@ -14,10 +14,14 @@ env:
   AWS_REGION: ap-southeast-2
   APP_DIR: /opt/alfab/current
   SECRET_ID: alfab/prod/database
+  REMOTE_PATH: /var/www/alfab
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      HAS_SSM: ${{ secrets.AWS_DEPLOY_ROLE_ARN != '' && secrets.ALFAB_DEPLOY_BUCKET != '' && secrets.ALFAB_EC2_INSTANCE_ID != '' }}
+      HAS_SSH: ${{ secrets.REMOTE_USER != '' && secrets.REMOTE_HOST != '' && secrets.REMOTE_PASSWORD != '' }}
 
     steps:
       - name: Checkout
@@ -36,58 +40,40 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Package app
+      - name: Configure AWS credentials
+        id: configure_aws
+        if: env.HAS_SSM == 'true'
+        continue-on-error: true
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy with SSM
+        id: ssm_deploy
+        if: env.HAS_SSM == 'true' && steps.configure_aws.outcome == 'success'
+        continue-on-error: true
+        env:
+          DEPLOY_BUCKET: ${{ secrets.ALFAB_DEPLOY_BUCKET }}
+          EC2_INSTANCE_ID: ${{ secrets.ALFAB_EC2_INSTANCE_ID }}
         run: |
+          set -euo pipefail
+
           tar \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='.next' \
             --exclude='node_modules' \
             --exclude='tsconfig.tsbuildinfo' \
-            --exclude='web-app-project' \
-            --exclude='.precheckout-backup-*' \
             -czf /tmp/app-src.tgz .
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Upload artifact
-        id: upload
-        env:
-          DEPLOY_BUCKET: ${{ secrets.ALFAB_DEPLOY_BUCKET }}
-        run: |
-          set -euo pipefail
-
-          if [[ -z "${DEPLOY_BUCKET}" ]]; then
-            echo "ALFAB_DEPLOY_BUCKET secret is required." >&2
-            exit 1
-          fi
 
           artifact_key="app-src-${GITHUB_SHA}.tgz"
           aws s3 cp /tmp/app-src.tgz "s3://${DEPLOY_BUCKET}/${artifact_key}"
 
-          echo "artifact_key=${artifact_key}" >> "$GITHUB_OUTPUT"
-
-      - name: Deploy on EC2 (SSM)
-        env:
-          DEPLOY_BUCKET: ${{ secrets.ALFAB_DEPLOY_BUCKET }}
-          EC2_INSTANCE_ID: ${{ secrets.ALFAB_EC2_INSTANCE_ID }}
-          ARTIFACT_KEY: ${{ steps.upload.outputs.artifact_key }}
-        run: |
-          set -euo pipefail
-
-          if [[ -z "${EC2_INSTANCE_ID}" ]]; then
-            echo "ALFAB_EC2_INSTANCE_ID secret is required." >&2
-            exit 1
-          fi
-
           cat > /tmp/ssm-deploy.sh <<SCRIPT
           set -euo pipefail
           mkdir -p /opt/alfab
-          aws s3 cp "s3://${DEPLOY_BUCKET}/${ARTIFACT_KEY}" /opt/alfab/src.tgz
+          aws s3 cp "s3://${DEPLOY_BUCKET}/${artifact_key}" /opt/alfab/src.tgz
           rm -rf "${APP_DIR}"
           mkdir -p "${APP_DIR}"
           tar -xzf /opt/alfab/src.tgz -C "${APP_DIR}"
@@ -110,7 +96,7 @@ jobs:
           echo "SSM command: ${command_id}"
 
           status="Pending"
-          for i in {1..180}; do
+          for _ in {1..180}; do
             status="$(aws ssm get-command-invocation \
               --region "${AWS_REGION}" \
               --command-id "${command_id}" \
@@ -140,3 +126,48 @@ jobs:
             echo "Deployment failed with status ${status}." >&2
             exit 1
           fi
+
+      - name: Install sshpass
+        if: env.HAS_SSH == 'true' && (env.HAS_SSM != 'true' || steps.ssm_deploy.outcome != 'success')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+
+      - name: Deploy with SSH
+        id: ssh_deploy
+        if: env.HAS_SSH == 'true' && (env.HAS_SSM != 'true' || steps.ssm_deploy.outcome != 'success')
+        env:
+          REMOTE_USER: ${{ secrets.REMOTE_USER }}
+          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
+          REMOTE_PASSWORD: ${{ secrets.REMOTE_PASSWORD }}
+          REMOTE_PATH: ${{ env.REMOTE_PATH }}
+        run: |
+          set -euo pipefail
+          chmod +x scripts/load-env.sh scripts/deploy.sh
+          source scripts/load-env.sh
+          load_env
+          ./scripts/deploy.sh
+
+      - name: Validate deployment
+        if: always()
+        run: |
+          set -euo pipefail
+
+          echo "HAS_SSM=${HAS_SSM}"
+          echo "HAS_SSH=${HAS_SSH}"
+          echo "configure_aws=${{ steps.configure_aws.outcome }}"
+          echo "ssm_deploy=${{ steps.ssm_deploy.outcome }}"
+          echo "ssh_deploy=${{ steps.ssh_deploy.outcome }}"
+
+          if [[ "${HAS_SSM}" != "true" && "${HAS_SSH}" != "true" ]]; then
+            echo "No deployment secrets are configured (SSM or SSH)." >&2
+            exit 1
+          fi
+
+          if [[ "${{ steps.ssm_deploy.outcome }}" == "success" || "${{ steps.ssh_deploy.outcome }}" == "success" ]]; then
+            echo "Deployment succeeded."
+            exit 0
+          fi
+
+          echo "Deployment failed for all configured methods." >&2
+          exit 1
