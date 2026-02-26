@@ -1,0 +1,142 @@
+name: Deploy EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-2
+  APP_DIR: /opt/alfab/current
+  SECRET_ID: alfab/prod/database
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web-app
+        run: npm ci
+
+      - name: Build
+        working-directory: web-app
+        run: npm run build
+
+      - name: Package web app
+        run: |
+          tar -C web-app \
+            --exclude='.next' \
+            --exclude='node_modules' \
+            --exclude='tsconfig.tsbuildinfo' \
+            -czf /tmp/web-app-src.tgz .
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload artifact
+        id: upload
+        env:
+          DEPLOY_BUCKET: ${{ secrets.ALFAB_DEPLOY_BUCKET }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${DEPLOY_BUCKET}" ]]; then
+            echo "ALFAB_DEPLOY_BUCKET secret is required." >&2
+            exit 1
+          fi
+
+          artifact_key="web-app-src-${GITHUB_SHA}.tgz"
+          aws s3 cp /tmp/web-app-src.tgz "s3://${DEPLOY_BUCKET}/${artifact_key}"
+
+          echo "artifact_key=${artifact_key}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy on EC2 (SSM)
+        env:
+          DEPLOY_BUCKET: ${{ secrets.ALFAB_DEPLOY_BUCKET }}
+          EC2_INSTANCE_ID: ${{ secrets.ALFAB_EC2_INSTANCE_ID }}
+          ARTIFACT_KEY: ${{ steps.upload.outputs.artifact_key }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${EC2_INSTANCE_ID}" ]]; then
+            echo "ALFAB_EC2_INSTANCE_ID secret is required." >&2
+            exit 1
+          fi
+
+          cat > /tmp/ssm-deploy.sh <<SCRIPT
+          set -euo pipefail
+          mkdir -p /opt/alfab
+          aws s3 cp "s3://${DEPLOY_BUCKET}/${ARTIFACT_KEY}" /opt/alfab/src.tgz
+          rm -rf "${APP_DIR}"
+          mkdir -p "${APP_DIR}"
+          tar -xzf /opt/alfab/src.tgz -C "${APP_DIR}"
+          cd "${APP_DIR}"
+          chmod +x scripts/*.sh
+          AWS_REGION="${AWS_REGION}" SECRET_ID="${SECRET_ID}" APP_DIR="${APP_DIR}" bash scripts/ec2-deploy.sh
+          SCRIPT
+
+          jq -Rs '{commands:[.]}' /tmp/ssm-deploy.sh > /tmp/ssm-params.json
+
+          command_id="$(aws ssm send-command \
+            --region "${AWS_REGION}" \
+            --instance-ids "${EC2_INSTANCE_ID}" \
+            --document-name AWS-RunShellScript \
+            --comment "Deploy ALFAB from GitHub Actions" \
+            --parameters file:///tmp/ssm-params.json \
+            --query 'Command.CommandId' \
+            --output text)"
+
+          echo "SSM command: ${command_id}"
+
+          status="Pending"
+          for i in {1..180}; do
+            status="$(aws ssm get-command-invocation \
+              --region "${AWS_REGION}" \
+              --command-id "${command_id}" \
+              --instance-id "${EC2_INSTANCE_ID}" \
+              --query 'Status' \
+              --output text 2>/dev/null || true)"
+
+            echo "Current SSM status: ${status}"
+
+            case "${status}" in
+              Success|Failed|Cancelled|TimedOut)
+                break
+                ;;
+            esac
+
+            sleep 5
+          done
+
+          aws ssm get-command-invocation \
+            --region "${AWS_REGION}" \
+            --command-id "${command_id}" \
+            --instance-id "${EC2_INSTANCE_ID}" \
+            --query '{Status:Status,ResponseCode:ResponseCode,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+            --output json
+
+          if [[ "${status}" != "Success" ]]; then
+            echo "Deployment failed with status ${status}." >&2
+            exit 1
+          fi

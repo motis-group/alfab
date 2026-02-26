@@ -11,12 +11,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "migrate:supabase": "node scripts/migrate-supabase-to-postgres.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.1",
     "next": "^14.0.0",
+    "pg": "^8.13.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

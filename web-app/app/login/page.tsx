@@ -25,7 +25,7 @@ export default function LoginPage() {
       console.log('Attempting login...');
       console.log('Password attempt:', password);
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/signin`, {
+      const response = await fetch('/api/signin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
