@@ -128,14 +128,15 @@ jobs:
           fi
 
       - name: Install sshpass
-        if: env.HAS_SSH == 'true' && (env.HAS_SSM != 'true' || steps.ssm_deploy.outcome != 'success')
+        if: env.HAS_SSH == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y sshpass
 
       - name: Deploy with SSH
         id: ssh_deploy
-        if: env.HAS_SSH == 'true' && (env.HAS_SSM != 'true' || steps.ssm_deploy.outcome != 'success')
+        if: env.HAS_SSH == 'true'
+        continue-on-error: true
         env:
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
@@ -148,6 +149,25 @@ jobs:
           load_env
           ./scripts/deploy.sh
 
+      - name: Smoke test production API route
+        id: smoke
+        if: steps.ssm_deploy.outcome == 'success' || steps.ssh_deploy.outcome == 'success'
+        run: |
+          set -euo pipefail
+
+          status="$(curl -sS -o /tmp/smoke_api_db.out -w '%{http_code}' --max-time 20 \
+            -X POST "https://www.alfabvic.com.au/api/db?smoke=${GITHUB_SHA}" \
+            -H 'Content-Type: application/json' \
+            --data '{"table":"customers","action":"select","columns":"*"}' || true)"
+
+          echo "Smoke status: ${status}"
+          sed -n '1,80p' /tmp/smoke_api_db.out || true
+
+          if [[ "${status}" == "404" || "${status}" == "000" ]]; then
+            echo "Production API route is still unavailable (status ${status})." >&2
+            exit 1
+          fi
+
       - name: Validate deployment
         if: always()
         run: |
@@ -158,13 +178,14 @@ jobs:
           echo "configure_aws=${{ steps.configure_aws.outcome }}"
           echo "ssm_deploy=${{ steps.ssm_deploy.outcome }}"
           echo "ssh_deploy=${{ steps.ssh_deploy.outcome }}"
+          echo "smoke=${{ steps.smoke.outcome }}"
 
           if [[ "${HAS_SSM}" != "true" && "${HAS_SSH}" != "true" ]]; then
             echo "No deployment secrets are configured (SSM or SSH)." >&2
             exit 1
           fi
 
-          if [[ "${{ steps.ssm_deploy.outcome }}" == "success" || "${{ steps.ssh_deploy.outcome }}" == "success" ]]; then
+          if [[ ("${{ steps.ssm_deploy.outcome }}" == "success" || "${{ steps.ssh_deploy.outcome }}" == "success") && "${{ steps.smoke.outcome }}" == "success" ]]; then
             echo "Deployment succeeded."
             exit 0
           fi
