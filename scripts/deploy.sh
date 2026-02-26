@@ -1,6 +1,6 @@
 #!/bin/bash
-set -e # Exit on error
-set -x # Enable command echoing for debugging
+set -e
+set -x
 
 # Required environment variables
 # REMOTE_USER - SSH user
@@ -8,19 +8,16 @@ set -x # Enable command echoing for debugging
 # REMOTE_PASSWORD - SSH password
 # REMOTE_PATH - Remote deployment path (e.g., /var/www/alfab)
 
-# Function to run remote commands via SSH
 run_remote_cmd() {
     sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no "$REMOTE_USER@$REMOTE_HOST" "$1"
 }
 
-# Function to copy file content to remote server
 copy_to_remote() {
     echo "$1" | run_remote_cmd "sudo tee $2"
 }
 
 echo "🚀 Starting deployment process..."
 
-# Setup systemd service configuration
 SYSTEMD_SERVICE="[Unit]
 Description=Next.js application
 After=network.target
@@ -40,17 +37,14 @@ WantedBy=multi-user.target"
 
 echo "📦 Deploying application..."
 
-# Stop existing service and update codebase
 run_remote_cmd "
     sudo systemctl stop nextjs || true
-    
-    # Fix git ownership and directory permissions
+
     sudo chown -R $REMOTE_USER:$REMOTE_USER $REMOTE_PATH
     sudo chmod -R 755 $REMOTE_PATH
-    
-    # Configure git safety
+
     git config --global --add safe.directory $REMOTE_PATH
-    
+
     cd $REMOTE_PATH
     if [ -d .git ]; then
         sudo git fetch origin
@@ -61,29 +55,29 @@ run_remote_cmd "
         sudo git clone https://github.com/motis-group/alfab.git $REMOTE_PATH
         cd $REMOTE_PATH
     fi
-    
-    # Ensure node_modules exists and has correct permissions
+
+    # Legacy compatibility: older nginx/systemd configs may still point at /web-app.
+    if [ -d web-app ] && [ ! -L web-app ]; then
+        sudo rm -rf web-app
+    fi
+    if [ ! -e web-app ]; then
+        sudo ln -s . web-app
+    fi
+
     sudo mkdir -p node_modules
     sudo chown -R $REMOTE_USER:$REMOTE_USER node_modules
-    
-    # Install dependencies and build
-    sudo npm install --production=false --no-audit  # We need dev dependencies for building
+
+    sudo npm install --production=false --no-audit
     sudo npm run build
-    
-    # After build, we can remove dev dependencies
     sudo npm prune --production
-    
-    # Set final permissions
+
     sudo chown -R www-data:www-data ."
 
 echo "⚙️ Configuring services..."
-
-# Update service configuration
 copy_to_remote "$SYSTEMD_SERVICE" "/etc/systemd/system/nextjs.service"
 
 echo "🔄 Restarting services..."
 
-# Final setup and service restart
 run_remote_cmd "
     sudo chown -R www-data:www-data $REMOTE_PATH
     cd $REMOTE_PATH
