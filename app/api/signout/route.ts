@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { clearSessionCookie, readSessionTokenFromCookie, revokeAppSessionByToken } from '@utils/auth-session';
+import { getRequestOrigin } from '@utils/billing-config';
 
 export const runtime = 'nodejs';
 
@@ -40,7 +41,8 @@ export async function GET(request: Request) {
 
   const requestUrl = new URL(request.url);
   const nextPath = safeNextPath(requestUrl.searchParams.get('next'));
-  const redirectUrl = new URL(nextPath, request.url);
+  const origin = getRequestOrigin(request);
+  const redirectUrl = new URL(nextPath, origin);
 
   const response = NextResponse.redirect(redirectUrl);
   clearSessionCookie(response);
