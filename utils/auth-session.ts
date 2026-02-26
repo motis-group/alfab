@@ -15,7 +15,7 @@ interface RawSessionRow {
   username: string;
   role: string;
   is_active: boolean;
-  assumed_role: string | null;
+  assumed_role?: string | null;
   expires_at: string;
 }
 
@@ -63,24 +63,52 @@ function mapRawSession(row: RawSessionRow): AppSession {
 async function loadSessionByToken(sessionToken: string): Promise<AppSession | null> {
   const tokenHash = hashSessionToken(sessionToken);
 
-  const result = await dbQuery<RawSessionRow>(
-    `
-      select
-        s.id as session_id,
-        s.user_id,
-        s.assumed_role,
-        s.expires_at,
-        u.username,
-        u.role,
-        u.is_active
-      from auth_sessions s
-      join users u on u.id = s.user_id
-      where s.token_hash = $1
-        and s.expires_at > now()
-      limit 1
-    `,
-    [tokenHash]
-  );
+  let result;
+
+  try {
+    result = await dbQuery<RawSessionRow>(
+      `
+        select
+          s.id as session_id,
+          s.user_id,
+          s.assumed_role,
+          s.expires_at,
+          u.username,
+          u.role,
+          u.is_active
+        from auth_sessions s
+        join users u on u.id = s.user_id
+        where s.token_hash = $1
+          and s.expires_at > now()
+        limit 1
+      `,
+      [tokenHash]
+    );
+  } catch (error: any) {
+    // Backward compatibility for pre-migration schemas without auth_sessions.assumed_role.
+    if (error?.code !== '42703' || !String(error?.message || '').includes('assumed_role')) {
+      throw error;
+    }
+
+    result = await dbQuery<RawSessionRow>(
+      `
+        select
+          s.id as session_id,
+          s.user_id,
+          null::text as assumed_role,
+          s.expires_at,
+          u.username,
+          u.role,
+          u.is_active
+        from auth_sessions s
+        join users u on u.id = s.user_id
+        where s.token_hash = $1
+          and s.expires_at > now()
+        limit 1
+      `,
+      [tokenHash]
+    );
+  }
 
   if (!result.rowCount) {
     return null;

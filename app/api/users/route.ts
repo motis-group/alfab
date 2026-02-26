@@ -54,7 +54,7 @@ async function requireSuperadmin() {
     };
   }
 
-  if (session.effectiveRole !== 'superadmin') {
+  if (session.role !== 'superadmin') {
     return {
       session,
       response: NextResponse.json({ error: 'Only superadmin can manage users and roles.' }, { status: 403 }),

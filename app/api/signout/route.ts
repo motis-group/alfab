@@ -4,7 +4,19 @@ import { clearSessionCookie, readSessionTokenFromCookie, revokeAppSessionByToken
 
 export const runtime = 'nodejs';
 
-export async function POST() {
+function safeNextPath(value: string | null): string {
+  if (!value || !value.startsWith('/')) {
+    return '/login';
+  }
+
+  if (value.startsWith('//')) {
+    return '/login';
+  }
+
+  return value;
+}
+
+async function revokeCurrentSession(): Promise<void> {
   const sessionToken = await readSessionTokenFromCookie();
 
   if (sessionToken) {
@@ -12,9 +24,25 @@ export async function POST() {
       // Keep signout resilient; cookie will still be cleared.
     });
   }
+}
+
+export async function POST() {
+  await revokeCurrentSession();
 
   const response = NextResponse.json({ success: true });
   clearSessionCookie(response);
 
+  return response;
+}
+
+export async function GET(request: Request) {
+  await revokeCurrentSession();
+
+  const requestUrl = new URL(request.url);
+  const nextPath = safeNextPath(requestUrl.searchParams.get('next'));
+  const redirectUrl = new URL(nextPath, request.url);
+
+  const response = NextResponse.redirect(redirectUrl);
+  clearSessionCookie(response);
   return response;
 }

@@ -4,6 +4,7 @@ import '@root/global.scss';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
@@ -43,14 +44,7 @@ interface UserDraft {
   password: string;
 }
 
-const navigationItems = [
-  { icon: '⊹', children: 'Glass Costing', href: '/' },
-  { icon: '⊹', children: 'Order Management', href: '/doors' },
-  { icon: '⊹', children: 'Customers', href: '/doors/clients' },
-  { icon: '⊹', children: 'Pricing Settings', href: '/settings' },
-  { icon: '⊹', children: 'Billing', href: '/settings/billing' },
-  { icon: '⊹', children: 'Users', href: '/settings/users' },
-];
+const navigationItems = APP_NAVIGATION_ITEMS;
 
 function formatDate(value: string): string {
   return new Date(value).toLocaleString('en-AU');
@@ -78,7 +72,7 @@ export default function UserSettingsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const isSuperadmin = currentUser?.role === 'superadmin';
-  const canInvite = currentUser?.effectiveRole === 'superadmin' || currentUser?.effectiveRole === 'admin';
+  const canInvite = isSuperadmin || currentUser?.effectiveRole === 'superadmin' || currentUser?.effectiveRole === 'admin';
 
   const badgeText = useMemo(() => {
     if (!currentUser) {
@@ -168,7 +162,7 @@ export default function UserSettingsPage() {
         setDrafts({});
       }
 
-      if (sessionUser.effectiveRole === 'superadmin' || sessionUser.effectiveRole === 'admin') {
+      if (sessionUser.role === 'superadmin' || sessionUser.effectiveRole === 'admin') {
         const inviteResponse = await fetch('/api/users/invites', { cache: 'no-store' });
         const inviteData = (await inviteResponse.json().catch(() => null)) as { invites?: InviteRecord[]; error?: string } | null;
         if (!inviteResponse.ok) {
@@ -189,14 +183,6 @@ export default function UserSettingsPage() {
     loadAll();
   }, []);
 
-  async function handleSignOut() {
-    try {
-      await fetch('/api/signout', { method: 'POST' });
-    } finally {
-      router.push('/login');
-      router.refresh();
-    }
-  }
 
   async function createInvite() {
     if (!canInvite) {
@@ -331,7 +317,7 @@ export default function UserSettingsPage() {
       logo="⚙"
       navigationItems={navigationItems}
       navLabel="USER SETTINGS"
-      navRight={<ActionButton onClick={handleSignOut}>SIGN OUT</ActionButton>}
+      navRight={<ActionButton onClick={() => router.push('/settings')}>BACK TO SETTINGS</ActionButton>}
       heading="USER MANAGEMENT"
       badge={badgeText}
       showThemeControls

@@ -1,0 +1,11 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: 1ch;
+}
+
+.error {
+  color: var(--theme-status-error);
+  font-size: calc(var(--font-size) * 0.9);
+  text-transform: uppercase;
+}

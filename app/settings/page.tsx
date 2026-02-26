@@ -4,6 +4,7 @@ import '@root/global.scss';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 
 import ActionButton from '@components/ActionButton';
 import Card from '@components/Card';
@@ -20,15 +21,7 @@ import Text from '@components/Text';
 import { usePricing } from '@components/PricingProvider';
 import { EdgeworkType, GlassThickness, GlassType } from '@utils/calculations';
 
-const navigationItems = [
-  { icon: '⊹', children: 'Glass Costing', href: '/' },
-  { icon: '⊹', children: 'Order Management', href: '/doors' },
-  { icon: '⊹', children: 'Customers', href: '/doors/clients' },
-  { icon: '⊹', children: 'Pricing Settings', href: '/settings' },
-  { icon: '⊹', children: 'Billing', href: '/settings/billing' },
-  { icon: '⊹', children: 'Users', href: '/settings/users' },
-  { icon: '⊹', children: 'Component Library', href: '/examples' },
-];
+const navigationItems = APP_NAVIGATION_ITEMS;
 
 export default function PricingSettings() {
   const router = useRouter();

@@ -11,6 +11,8 @@ import DropdownMenuTrigger from '@components/DropdownMenuTrigger';
 import Grid from '@components/Grid';
 import Navigation from '@components/Navigation';
 import Row from '@components/Row';
+import AppSectionNav from '@components/page/AppSectionNav';
+import AppSessionIndicator from '@components/page/AppSessionIndicator';
 
 interface NavigationItem {
   icon?: React.ReactNode;
@@ -39,10 +41,25 @@ interface AppFrameProps {
   badge?: React.ReactNode;
   actionItems?: FrameActionItem[];
   showThemeControls?: boolean;
+  showSectionNavigation?: boolean;
+  showSessionIndicator?: boolean;
   children?: React.ReactNode;
 }
 
-const AppFrame: React.FC<AppFrameProps> = ({ previewPixelSRC, logo = '⬡', navigationItems = [], navLabel, navRight, heading, badge, actionItems = [], showThemeControls = false, children }) => {
+const AppFrame: React.FC<AppFrameProps> = ({
+  previewPixelSRC,
+  logo = '⬡',
+  navigationItems = [],
+  navLabel,
+  navRight,
+  heading,
+  badge,
+  actionItems = [],
+  showThemeControls = false,
+  showSectionNavigation = true,
+  showSessionIndicator = true,
+  children,
+}) => {
   let left: React.ReactNode = null;
 
   if (navLabel) {
@@ -57,10 +74,19 @@ const AppFrame: React.FC<AppFrameProps> = ({ previewPixelSRC, logo = '⬡', navi
     }
   }
 
+  const right = navRight || showSessionIndicator ? (
+    <div className={styles.navRight}>
+      {navRight}
+      {showSessionIndicator ? <AppSessionIndicator /> : null}
+    </div>
+  ) : null;
+
   return (
     <DefaultLayout previewPixelSRC={previewPixelSRC}>
       <Grid className={styles.root}>
-        <Navigation logo={logo} left={left} right={navRight} />
+        <Navigation logo={logo} left={left} right={right} />
+
+        {showSectionNavigation ? <AppSectionNav /> : null}
 
         {showThemeControls && <DefaultActionBar />}
 

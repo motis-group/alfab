@@ -2,6 +2,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1ch;
   background: var(--theme-border);
 }
 
@@ -38,6 +39,9 @@
 
 .left {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75ch;
 }
 
 .children {
@@ -47,4 +51,8 @@
 
 .right {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75ch;
 }

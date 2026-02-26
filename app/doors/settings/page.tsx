@@ -8,14 +8,9 @@ import CardDouble from '@components/CardDouble';
 import Table from '@components/Table';
 import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
+import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 
-const navigationItems = [
-  { icon: '⊹', children: 'Glass Costing', href: '/' },
-  { icon: '⊹', children: 'Order Management', href: '/doors' },
-  { icon: '⊹', children: 'Customers', href: '/doors/clients' },
-  { icon: '⊹', children: 'Pricing Settings', href: '/settings' },
-  { icon: '⊹', children: 'Billing', href: '/settings/billing' },
-];
+const navigationItems = APP_NAVIGATION_ITEMS;
 
 export default function SettingsPage() {
   return (
@@ -24,7 +19,6 @@ export default function SettingsPage() {
       logo="⬡"
       navigationItems={navigationItems}
       navLabel="PRICING RULES"
-      navRight={<ActionButton>SIGN OUT</ActionButton>}
       heading="PRICING RULES"
       badge="SYSTEM SETTINGS"
       showThemeControls

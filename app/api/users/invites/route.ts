@@ -26,8 +26,8 @@ interface CreateInviteBody {
   expiresHours?: number;
 }
 
-function canInvite(role: string): boolean {
-  return role === 'superadmin' || role === 'admin';
+function canInvite(baseRole: string, effectiveRole: string): boolean {
+  return baseRole === 'superadmin' || effectiveRole === 'superadmin' || effectiveRole === 'admin';
 }
 
 function hashToken(token: string): string {
@@ -63,14 +63,14 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (!canInvite(session.effectiveRole)) {
+  if (!canInvite(session.role, session.effectiveRole)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const params: unknown[] = [];
   let whereSql = '';
 
-  if (session.effectiveRole !== 'superadmin') {
+  if (session.role !== 'superadmin') {
     params.push(session.userId);
     whereSql = `where i.invited_by = $${params.length}`;
   }
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  if (!canInvite(session.effectiveRole)) {
+  if (!canInvite(session.role, session.effectiveRole)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
   const email = normalizeEmail(body.email);
 
   const inviteRole: AppRole = (() => {
-    if (session.effectiveRole !== 'superadmin') {
+    if (session.role !== 'superadmin') {
       return 'standard';
     }
 

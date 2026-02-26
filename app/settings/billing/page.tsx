@@ -4,6 +4,7 @@ import '@root/global.scss';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
@@ -16,14 +17,7 @@ import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 
-const navigationItems = [
-  { icon: '⊹', children: 'Glass Costing', href: '/' },
-  { icon: '⊹', children: 'Order Management', href: '/doors' },
-  { icon: '⊹', children: 'Customers', href: '/doors/clients' },
-  { icon: '⊹', children: 'Pricing Settings', href: '/settings' },
-  { icon: '⊹', children: 'Billing', href: '/settings/billing' },
-  { icon: '⊹', children: 'Users', href: '/settings/users' },
-];
+const navigationItems = APP_NAVIGATION_ITEMS;
 
 interface BillingEstimateResponse {
   assumptions: {

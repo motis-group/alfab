@@ -40,6 +40,21 @@ create table if not exists auth_sessions (
   last_seen_at timestamptz
 );
 
+do $$
+begin
+  alter table auth_sessions add column if not exists assumed_role text;
+  alter table auth_sessions add column if not exists last_seen_at timestamptz;
+  update auth_sessions
+  set assumed_role = null
+  where assumed_role is not null
+    and assumed_role not in ('superadmin', 'admin', 'standard', 'readonly');
+  alter table auth_sessions drop constraint if exists auth_sessions_assumed_role_check;
+  alter table auth_sessions add constraint auth_sessions_assumed_role_check check (assumed_role in ('superadmin', 'admin', 'standard', 'readonly'));
+exception
+  when undefined_table then
+    null;
+end $$;
+
 create table if not exists user_invites (
   id uuid primary key default gen_random_uuid(),
   token_hash text not null unique,
