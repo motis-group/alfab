@@ -4,6 +4,12 @@ set -euo pipefail
 AWS_REGION="${AWS_REGION:-ap-southeast-2}"
 SECRET_ID="${SECRET_ID:-alfab/prod/database}"
 APP_DIR="${APP_DIR:-/opt/alfab/current}"
+PRIMARY_DOMAIN="${DEPLOY_DOMAIN:-www.alfabvic.com.au}"
+ALT_DOMAIN="${ALT_DEPLOY_DOMAIN:-alfabvic.com.au}"
+SERVER_NAMES="${ALT_DOMAIN} ${PRIMARY_DOMAIN}"
+SSL_CERT_DIR="/etc/letsencrypt/live/${PRIMARY_DOMAIN}"
+SSL_CERT_FILE="${SSL_CERT_DIR}/fullchain.pem"
+SSL_KEY_FILE="${SSL_CERT_DIR}/privkey.pem"
 
 if [[ ! -d "${APP_DIR}" ]]; then
   echo "App directory does not exist: ${APP_DIR}" >&2
@@ -47,6 +53,70 @@ select_app_user() {
   done
 
   id -un
+}
+
+render_nginx_config() {
+  if [[ -f "${SSL_CERT_FILE}" && -f "${SSL_KEY_FILE}" ]]; then
+    cat <<NGINX
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${SERVER_NAMES};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name ${SERVER_NAMES};
+
+    ssl_certificate ${SSL_CERT_FILE};
+    ssl_certificate_key ${SSL_KEY_FILE};
+    ssl_session_timeout 1d;
+    ssl_session_cache shared:SSL:10m;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    location / {
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_pass http://127.0.0.1:3000;
+    }
+}
+NGINX
+  else
+    cat <<NGINX
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${SERVER_NAMES};
+
+    location / {
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_pass http://127.0.0.1:3000;
+    }
+}
+NGINX
+  fi
 }
 
 install_runtime_packages
@@ -129,45 +199,21 @@ RestartSec=5
 WantedBy=multi-user.target
 UNIT
 
-if [[ -d /etc/nginx/conf.d ]]; then
-  cat <<'NGINX' | run_as_root tee /etc/nginx/conf.d/alfab.conf >/dev/null
-server {
-    listen 80;
-    server_name _;
+run_as_root mkdir -p /var/www/certbot
 
-    location / {
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_pass http://127.0.0.1:3000;
-    }
-}
-NGINX
+if [[ -f "${SSL_CERT_FILE}" && -f "${SSL_KEY_FILE}" ]]; then
+  echo "Configuring nginx with TLS for ${PRIMARY_DOMAIN}."
+else
+  echo "TLS certificate not found at ${SSL_CERT_DIR}; configuring HTTP-only nginx."
+fi
+
+if [[ -d /etc/nginx/conf.d ]]; then
+  render_nginx_config | run_as_root tee /etc/nginx/conf.d/alfab.conf >/dev/null
   run_as_root rm -f /etc/nginx/conf.d/default.conf
 fi
 
 if [[ -d /etc/nginx/sites-available ]]; then
-  cat <<'NGINX' | run_as_root tee /etc/nginx/sites-available/alfab >/dev/null
-server {
-    listen 80;
-    server_name _;
-
-    location / {
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_pass http://127.0.0.1:3000;
-    }
-}
-NGINX
+  render_nginx_config | run_as_root tee /etc/nginx/sites-available/alfab >/dev/null
   run_as_root ln -sf /etc/nginx/sites-available/alfab /etc/nginx/sites-enabled/alfab
   run_as_root rm -f /etc/nginx/sites-enabled/default
 fi
@@ -177,6 +223,7 @@ run_as_root systemctl daemon-reload
 run_as_root systemctl enable --now alfab
 run_as_root systemctl enable --now nginx
 run_as_root systemctl restart alfab
+run_as_root nginx -t
 run_as_root systemctl restart nginx
 
 for _ in {1..30}; do
