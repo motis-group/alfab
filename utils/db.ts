@@ -12,13 +12,54 @@ function parseBoolean(value: string | undefined, fallback = false): boolean {
   return value.toLowerCase() === 'true' || value === '1' || value.toLowerCase() === 'yes';
 }
 
+function isLocalDatabaseHost(connectionString: string): boolean {
+  try {
+    const parsed = new URL(connectionString);
+    const host = parsed.hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  } catch {
+    return false;
+  }
+}
+
+function sslModeFromConnectionString(connectionString: string): string {
+  try {
+    const parsed = new URL(connectionString);
+    return (parsed.searchParams.get('sslmode') || '').trim().toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function resolveUseSsl(connectionString: string): boolean {
+  if (typeof process.env.DATABASE_SSL !== 'undefined') {
+    return parseBoolean(process.env.DATABASE_SSL, false);
+  }
+
+  const sslMode = sslModeFromConnectionString(connectionString);
+  if (sslMode === 'disable') {
+    return false;
+  }
+
+  if (sslMode === 'require' || sslMode === 'verify-ca' || sslMode === 'verify-full') {
+    return true;
+  }
+
+  if (isLocalDatabaseHost(connectionString)) {
+    return false;
+  }
+
+  // Default to SSL for non-local hosts to satisfy managed PostgreSQL (RDS/Supabase).
+  return true;
+}
+
 function createPool(): Pool {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
     throw new Error('Missing DATABASE_URL');
   }
 
-  const useSsl = parseBoolean(process.env.DATABASE_SSL, false);
+  const useSsl = resolveUseSsl(connectionString);
   const rejectUnauthorized = parseBoolean(process.env.DATABASE_SSL_REJECT_UNAUTHORIZED, false);
 
   return new Pool({

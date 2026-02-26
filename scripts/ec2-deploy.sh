@@ -166,6 +166,8 @@ cat <<ENVVARS | run_as_root tee /etc/alfab.env >/dev/null
 NODE_ENV=production
 PORT=3000
 DATABASE_URL=${DATABASE_URL}
+DATABASE_SSL=true
+DATABASE_SSL_REJECT_UNAUTHORIZED=false
 ENVVARS
 run_as_root chmod 600 /etc/alfab.env
 

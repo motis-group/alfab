@@ -13,7 +13,8 @@ This app now uses direct PostgreSQL access through `DATABASE_URL` and does not r
 Set at least:
 
 - `DATABASE_URL=postgres://<user>:<password>@<rds-endpoint>:5432/<database>`
-- `DATABASE_SSL=false` (or `true` if SSL is required in your setup)
+- `DATABASE_SSL=true`
+- `DATABASE_SSL_REJECT_UNAUTHORIZED=false` (set to `true` if you manage CA trust explicitly)
 - `STRIPE_SECRET_KEY=<stripe-secret>`
 - `STRIPE_WEBHOOK_SECRET=<stripe-webhook-secret>`
 - `ADMIN_PASSWORD=<app-login-password>`
