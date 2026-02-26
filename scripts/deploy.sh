@@ -9,7 +9,15 @@ set -x
 # REMOTE_PATH - Remote deployment path (e.g., /var/www/alfab)
 
 run_remote_cmd() {
-    sshpass -p "$REMOTE_PASSWORD" ssh -o StrictHostKeyChecking=no "$REMOTE_USER@$REMOTE_HOST" "$1"
+    local sanitized_password
+    sanitized_password="$(printf '%s' "$REMOTE_PASSWORD" | tr -d '\r\n')"
+
+    sshpass -p "$sanitized_password" ssh \
+      -o StrictHostKeyChecking=no \
+      -o PreferredAuthentications=password,keyboard-interactive \
+      -o PubkeyAuthentication=no \
+      -o NumberOfPasswordPrompts=1 \
+      "$REMOTE_USER@$REMOTE_HOST" "$1"
 }
 
 copy_to_remote() {
