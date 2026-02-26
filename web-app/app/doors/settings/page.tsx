@@ -152,14 +152,14 @@ export default async function SettingsPage() {
         </CardDouble>
 
         <Card title="QUICK ACTIONS">
-          <ActionListItem icon="⭢" href="/costing">
+          <ActionListItem icon="⭢" href="/doors">
             Return to Dashboard
           </ActionListItem>
-          <ActionListItem icon="⭢" href="/costing/clients">
+          <ActionListItem icon="⭢" href="/doors/clients">
             Manage Clients
           </ActionListItem>
-          <ActionListItem icon="⭢" href="/costing/templates">
-            View Templates
+          <ActionListItem icon="⭢" href="/doors/templates">
+            View Products
           </ActionListItem>
         </Card>
       </Grid>

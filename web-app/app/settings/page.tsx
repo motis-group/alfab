@@ -28,8 +28,8 @@ import { usePricing } from '@components/PricingProvider';
 
 const navigationItems = [
   { icon: '⊹', children: 'Glass Costing', href: '/' },
-  { icon: '⊹', children: 'Doors', href: '/doors' },
-  { icon: '⊹', children: 'Client Management', href: '/costing/clients' },
+  { icon: '⊹', children: 'Order Management', href: '/doors' },
+  { icon: '⊹', children: 'Customers', href: '/doors/clients' },
   { icon: '⊹', children: 'Pricing Settings', href: '/settings' },
   { icon: '⊹', children: 'Component Library', href: '/examples' },
 ];

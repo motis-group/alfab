@@ -38,9 +38,9 @@ const glassThicknesses: GlassThickness[] = [4, 5, 6, 8, 10, 12];
 const edgeWorkOptions: EdgeworkType[] = ['ROUGH ARRIS', 'FLAT GRIND - STRAIGHT', 'FLAT GRIND - CURVED', 'FLAT POLISH - STRAIGHT', 'FLAT POLISH - CURVED'];
 
 const navigationItems = [
-  { icon: '⊹', children: 'Glass Costing', href: '/costing' },
-  { icon: '⊹', children: 'Doors', href: '/doors' },
-  { icon: '⊹', children: 'Client Management', href: '/costing/clients' },
+  { icon: '⊹', children: 'Glass Costing', href: '/' },
+  { icon: '⊹', children: 'Order Management', href: '/doors' },
+  { icon: '⊹', children: 'Customers', href: '/doors/clients' },
   { icon: '⊹', children: 'Pricing Settings', href: '/settings' },
   { icon: '⊹', children: 'Component Library', href: '/' },
 ];
@@ -427,8 +427,8 @@ export default function CostingDashboard() {
             items={[
               {
                 hotkey: '⌘+C',
-                body: 'Clients',
-                onClick: () => router.push('/costing/clients'),
+                body: 'Orders',
+                onClick: () => router.push('/doors'),
               },
               {
                 hotkey: '⌘+S',
