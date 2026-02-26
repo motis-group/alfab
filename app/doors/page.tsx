@@ -25,7 +25,6 @@ import {
   OrderStatus,
   ParsedLineNotes,
   PricingSource,
-  Product,
   PurchaseOrder,
   PurchaseOrderLine,
   USER_ROLE_OPTIONS,
@@ -40,9 +39,9 @@ import {
   todayISODate,
 } from '@utils/order-management';
 import { createClient } from '@utils/db-client';
+import { CurrentSessionUser, fetchCurrentSessionUser } from '@utils/session-client';
 
 const TABLE_CUSTOMERS = 'customers';
-const TABLE_PRODUCTS = 'products';
 const TABLE_CUSTOMER_PRODUCTS = 'customer_products';
 const TABLE_PURCHASE_ORDERS = 'purchase_orders';
 const TABLE_PURCHASE_ORDER_LINES = 'purchase_order_lines';
@@ -51,9 +50,9 @@ const navigationItems = [
   { icon: '⊹', children: 'Glass Costing', href: '/' },
   { icon: '⊹', children: 'Order Management', href: '/doors' },
   { icon: '⊹', children: 'Customers', href: '/doors/clients' },
-  { icon: '⊹', children: 'Products', href: '/doors/templates' },
   { icon: '⊹', children: 'Pricing Settings', href: '/settings' },
   { icon: '⊹', children: 'Billing', href: '/settings/billing' },
+  { icon: '⊹', children: 'Users', href: '/settings/users' },
 ];
 
 const defaultAdhocSpec: GlassSpecification = {
@@ -89,7 +88,6 @@ interface OrderFormState {
 interface LineDraft {
   localId: string;
   id?: string;
-  productId: string;
   quantityOrdered: number;
   quantityFulfilled: number;
   unitPriceAtOrder: number;
@@ -104,7 +102,6 @@ function createLineDraft(partial?: Partial<LineDraft>): LineDraft {
   return {
     localId: partial?.localId || `line-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
     id: partial?.id,
-    productId: partial?.productId || '',
     quantityOrdered: partial?.quantityOrdered ?? 1,
     quantityFulfilled: partial?.quantityFulfilled ?? 0,
     unitPriceAtOrder: partial?.unitPriceAtOrder ?? 0,
@@ -178,10 +175,10 @@ function orderStatusClassName(status: OrderStatus): string {
 export default function OrderManagementPage() {
   const router = useRouter();
 
-  const [role, setRole] = useState<UserRole>('admin');
+  const [role, setRole] = useState<UserRole>('readonly');
+  const [sessionUser, setSessionUser] = useState<CurrentSessionUser | null>(null);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
   const [customerProducts, setCustomerProducts] = useState<CustomerProduct[]>([]);
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [orderLines, setOrderLines] = useState<PurchaseOrderLine[]>([]);
@@ -216,7 +213,7 @@ export default function OrderManagementPage() {
   const [isEditingOrder, setIsEditingOrder] = useState(false);
 
   const canEditOrders = role !== 'readonly';
-  const canManageMasterData = role === 'admin';
+  const canManageMasterData = role === 'admin' || role === 'superadmin';
 
   const customerMap = useMemo(() => {
     const map: Record<string, Customer> = {};
@@ -225,14 +222,6 @@ export default function OrderManagementPage() {
     });
     return map;
   }, [customers]);
-
-  const productMap = useMemo(() => {
-    const map: Record<string, Product> = {};
-    products.forEach((product) => {
-      map[product.id] = product;
-    });
-    return map;
-  }, [products]);
 
   const linesByOrder = useMemo(() => {
     const map: Record<string, PurchaseOrderLine[]> = {};
@@ -246,7 +235,6 @@ export default function OrderManagementPage() {
   }, [orderLines]);
 
   const activeCustomers = useMemo(() => customers.filter((customer) => customer.is_active !== false), [customers]);
-  const activeProducts = useMemo(() => products.filter((product) => product.is_active !== false), [products]);
 
   const customerConfigsForForm = useMemo(() => customerProducts.filter((config) => config.customer_id === orderForm.customerId), [customerProducts, orderForm.customerId]);
 
@@ -325,29 +313,25 @@ export default function OrderManagementPage() {
 
     try {
       const db = createClient();
-      const [customerRes, productRes, customerProductRes, orderRes, lineRes] = await Promise.all([
+      const [customerRes, customerProductRes, orderRes, lineRes] = await Promise.all([
         db.from(TABLE_CUSTOMERS).select('*').order('name', { ascending: true }),
-        db.from(TABLE_PRODUCTS).select('*').order('name', { ascending: true }),
         db.from(TABLE_CUSTOMER_PRODUCTS).select('*'),
         db.from(TABLE_PURCHASE_ORDERS).select('*').order('received_date', { ascending: false }),
         db.from(TABLE_PURCHASE_ORDER_LINES).select('*'),
       ]);
 
       if (customerRes.error) throw customerRes.error;
-      if (productRes.error) throw productRes.error;
       if (customerProductRes.error) throw customerProductRes.error;
       if (orderRes.error) throw orderRes.error;
       if (lineRes.error) throw lineRes.error;
 
       setCustomers((customerRes.data as Customer[]) || []);
-      setProducts((productRes.data as Product[]) || []);
       setCustomerProducts((customerProductRes.data as CustomerProduct[]) || []);
       setOrders((orderRes.data as PurchaseOrder[]) || []);
       setOrderLines((lineRes.data as PurchaseOrderLine[]) || []);
     } catch (error: any) {
       setSchemaError(error?.message || 'Unable to load order management tables.');
       setCustomers([]);
-      setProducts([]);
       setCustomerProducts([]);
       setOrders([]);
       setOrderLines([]);
@@ -356,17 +340,29 @@ export default function OrderManagementPage() {
     }
   }
 
+  async function loadSessionUser() {
+    const nextUser = await fetchCurrentSessionUser();
+    if (!nextUser) {
+      router.push('/login');
+      return null;
+    }
+
+    setSessionUser(nextUser);
+    setRole(nextUser.effectiveRole as UserRole);
+    return nextUser;
+  }
+
   useEffect(() => {
     setPricingData(parsePricingDataFromStorage());
 
-    if (typeof window !== 'undefined') {
-      const savedRole = localStorage.getItem('orderManagementRole') as UserRole | null;
-      if (savedRole && USER_ROLE_OPTIONS.includes(savedRole)) {
-        setRole(savedRole);
+    (async () => {
+      const nextUser = await loadSessionUser();
+      if (!nextUser) {
+        return;
       }
-    }
 
-    loadData();
+      await loadData();
+    })();
   }, []);
 
   useEffect(() => {
@@ -384,11 +380,29 @@ export default function OrderManagementPage() {
     setLineFulfillmentDrafts(nextDrafts);
   }, [selectedOrder, selectedOrderLines]);
 
-  function persistRole(nextRole: UserRole) {
-    setRole(nextRole);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('orderManagementRole', nextRole);
+  async function persistRole(nextRole: UserRole) {
+    if (!sessionUser?.canOverrideSessionRole) {
+      return;
     }
+
+    const response = await fetch('/api/session-role', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ role: nextRole }),
+    });
+
+    const data = (await response.json().catch(() => null)) as { user?: CurrentSessionUser; error?: string } | null;
+
+    if (!response.ok || !data?.user) {
+      setFormError(data?.error || 'Unable to update session role.');
+      return;
+    }
+
+    setSessionUser(data.user);
+    setRole(data.user.effectiveRole as UserRole);
+    await loadData();
   }
 
   function resetOrderForm() {
@@ -442,18 +456,16 @@ export default function OrderManagementPage() {
       return;
     }
 
-    const product = productMap[config.product_id];
     const parsedNotes = parseCustomerProductNotes(config.notes);
 
     const unitPriceFromRecord = Number((config as any).negotiated_price || (config as any).unit_price || 0);
     const unitPriceFromNotes = parsedNotes.unitPrice || 0;
-    const unitPrice = unitPriceFromNotes || unitPriceFromRecord || Number(product?.unit_price || 0);
+    const unitPrice = unitPriceFromNotes || unitPriceFromRecord || 0;
 
     updateLineDraft(lineId, (line) => {
       return {
         ...line,
         customerProductId,
-        productId: config.product_id,
         quantityOrdered: config.default_qty || line.quantityOrdered || 1,
         unitPriceAtOrder: unitPrice,
         pricingSource: 'existing_config',
@@ -485,8 +497,13 @@ export default function OrderManagementPage() {
     }
 
     for (const line of lineDrafts) {
-      if (!line.productId) {
-        setFormError('Each line item must have a product selected.');
+      if (line.pricingSource === 'existing_config' && !line.customerProductId) {
+        setFormError('Each product line must select a product.');
+        return;
+      }
+
+      if (line.pricingSource === 'adhoc_calculator' && !line.lineNote.trim()) {
+        setFormError('Each ad hoc line needs a description.');
         return;
       }
     }
@@ -534,21 +551,27 @@ export default function OrderManagementPage() {
         throw new Error('Purchase order ID was not returned after save.');
       }
 
-      const linePayload = lineDrafts.map((line) => ({
-        purchase_order_id: orderId,
-        product_id: line.productId,
-        quantity_ordered: Math.max(1, Number(line.quantityOrdered) || 1),
-        quantity_fulfilled: Math.max(0, Number(line.quantityFulfilled) || 0),
-        unit_price_at_order: Number(line.unitPriceAtOrder) || 0,
-        line_notes: serializeLineNotes({
-          note: line.lineNote,
-          pricingSource: line.pricingSource,
-          customerProductId: line.customerProductId || null,
-          adhocSpecification: line.pricingSource === 'adhoc_calculator' ? line.adhocSpec : null,
-          markupPercent: line.pricingSource === 'adhoc_calculator' ? line.markupPercent : null,
-          productLabel: productMap[line.productId]?.name || null,
-        }),
-      }));
+      const linePayload = lineDrafts.map((line) => {
+        const selectedCustomerProduct = customerProducts.find((entry) => entry.id === line.customerProductId);
+        const selectedLabel = selectedCustomerProduct?.name || selectedCustomerProduct?.customer_part_ref || 'Customer Product';
+        const isAdhoc = line.pricingSource === 'adhoc_calculator';
+
+        return {
+          purchase_order_id: orderId,
+          product_id: isAdhoc ? null : selectedCustomerProduct?.product_id || null,
+          quantity_ordered: Math.max(1, Number(line.quantityOrdered) || 1),
+          quantity_fulfilled: Math.max(0, Number(line.quantityFulfilled) || 0),
+          unit_price_at_order: Number(line.unitPriceAtOrder) || 0,
+          line_notes: serializeLineNotes({
+            note: line.lineNote,
+            pricingSource: line.pricingSource,
+            customerProductId: line.customerProductId || null,
+            adhocSpecification: isAdhoc ? line.adhocSpec : null,
+            markupPercent: isAdhoc ? line.markupPercent : null,
+            productLabel: isAdhoc ? (line.lineNote.trim() || 'Ad Hoc Item') : selectedLabel,
+          }),
+        };
+      });
 
       const { error: insertLineError } = await db.from(TABLE_PURCHASE_ORDER_LINES).insert(linePayload);
       if (insertLineError) throw insertLineError;
@@ -578,12 +601,10 @@ export default function OrderManagementPage() {
 
     const mappedLines = existingLines.map((line) => {
       const parsedNotes = parseLineNotes(line.line_notes);
-      const productFromMetadata = parsedNotes.productLabel || '';
 
       return createLineDraft({
         localId: line.id || `line-${Math.random().toString(36).slice(2, 9)}`,
         id: line.id,
-        productId: line.product_id || '',
         quantityOrdered: line.quantity_ordered || 1,
         quantityFulfilled: line.quantity_fulfilled || 0,
         unitPriceAtOrder: line.unit_price_at_order || 0,
@@ -683,38 +704,33 @@ export default function OrderManagementPage() {
           body: 'Customers',
           onClick: () => router.push('/doors/clients'),
         },
-        {
-          hotkey: '⌘+P',
-          body: 'Products',
-          onClick: () => router.push('/doors/templates'),
-        },
       ]}
     >
 
-        <Card title="SESSION ROLE">
-          <Text>Role controls access level for this session.</Text>
-          <br />
-          <select
-            value={role}
-            onChange={(event) => persistRole(event.target.value as UserRole)}
-          >
-            {USER_ROLE_OPTIONS.map((roleOption) => (
-              <option key={roleOption} value={roleOption}>
-                {roleOption.toUpperCase()}
-              </option>
-            ))}
-          </select>
-          <br />
-          <Text>
-            {role === 'admin' && 'Admin: full access to orders, customers, and products.'}
-            {role === 'standard' && 'Standard: can create/edit orders and update statuses.'}
-            {role === 'readonly' && 'Read-only: can view orders only.'}
-          </Text>
-        </Card>
+        {sessionUser?.canOverrideSessionRole && (
+          <Card title="SESSION ROLE">
+            <Text>Superadmin can assume a lower role for this session only.</Text>
+            <br />
+            <select value={role} onChange={(event) => persistRole(event.target.value as UserRole)}>
+              {USER_ROLE_OPTIONS.map((roleOption) => (
+                <option key={roleOption} value={roleOption}>
+                  {roleOption.toUpperCase()}
+                </option>
+              ))}
+            </select>
+            <br />
+            <Text>
+              {role === 'superadmin' && 'Superadmin: full access including role management.'}
+              {role === 'admin' && 'Admin: manage operations and invite users.'}
+              {role === 'standard' && 'Standard: create/edit orders.'}
+              {role === 'readonly' && 'Read-only: view only.'}
+            </Text>
+          </Card>
+        )}
 
         {!canManageMasterData && (
           <Card title="ACCESS NOTE">
-            <Text>Master data management is admin-only. Use admin role to edit customers and products.</Text>
+            <Text>Master data management is admin/superadmin only.</Text>
           </Card>
         )}
 
@@ -729,6 +745,69 @@ export default function OrderManagementPage() {
             </Text>
           </Card>
         )}
+        <Card title="ORDER DASHBOARD">
+          <RowSpaceBetween>
+            <Text>OPEN ORDERS</Text>
+            <Text>
+              <span className="status-warning">{orders.filter((order) => order.status === 'open').length}</span>
+            </Text>
+          </RowSpaceBetween>
+          <RowSpaceBetween>
+            <Text>IN PRODUCTION</Text>
+            <Text>
+              <span className="status-warning">{orders.filter((order) => order.status === 'in_production').length}</span>
+            </Text>
+          </RowSpaceBetween>
+          <RowSpaceBetween>
+            <Text>DUE WITHIN 7 DAYS</Text>
+            <Text>
+              <span className="status-warning">{dueInSevenDays.length}</span>
+            </Text>
+          </RowSpaceBetween>
+
+          <br />
+          <Text>OPEN ORDERS BY CUSTOMER</Text>
+          <Table>
+            <TableRow>
+              <TableColumn style={{ width: '26ch' }}>CUSTOMER</TableColumn>
+              <TableColumn>OPEN ORDERS</TableColumn>
+            </TableRow>
+            {openOrdersByCustomer.map((entry) => (
+              <TableRow key={entry.customerId}>
+                <TableColumn>{entry.name}</TableColumn>
+                <TableColumn>{entry.count}</TableColumn>
+              </TableRow>
+            ))}
+            {!openOrdersByCustomer.length && (
+              <TableRow>
+                <TableColumn colSpan={2} style={{ textAlign: 'center' }}>
+                  No open orders.
+                </TableColumn>
+              </TableRow>
+            )}
+          </Table>
+
+          <br />
+          <Text>RECENTLY UPDATED ORDERS</Text>
+          <Table>
+            <TableRow>
+              <TableColumn style={{ width: '16ch' }}>PO</TableColumn>
+              <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
+              <TableColumn style={{ width: '16ch' }}>STATUS</TableColumn>
+              <TableColumn>UPDATED</TableColumn>
+            </TableRow>
+            {recentOrders.map((order) => (
+              <TableRow key={order.id}>
+                <TableColumn>{order.po_number}</TableColumn>
+                <TableColumn>{customerMap[order.customer_id]?.name || 'Unknown'}</TableColumn>
+                <TableColumn>
+                  <span className={orderStatusClassName(order.status)}>{statusLabel(order.status)}</span>
+                </TableColumn>
+                <TableColumn>{(order.updated_at || order.created_at || '').replace('T', ' ').slice(0, 16) || '—'}</TableColumn>
+              </TableRow>
+            ))}
+          </Table>
+        </Card>
 
         <CardDouble title={isEditingOrder ? 'EDIT PURCHASE ORDER' : 'NEW PURCHASE ORDER'}>
           <Text>PO HEADER</Text>
@@ -778,13 +857,9 @@ export default function OrderManagementPage() {
           {lineDrafts.map((line, index) => {
             const lineCost = getLineCost(line);
             const availableConfigOptions = customerConfigsForForm.map((config) => {
-              const product = productMap[config.product_id];
               const parsedNotes = parseCustomerProductNotes(config.notes);
-              const price =
-                parsedNotes.unitPrice ||
-                Number((config as any).negotiated_price || (config as any).unit_price || 0) ||
-                Number(product?.unit_price || 0);
-              const configLabel = config.customer_part_ref || product?.name || 'Unnamed configuration';
+              const price = parsedNotes.unitPrice || Number((config as any).negotiated_price || (config as any).unit_price || 0);
+              const configLabel = config.name || config.customer_part_ref || 'Unnamed product';
               return {
                 id: config.id,
                 label: `${configLabel} (${formatCurrency(price)})`,
@@ -795,29 +870,33 @@ export default function OrderManagementPage() {
 
             return (
               <Card key={line.localId} title={`LINE ${index + 1}`}>
-                <Text>PRICING SOURCE</Text>
+                <Text>LINE TYPE</Text>
                 <select
                   value={line.pricingSource}
                   disabled={!canEditOrders}
                   onChange={(event) => {
                     const nextSource = event.target.value as PricingSource;
-                    updateLineDraft(line.localId, (current) => ({ ...current, pricingSource: nextSource }));
+                    updateLineDraft(line.localId, (current) => ({
+                      ...current,
+                      pricingSource: nextSource,
+                      customerProductId: nextSource === 'adhoc_calculator' ? '' : current.customerProductId,
+                    }));
                   }}
                 >
-                  <option value="existing_config">Existing Customer Configuration</option>
-                  <option value="adhoc_calculator">Ad Hoc Calculator</option>
+                  <option value="existing_config">Customer Product</option>
+                  <option value="adhoc_calculator">Ad Hoc</option>
                 </select>
                 <br />
 
                 {line.pricingSource === 'existing_config' && (
                   <>
-                    <Text>EXISTING CONFIGURATION</Text>
+                    <Text>PRODUCT</Text>
                     <select
                       value={line.customerProductId}
                       disabled={!canEditOrders}
                       onChange={(event) => applyCustomerConfig(line.localId, event.target.value)}
                     >
-                      <option value="">Select existing configuration...</option>
+                      <option value="">Select product...</option>
                       {availableConfigOptions.map((option) => (
                         <option key={option.id} value={option.id}>
                           {option.label}
@@ -827,28 +906,6 @@ export default function OrderManagementPage() {
                     <br />
                   </>
                 )}
-
-                <Text>PRODUCT</Text>
-                <select
-                  value={line.productId}
-                  disabled={!canEditOrders}
-                  onChange={(event) => {
-                    const nextProductId = event.target.value;
-                    updateLineDraft(line.localId, (current) => ({
-                      ...current,
-                      productId: nextProductId,
-                      unitPriceAtOrder: current.pricingSource === 'existing_config' ? Number(productMap[nextProductId]?.unit_price || current.unitPriceAtOrder || 0) : current.unitPriceAtOrder,
-                    }));
-                  }}
-                >
-                  <option value="">Select product...</option>
-                  {activeProducts.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.name}
-                    </option>
-                  ))}
-                </select>
-                <br />
 
                 <Input
                   label="QUANTITY ORDERED"
@@ -1131,7 +1188,7 @@ export default function OrderManagementPage() {
 
                 <br />
                 <Input
-                  label="LINE NOTES"
+                  label={line.pricingSource === 'adhoc_calculator' ? 'AD HOC DESCRIPTION' : 'LINE NOTES'}
                   name={`line_notes_${line.localId}`}
                   value={line.lineNote}
                   onChange={(event) => updateLineDraft(line.localId, (current) => ({ ...current, lineNote: event.target.value }))}
@@ -1306,7 +1363,7 @@ export default function OrderManagementPage() {
             <Text>LINE ITEMS</Text>
             <Table>
               <TableRow>
-                <TableColumn style={{ width: '24ch' }}>PRODUCT</TableColumn>
+                <TableColumn style={{ width: '24ch' }}>ITEM</TableColumn>
                 <TableColumn style={{ width: '10ch' }}>QTY</TableColumn>
                 <TableColumn style={{ width: '14ch' }}>UNIT PRICE</TableColumn>
                 <TableColumn style={{ width: '16ch' }}>LINE TOTAL</TableColumn>
@@ -1316,11 +1373,12 @@ export default function OrderManagementPage() {
 
               {selectedOrderLines.map((line) => {
                 const parsedNotes = parseLineNotes(line.line_notes);
-                const productName = productMap[line.product_id || '']?.name || parsedNotes.productLabel || 'Unknown Product';
+                const isAdhocLine = parsedNotes.pricingSource === 'adhoc_calculator' || !line.product_id;
+                const itemName = isAdhocLine ? parsedNotes.productLabel || 'AD HOC ITEM' : parsedNotes.productLabel || 'Customer Product';
 
                 return (
                   <TableRow key={line.id}>
-                    <TableColumn>{productName}</TableColumn>
+                    <TableColumn>{itemName}</TableColumn>
                     <TableColumn>{line.quantity_ordered}</TableColumn>
                     <TableColumn>{formatCurrency(line.unit_price_at_order || 0)}</TableColumn>
                     <TableColumn>{formatCurrency(calculateLineTotal(line))}</TableColumn>
@@ -1359,69 +1417,6 @@ export default function OrderManagementPage() {
           </CardDouble>
         )}
 
-        <Card title="ORDER DASHBOARD">
-          <RowSpaceBetween>
-            <Text>OPEN ORDERS</Text>
-            <Text>
-              <span className="status-warning">{orders.filter((order) => order.status === 'open').length}</span>
-            </Text>
-          </RowSpaceBetween>
-          <RowSpaceBetween>
-            <Text>IN PRODUCTION</Text>
-            <Text>
-              <span className="status-warning">{orders.filter((order) => order.status === 'in_production').length}</span>
-            </Text>
-          </RowSpaceBetween>
-          <RowSpaceBetween>
-            <Text>DUE WITHIN 7 DAYS</Text>
-            <Text>
-              <span className="status-warning">{dueInSevenDays.length}</span>
-            </Text>
-          </RowSpaceBetween>
-
-          <br />
-          <Text>OPEN ORDERS BY CUSTOMER</Text>
-          <Table>
-            <TableRow>
-              <TableColumn style={{ width: '26ch' }}>CUSTOMER</TableColumn>
-              <TableColumn>OPEN ORDERS</TableColumn>
-            </TableRow>
-            {openOrdersByCustomer.map((entry) => (
-              <TableRow key={entry.customerId}>
-                <TableColumn>{entry.name}</TableColumn>
-                <TableColumn>{entry.count}</TableColumn>
-              </TableRow>
-            ))}
-            {!openOrdersByCustomer.length && (
-              <TableRow>
-                <TableColumn colSpan={2} style={{ textAlign: 'center' }}>
-                  No open orders.
-                </TableColumn>
-              </TableRow>
-            )}
-          </Table>
-
-          <br />
-          <Text>RECENTLY UPDATED ORDERS</Text>
-          <Table>
-            <TableRow>
-              <TableColumn style={{ width: '16ch' }}>PO</TableColumn>
-              <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
-              <TableColumn style={{ width: '16ch' }}>STATUS</TableColumn>
-              <TableColumn>UPDATED</TableColumn>
-            </TableRow>
-            {recentOrders.map((order) => (
-              <TableRow key={order.id}>
-                <TableColumn>{order.po_number}</TableColumn>
-                <TableColumn>{customerMap[order.customer_id]?.name || 'Unknown'}</TableColumn>
-                <TableColumn>
-                  <span className={orderStatusClassName(order.status)}>{statusLabel(order.status)}</span>
-                </TableColumn>
-                <TableColumn>{(order.updated_at || order.created_at || '').replace('T', ' ').slice(0, 16) || '—'}</TableColumn>
-              </TableRow>
-            ))}
-          </Table>
-        </Card>
     </AppFrame>
   );
 }

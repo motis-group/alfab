@@ -1,85 +1,169 @@
-import { NextRequest } from 'next/server';
-import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
-export const runtime = 'edge';
+import { applySessionCookie, createAppSession } from '@utils/auth-session';
+import { normalizeAppRole } from '@utils/authz';
+import { dbQuery } from '@utils/db';
+import { hashPassword, verifyPassword } from '@utils/password';
 
-// Handle OPTIONS requests (for CORS)
-export async function OPTIONS() {
-  return new NextResponse(null, {
-    status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  });
+export const runtime = 'nodejs';
+
+interface SignInBody {
+  username?: string;
+  password?: string;
 }
 
-// Handle POST requests for login
-export async function POST(req: NextRequest) {
-  // Add CORS headers
-  const headers = new Headers({
+interface UserRow {
+  id: string;
+  username: string;
+  password_hash: string;
+  role: string;
+  is_active: boolean;
+}
+
+function baseHeaders(): Headers {
+  return new Headers({
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Content-Type': 'application/json',
   });
+}
 
-  try {
-    const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-    console.log('Environment check - ADMIN_PASSWORD exists:', !!ADMIN_PASSWORD);
+function normalizeUsername(value: unknown): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
 
-    if (!ADMIN_PASSWORD) {
-      console.error('ADMIN_PASSWORD is not set in environment variables');
-      return new NextResponse(JSON.stringify({ error: 'Server configuration error' }), {
-        status: 500,
-        headers,
-      });
+  const normalized = value.trim().toLowerCase();
+  return normalized.replace(/[^a-z0-9._-]/g, '');
+}
+
+async function ensureBootstrapSuperadmin(username: string): Promise<UserRow> {
+  const existing = await dbQuery<UserRow>('select id, username, password_hash, role, is_active from users where lower(username) = $1 limit 1', [username]);
+
+  if (existing.rowCount) {
+    const current = existing.rows[0];
+    if (current.role !== 'superadmin' || current.is_active === false) {
+      const updated = await dbQuery<UserRow>(
+        `
+          update users
+          set role = 'superadmin',
+              is_active = true
+          where id = $1
+          returning id, username, password_hash, role, is_active
+        `,
+        [current.id]
+      );
+      return updated.rows[0];
     }
 
-    const body = await req.json();
-    const { password } = body;
+    return current;
+  }
+
+  const inserted = await dbQuery<UserRow>(
+    `
+      insert into users (username, password_hash, role, is_active)
+      values ($1, $2, 'superadmin', true)
+      returning id, username, password_hash, role, is_active
+    `,
+    [username, 'admin-password-bootstrap']
+  );
+
+  return inserted.rows[0];
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: baseHeaders(),
+  });
+}
+
+export async function POST(request: NextRequest) {
+  const headers = baseHeaders();
+
+  try {
+    const body = ((await request.json().catch(() => ({}))) || {}) as SignInBody;
+    const username = normalizeUsername(body.username);
+    const password = typeof body.password === 'string' ? body.password : '';
 
     if (!password) {
-      return new NextResponse(JSON.stringify({ error: 'Password is required' }), {
+      return new NextResponse(JSON.stringify({ error: 'Password is required.' }), {
         status: 400,
         headers,
       });
     }
 
-    if (password !== ADMIN_PASSWORD) {
-      return new NextResponse(JSON.stringify({ error: 'Invalid password' }), {
+    const adminPassword = process.env.ADMIN_PASSWORD || '';
+    const bootstrapUsername = normalizeUsername(process.env.SUPERADMIN_USERNAME || 'superadmin') || 'superadmin';
+
+    let user: UserRow | null = null;
+
+    if (adminPassword && password === adminPassword) {
+      user = await ensureBootstrapSuperadmin(bootstrapUsername);
+    } else {
+      if (!username) {
+        return new NextResponse(JSON.stringify({ error: 'Username is required.' }), {
+          status: 400,
+          headers,
+        });
+      }
+
+      const result = await dbQuery<UserRow>('select id, username, password_hash, role, is_active from users where lower(username) = $1 limit 1', [username]);
+      user = result.rowCount ? result.rows[0] : null;
+
+      if (!user || user.is_active === false || !verifyPassword(password, user.password_hash)) {
+        return new NextResponse(JSON.stringify({ error: 'Invalid username or password.' }), {
+          status: 401,
+          headers,
+        });
+      }
+
+      if (!user.password_hash.startsWith('scrypt$')) {
+        const upgradedHash = hashPassword(password);
+        await dbQuery('update users set password_hash = $1 where id = $2', [upgradedHash, user.id]);
+      }
+    }
+
+    if (!user) {
+      return new NextResponse(JSON.stringify({ error: 'Unable to sign in.' }), {
         status: 401,
         headers,
       });
     }
 
-    // Generate a session token
-    const randomBytes = new Uint8Array(32);
-    crypto.getRandomValues(randomBytes);
-    const sessionToken = Array.from(randomBytes)
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
+    const token = await createAppSession(user.id);
+    const response = new NextResponse(
+      JSON.stringify({
+        success: true,
+        user: {
+          id: user.id,
+          username: user.username,
+          role: normalizeAppRole(user.role, 'readonly'),
+        },
+      }),
+      {
+        status: 200,
+        headers,
+      }
+    );
 
-    const responseHeaders = new Headers(headers);
-    // Set the session cookie
-    responseHeaders.append('Set-Cookie', `session=${sessionToken}; HttpOnly; Path=/; SameSite=Strict; ${process.env.NODE_ENV === 'production' ? 'Secure;' : ''} Max-Age=${7 * 24 * 60 * 60}`);
+    applySessionCookie(response, token);
 
-    return new NextResponse(JSON.stringify({ success: true }), {
-      status: 200,
-      headers: responseHeaders,
-    });
-  } catch (error) {
-    console.error('Login error FROM ROUTE:', error);
-    return new NextResponse(JSON.stringify({ error: 'Server error during login' }), {
-      status: 500,
-      headers,
-    });
+    return response;
+  } catch (error: any) {
+    return new NextResponse(
+      JSON.stringify({
+        error: error?.message || 'Sign in failed.',
+      }),
+      {
+        status: 500,
+        headers,
+      }
+    );
   }
 }
 
-// Handle GET requests (optional, for API documentation)
 export async function GET() {
-  return NextResponse.json({ error: 'Please use POST method for login' }, { status: 405 });
+  return NextResponse.json({ error: 'Use POST to sign in.' }, { status: 405 });
 }

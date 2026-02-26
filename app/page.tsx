@@ -32,6 +32,7 @@ const navigationItems = [
   { icon: '⊹', children: 'Customers', href: '/doors/clients' },
   { icon: '⊹', children: 'Pricing Settings', href: '/settings' },
   { icon: '⊹', children: 'Billing', href: '/settings/billing' },
+  { icon: '⊹', children: 'Users', href: '/settings/users' },
   { icon: '⊹', children: 'Component Library', href: '/' },
 ];
 

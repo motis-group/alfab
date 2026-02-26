@@ -16,8 +16,39 @@ create table if not exists users (
   id uuid primary key default gen_random_uuid(),
   username text not null unique,
   password_hash text not null,
-  role text not null check (role in ('admin', 'standard', 'readonly')),
+  role text not null check (role in ('superadmin', 'admin', 'standard', 'readonly')),
   is_active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+do $$
+begin
+  alter table users drop constraint if exists users_role_check;
+  alter table users add constraint users_role_check check (role in ('superadmin', 'admin', 'standard', 'readonly'));
+exception
+  when undefined_table then
+    null;
+end $$;
+
+create table if not exists auth_sessions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  token_hash text not null unique,
+  assumed_role text check (assumed_role in ('superadmin', 'admin', 'standard', 'readonly')),
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  last_seen_at timestamptz
+);
+
+create table if not exists user_invites (
+  id uuid primary key default gen_random_uuid(),
+  token_hash text not null unique,
+  email text,
+  role text not null check (role in ('admin', 'standard', 'readonly')) default 'standard',
+  invited_by uuid references users(id) on delete set null,
+  expires_at timestamptz not null,
+  accepted_at timestamptz,
+  accepted_user_id uuid references users(id) on delete set null,
   created_at timestamptz not null default now()
 );
 
@@ -49,11 +80,58 @@ create table if not exists products (
 create table if not exists customer_products (
   id uuid primary key default gen_random_uuid(),
   customer_id uuid not null references customers(id) on delete cascade,
-  product_id uuid not null references products(id) on delete cascade,
+  name text not null default 'Unnamed Product',
+  product_id uuid references products(id) on delete set null,
   customer_part_ref text,
   default_qty integer,
   notes text
 );
+
+do $$
+begin
+  alter table customer_products add column if not exists name text;
+exception
+  when undefined_table then
+    null;
+end $$;
+
+-- Backfill customer product names from old columns/catalog.
+update customer_products cp
+set name = coalesce(nullif(trim(cp.customer_part_ref), ''), nullif(trim(p.name), ''), 'Unnamed Product')
+from products p
+where cp.product_id = p.id
+  and (cp.name is null or trim(cp.name) = '');
+
+update customer_products
+set name = coalesce(nullif(trim(name), ''), 'Unnamed Product')
+where name is null or trim(name) = '';
+
+do $$
+begin
+  alter table customer_products alter column name set default 'Unnamed Product';
+  alter table customer_products alter column name set not null;
+exception
+  when undefined_table then
+    null;
+end $$;
+
+do $$
+begin
+  alter table customer_products drop constraint if exists customer_products_product_id_fkey;
+  alter table customer_products add constraint customer_products_product_id_fkey
+    foreign key (product_id) references products(id) on delete set null;
+exception
+  when undefined_table then
+    null;
+end $$;
+
+do $$
+begin
+  alter table customer_products alter column product_id drop not null;
+exception
+  when undefined_table then
+    null;
+end $$;
 
 create table if not exists purchase_orders (
   id uuid primary key default gen_random_uuid(),
@@ -79,6 +157,11 @@ create table if not exists purchase_order_lines (
   line_notes text
 );
 
+create index if not exists idx_auth_sessions_user_id on auth_sessions(user_id);
+create index if not exists idx_auth_sessions_expires_at on auth_sessions(expires_at);
+create index if not exists idx_user_invites_expires_at on user_invites(expires_at);
+create index if not exists idx_user_invites_invited_by on user_invites(invited_by);
+create index if not exists idx_user_invites_accepted_at on user_invites(accepted_at);
 create index if not exists idx_products_category_id on products(category_id);
 create index if not exists idx_customer_products_customer_id on customer_products(customer_id);
 create index if not exists idx_customer_products_product_id on customer_products(product_id);

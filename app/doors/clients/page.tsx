@@ -16,20 +16,20 @@ import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 
-import { Customer, CustomerProduct, Product, UserRole, formatCurrency, parseCustomerProductNotes, serializeCustomerProductNotes, todayISODate } from '@utils/order-management';
+import { Customer, CustomerProduct, UserRole, formatCurrency, parseCustomerProductNotes, serializeCustomerProductNotes, todayISODate } from '@utils/order-management';
 import { createClient } from '@utils/db-client';
+import { fetchCurrentSessionUser } from '@utils/session-client';
 
 const TABLE_CUSTOMERS = 'customers';
-const TABLE_PRODUCTS = 'products';
 const TABLE_CUSTOMER_PRODUCTS = 'customer_products';
 
 const navigationItems = [
   { icon: '⊹', children: 'Glass Costing', href: '/' },
   { icon: '⊹', children: 'Order Management', href: '/doors' },
   { icon: '⊹', children: 'Customers', href: '/doors/clients' },
-  { icon: '⊹', children: 'Products', href: '/doors/templates' },
   { icon: '⊹', children: 'Pricing Settings', href: '/settings' },
   { icon: '⊹', children: 'Billing', href: '/settings/billing' },
+  { icon: '⊹', children: 'Users', href: '/settings/users' },
 ];
 
 interface CustomerFormState {
@@ -40,9 +40,9 @@ interface CustomerFormState {
   isActive: boolean;
 }
 
-interface CustomerConfigFormState {
+interface CustomerProductFormState {
   id: string | null;
-  productId: string;
+  name: string;
   customerPartRef: string;
   defaultQty: number;
   unitPrice: number;
@@ -64,10 +64,10 @@ function createDefaultCustomerForm(): CustomerFormState {
   };
 }
 
-function createDefaultConfigForm(): CustomerConfigFormState {
+function createDefaultProductForm(): CustomerProductFormState {
   return {
     id: null,
-    productId: '',
+    name: '',
     customerPartRef: '',
     defaultQty: 1,
     unitPrice: 0,
@@ -82,33 +82,24 @@ function activeStatusClassName(isActive?: boolean | null): string {
 export default function CustomersPage() {
   const router = useRouter();
 
-  const [role, setRole] = useState<UserRole>('admin');
+  const [role, setRole] = useState<UserRole>('readonly');
 
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
   const [customerProducts, setCustomerProducts] = useState<CustomerProduct[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingCustomer, setIsSavingCustomer] = useState(false);
-  const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [customerForm, setCustomerForm] = useState<CustomerFormState>(createDefaultCustomerForm());
-  const [configForm, setConfigForm] = useState<CustomerConfigFormState>(createDefaultConfigForm());
+  const [productForm, setProductForm] = useState<CustomerProductFormState>(createDefaultProductForm());
 
-  const canEdit = role === 'admin';
+  const canEdit = role === 'admin' || role === 'superadmin';
 
-  const productMap = useMemo(() => {
-    const map: Record<string, Product> = {};
-    products.forEach((product) => {
-      map[product.id] = product;
-    });
-    return map;
-  }, [products]);
-
-  const customerConfigs = useMemo(() => {
-    return customerProducts.filter((config) => config.customer_id === selectedCustomerId);
+  const selectedCustomerProducts = useMemo(() => {
+    return customerProducts.filter((product) => product.customer_id === selectedCustomerId);
   }, [customerProducts, selectedCustomerId]);
 
   async function loadData() {
@@ -117,19 +108,13 @@ export default function CustomersPage() {
 
     try {
       const db = createClient();
-      const [customerRes, productRes, customerProductRes] = await Promise.all([
-        db.from(TABLE_CUSTOMERS).select('*').order('name', { ascending: true }),
-        db.from(TABLE_PRODUCTS).select('*').order('name', { ascending: true }),
-        db.from(TABLE_CUSTOMER_PRODUCTS).select('*'),
-      ]);
+      const [customerRes, customerProductRes] = await Promise.all([db.from(TABLE_CUSTOMERS).select('*').order('name', { ascending: true }), db.from(TABLE_CUSTOMER_PRODUCTS).select('*')]);
 
       if (customerRes.error) throw customerRes.error;
-      if (productRes.error) throw productRes.error;
       if (customerProductRes.error) throw customerProductRes.error;
 
       const loadedCustomers = (customerRes.data as Customer[]) || [];
       setCustomers(loadedCustomers);
-      setProducts((productRes.data as Product[]) || []);
       setCustomerProducts((customerProductRes.data as CustomerProduct[]) || []);
 
       if (!selectedCustomerId && loadedCustomers.length) {
@@ -137,9 +122,8 @@ export default function CustomersPage() {
         setSelectedCustomerId(firstActiveCustomer.id);
       }
     } catch (loadError: any) {
-      setError(loadError?.message || 'Unable to load customers and configurations.');
+      setError(loadError?.message || 'Unable to load customers and products.');
       setCustomers([]);
-      setProducts([]);
       setCustomerProducts([]);
     } finally {
       setIsLoading(false);
@@ -147,22 +131,24 @@ export default function CustomersPage() {
   }
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedRole = localStorage.getItem('orderManagementRole') as UserRole | null;
-      if (savedRole) {
-        setRole(savedRole);
+    (async () => {
+      const user = await fetchCurrentSessionUser();
+      if (!user) {
+        router.push('/login');
+        return;
       }
-    }
 
-    loadData();
+      setRole(user.effectiveRole as UserRole);
+      await loadData();
+    })();
   }, []);
 
   function resetCustomerForm() {
     setCustomerForm(createDefaultCustomerForm());
   }
 
-  function resetConfigForm() {
-    setConfigForm(createDefaultConfigForm());
+  function resetProductForm() {
+    setProductForm(createDefaultProductForm());
   }
 
   function editCustomer(customer: Customer) {
@@ -175,15 +161,15 @@ export default function CustomersPage() {
     });
   }
 
-  function editCustomerConfig(config: CustomerProduct) {
-    const parsedNotes = parseCustomerProductNotes(config.notes);
+  function editProduct(product: CustomerProduct) {
+    const parsedNotes = parseCustomerProductNotes(product.notes);
 
-    setConfigForm({
-      id: config.id,
-      productId: config.product_id,
-      customerPartRef: config.customer_part_ref || '',
-      defaultQty: config.default_qty || 1,
-      unitPrice: parsedNotes.unitPrice || Number((config as any).negotiated_price || (config as any).unit_price || 0),
+    setProductForm({
+      id: product.id,
+      name: product.name || product.customer_part_ref || '',
+      customerPartRef: product.customer_part_ref || '',
+      defaultQty: product.default_qty || 1,
+      unitPrice: parsedNotes.unitPrice || Number((product as any).negotiated_price || (product as any).unit_price || 0),
       note: parsedNotes.note || '',
     });
   }
@@ -249,40 +235,41 @@ export default function CustomersPage() {
     }
   }
 
-  async function saveCustomerConfig() {
+  async function saveCustomerProduct() {
     if (!canEdit) {
       return;
     }
 
     if (!selectedCustomerId) {
-      setError('Select a customer before saving configurations.');
+      setError('Select a customer before saving products.');
       return;
     }
 
-    if (!configForm.productId) {
-      setError('Product is required for customer configuration.');
+    if (!productForm.name.trim()) {
+      setError('Product name is required.');
       return;
     }
 
     setError(null);
-    setIsSavingConfig(true);
+    setIsSavingProduct(true);
 
     try {
       const db = createClient();
       const payload = {
         customer_id: selectedCustomerId,
-        product_id: configForm.productId,
-        customer_part_ref: configForm.customerPartRef.trim() || null,
-        default_qty: Math.max(1, Number(configForm.defaultQty) || 1),
+        name: productForm.name.trim(),
+        product_id: null,
+        customer_part_ref: productForm.customerPartRef.trim() || null,
+        default_qty: Math.max(1, Number(productForm.defaultQty) || 1),
         notes: serializeCustomerProductNotes({
-          note: configForm.note.trim(),
-          unitPrice: Number(configForm.unitPrice) || 0,
+          note: productForm.note.trim(),
+          unitPrice: Number(productForm.unitPrice) || 0,
           savedSpecification: null,
         }),
       };
 
-      if (configForm.id) {
-        const { error: updateError } = await db.from(TABLE_CUSTOMER_PRODUCTS).update(payload).eq('id', configForm.id);
+      if (productForm.id) {
+        const { error: updateError } = await db.from(TABLE_CUSTOMER_PRODUCTS).update(payload).eq('id', productForm.id);
         if (updateError) throw updateError;
       } else {
         const { error: insertError } = await db.from(TABLE_CUSTOMER_PRODUCTS).insert(payload);
@@ -290,27 +277,27 @@ export default function CustomersPage() {
       }
 
       await loadData();
-      resetConfigForm();
+      resetProductForm();
     } catch (saveError: any) {
-      setError(saveError?.message || 'Unable to save customer configuration.');
+      setError(saveError?.message || 'Unable to save customer product.');
     } finally {
-      setIsSavingConfig(false);
+      setIsSavingProduct(false);
     }
   }
 
-  async function deleteCustomerConfig(configId: string) {
+  async function deleteCustomerProduct(productId: string) {
     if (!canEdit) {
       return;
     }
 
     try {
       const db = createClient();
-      const { error: deleteError } = await db.from(TABLE_CUSTOMER_PRODUCTS).delete().eq('id', configId);
+      const { error: deleteError } = await db.from(TABLE_CUSTOMER_PRODUCTS).delete().eq('id', productId);
       if (deleteError) throw deleteError;
 
       await loadData();
-    } catch (deleteConfigError: any) {
-      setError(deleteConfigError?.message || 'Unable to delete customer configuration.');
+    } catch (deleteError: any) {
+      setError(deleteError?.message || 'Unable to delete customer product.');
     }
   }
 
@@ -351,227 +338,206 @@ export default function CustomersPage() {
         },
       ]}
     >
-
-        {!canEdit && (
-          <Card title="READ ONLY">
-            <Text>Customer and configuration management requires admin role.</Text>
-          </Card>
-        )}
-
-        {error && (
-          <Card title="ERROR">
-            <Text>
-              <span className="status-error">{error}</span>
-            </Text>
-          </Card>
-        )}
-
-        <CardDouble title={customerForm.id ? 'EDIT CUSTOMER' : 'NEW CUSTOMER'}>
-          <Input label="CUSTOMER NAME" name="customer_name" value={customerForm.name} onChange={(event) => setCustomerForm((prev) => ({ ...prev, name: event.target.value }))} disabled={!canEdit} />
-          <Input label="CONTACT NAME" name="contact_name" value={customerForm.contactName} onChange={(event) => setCustomerForm((prev) => ({ ...prev, contactName: event.target.value }))} disabled={!canEdit} />
-          <Input label="CONTACT EMAIL" name="contact_email" value={customerForm.contactEmail} onChange={(event) => setCustomerForm((prev) => ({ ...prev, contactEmail: event.target.value }))} disabled={!canEdit} />
-
-          <Text>STATUS</Text>
-          <select
-            value={customerForm.isActive ? 'active' : 'inactive'}
-            onChange={(event) => setCustomerForm((prev) => ({ ...prev, isActive: event.target.value === 'active' }))}
-            disabled={!canEdit}
-          >
-            <option value="active">ACTIVE</option>
-            <option value="inactive">INACTIVE</option>
-          </select>
-
-          <br />
-          <RowSpaceBetween>
-            <ActionButton onClick={saveCustomer}>{isSavingCustomer ? 'Saving...' : customerForm.id ? 'Update Customer' : 'Create Customer'}</ActionButton>
-            <ActionButton onClick={resetCustomerForm}>Reset</ActionButton>
-          </RowSpaceBetween>
-        </CardDouble>
-
-        <Card title="CUSTOMER LIST">
-          {isLoading ? (
-            <Text>Loading customers...</Text>
-          ) : (
-            <Table>
-              <TableRow>
-                <TableColumn style={{ width: '24ch' }}>CUSTOMER</TableColumn>
-                <TableColumn style={{ width: '20ch' }}>CONTACT</TableColumn>
-                <TableColumn style={{ width: '26ch' }}>EMAIL</TableColumn>
-                <TableColumn style={{ width: '12ch' }}>STATUS</TableColumn>
-                <TableColumn>ACTIONS</TableColumn>
-              </TableRow>
-
-              {customers.map((customer) => (
-                <TableRow key={customer.id}>
-                  <TableColumn>{customer.name}</TableColumn>
-                  <TableColumn>{customer.contact_name || '—'}</TableColumn>
-                  <TableColumn>{customer.contact_email || '—'}</TableColumn>
-                  <TableColumn>
-                    <span className={activeStatusClassName(customer.is_active)}>{customer.is_active === false ? 'INACTIVE' : 'ACTIVE'}</span>
-                  </TableColumn>
-                  <TableColumn>
-                    <RowSpaceBetween>
-                      <ActionButton
-                        onClick={() => {
-                          setSelectedCustomerId(customer.id);
-                          editCustomer(customer);
-                        }}
-                      >
-                        Edit
-                      </ActionButton>
-                      <ActionButton
-                        onClick={() => {
-                          setSelectedCustomerId(customer.id);
-                        }}
-                      >
-                        Configure
-                      </ActionButton>
-                      <ActionButton onClick={() => toggleCustomerActive(customer)}>{customer.is_active === false ? 'Activate' : 'Deactivate'}</ActionButton>
-                    </RowSpaceBetween>
-                  </TableColumn>
-                </TableRow>
-              ))}
-
-              {!customers.length && (
-                <TableRow>
-                  <TableColumn colSpan={5} style={{ textAlign: 'center' }}>
-                    No customers found.
-                  </TableColumn>
-                </TableRow>
-              )}
-            </Table>
-          )}
+      {!canEdit && (
+        <Card title="READ ONLY">
+          <Text>Customer and product management requires admin or superadmin role.</Text>
         </Card>
+      )}
 
-        <CardDouble title="CUSTOMER CONFIGURATIONS">
-          <Text>Selected customer:</Text>
-          <br />
-          <select
-            value={selectedCustomerId}
-            onChange={(event) => {
-              setSelectedCustomerId(event.target.value);
-              resetConfigForm();
-            }}
-          >
-            <option value="">Select customer...</option>
-            {customers.map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.name}
-              </option>
-            ))}
-          </select>
+      {error && (
+        <Card title="ERROR">
+          <Text>
+            <span className="status-error">{error}</span>
+          </Text>
+        </Card>
+      )}
 
-          <br />
-          <Text>PRODUCT</Text>
-          <select
-            value={configForm.productId}
-            onChange={(event) => setConfigForm((prev) => ({ ...prev, productId: event.target.value }))}
-            disabled={!canEdit}
-          >
-            <option value="">Select product...</option>
-            {products
-              .filter((product) => product.is_active !== false)
-              .map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name}
-                </option>
-              ))}
-          </select>
+      <CardDouble title={customerForm.id ? 'EDIT CUSTOMER' : 'NEW CUSTOMER'}>
+        <Input label="CUSTOMER NAME" name="customer_name" value={customerForm.name} onChange={(event) => setCustomerForm((prev) => ({ ...prev, name: event.target.value }))} disabled={!canEdit} />
+        <Input label="CONTACT NAME" name="contact_name" value={customerForm.contactName} onChange={(event) => setCustomerForm((prev) => ({ ...prev, contactName: event.target.value }))} disabled={!canEdit} />
+        <Input label="CONTACT EMAIL" name="contact_email" value={customerForm.contactEmail} onChange={(event) => setCustomerForm((prev) => ({ ...prev, contactEmail: event.target.value }))} disabled={!canEdit} />
 
-          <br />
-          <Input label="CUSTOMER PART REF" name="customer_part_ref" value={configForm.customerPartRef} onChange={(event) => setConfigForm((prev) => ({ ...prev, customerPartRef: event.target.value }))} disabled={!canEdit} />
-          <Input
-            label="DEFAULT QTY"
-            type="number"
-            name="default_qty"
-            value={String(configForm.defaultQty)}
-            onChange={(event) => setConfigForm((prev) => ({ ...prev, defaultQty: Math.max(1, numberOrDefault(event.target.value, 1)) }))}
-            disabled={!canEdit}
-          />
-          <Input
-            label="DEFAULT UNIT PRICE ($)"
-            type="number"
-            name="default_price"
-            value={String(configForm.unitPrice)}
-            onChange={(event) => setConfigForm((prev) => ({ ...prev, unitPrice: Math.max(0, numberOrDefault(event.target.value, 0)) }))}
-            disabled={!canEdit}
-          />
-          <Input label="NOTES" name="config_notes" value={configForm.note} onChange={(event) => setConfigForm((prev) => ({ ...prev, note: event.target.value }))} disabled={!canEdit} />
+        <Text>STATUS</Text>
+        <select value={customerForm.isActive ? 'active' : 'inactive'} onChange={(event) => setCustomerForm((prev) => ({ ...prev, isActive: event.target.value === 'active' }))} disabled={!canEdit}>
+          <option value="active">ACTIVE</option>
+          <option value="inactive">INACTIVE</option>
+        </select>
 
-          <br />
-          <RowSpaceBetween>
-            <ActionButton onClick={saveCustomerConfig}>{isSavingConfig ? 'Saving...' : configForm.id ? 'Update Configuration' : 'Add Configuration'}</ActionButton>
-            <ActionButton onClick={resetConfigForm}>Reset</ActionButton>
-          </RowSpaceBetween>
-        </CardDouble>
+        <br />
+        <RowSpaceBetween>
+          <ActionButton onClick={saveCustomer}>{isSavingCustomer ? 'Saving...' : customerForm.id ? 'Update Customer' : 'Create Customer'}</ActionButton>
+          <ActionButton onClick={resetCustomerForm}>Reset</ActionButton>
+        </RowSpaceBetween>
+      </CardDouble>
 
-        <Card title="CONFIGURATION LIST">
+      <Card title="CUSTOMER LIST">
+        {isLoading ? (
+          <Text>Loading customers...</Text>
+        ) : (
           <Table>
             <TableRow>
-              <TableColumn style={{ width: '24ch' }}>PRODUCT</TableColumn>
-              <TableColumn style={{ width: '18ch' }}>PART REF</TableColumn>
-              <TableColumn style={{ width: '10ch' }}>DEFAULT QTY</TableColumn>
-              <TableColumn style={{ width: '16ch' }}>DEFAULT PRICE</TableColumn>
-              <TableColumn style={{ width: '24ch' }}>NOTES</TableColumn>
+              <TableColumn style={{ width: '24ch' }}>CUSTOMER</TableColumn>
+              <TableColumn style={{ width: '20ch' }}>CONTACT</TableColumn>
+              <TableColumn style={{ width: '26ch' }}>EMAIL</TableColumn>
+              <TableColumn style={{ width: '12ch' }}>STATUS</TableColumn>
               <TableColumn>ACTIONS</TableColumn>
             </TableRow>
 
-            {customerConfigs.map((config) => {
-              const parsedNotes = parseCustomerProductNotes(config.notes);
-              const fallbackPrice = Number((config as any).negotiated_price || (config as any).unit_price || 0) || Number(productMap[config.product_id]?.unit_price || 0);
-              const price = parsedNotes.unitPrice || fallbackPrice;
-
-              return (
-                <TableRow key={config.id}>
-                  <TableColumn>{productMap[config.product_id]?.name || 'Unknown Product'}</TableColumn>
-                  <TableColumn>{config.customer_part_ref || '—'}</TableColumn>
-                  <TableColumn>{config.default_qty || 1}</TableColumn>
-                  <TableColumn>{formatCurrency(price)}</TableColumn>
-                  <TableColumn>{parsedNotes.note || '—'}</TableColumn>
-                  <TableColumn>
-                    <RowSpaceBetween>
-                      <ActionButton onClick={() => editCustomerConfig(config)}>Edit</ActionButton>
-                      <ActionButton onClick={() => deleteCustomerConfig(config.id)}>Delete</ActionButton>
-                    </RowSpaceBetween>
-                  </TableColumn>
-                </TableRow>
-              );
-            })}
-
-            {!selectedCustomerId && (
-              <TableRow>
-                <TableColumn colSpan={6} style={{ textAlign: 'center' }}>
-                  Select a customer to view configurations.
+            {customers.map((customer) => (
+              <TableRow key={customer.id}>
+                <TableColumn>{customer.name}</TableColumn>
+                <TableColumn>{customer.contact_name || '—'}</TableColumn>
+                <TableColumn>{customer.contact_email || '—'}</TableColumn>
+                <TableColumn>
+                  <span className={activeStatusClassName(customer.is_active)}>{customer.is_active === false ? 'INACTIVE' : 'ACTIVE'}</span>
+                </TableColumn>
+                <TableColumn>
+                  <RowSpaceBetween>
+                    <ActionButton
+                      onClick={() => {
+                        setSelectedCustomerId(customer.id);
+                        editCustomer(customer);
+                      }}
+                    >
+                      Edit
+                    </ActionButton>
+                    <ActionButton
+                      onClick={() => {
+                        setSelectedCustomerId(customer.id);
+                      }}
+                    >
+                      Products
+                    </ActionButton>
+                    <ActionButton onClick={() => toggleCustomerActive(customer)}>{customer.is_active === false ? 'Activate' : 'Deactivate'}</ActionButton>
+                  </RowSpaceBetween>
                 </TableColumn>
               </TableRow>
-            )}
+            ))}
 
-            {selectedCustomerId && !customerConfigs.length && (
+            {!customers.length && (
               <TableRow>
-                <TableColumn colSpan={6} style={{ textAlign: 'center' }}>
-                  No configurations defined for this customer.
+                <TableColumn colSpan={5} style={{ textAlign: 'center' }}>
+                  No customers found.
                 </TableColumn>
               </TableRow>
             )}
           </Table>
-        </Card>
+        )}
+      </Card>
 
-        <Card title="SUMMARY">
-          <RowSpaceBetween>
-            <Text>ACTIVE CUSTOMERS</Text>
-            <Text>
-              <span className="status-success">{customers.filter((customer) => customer.is_active !== false).length}</span>
-            </Text>
-          </RowSpaceBetween>
-          <RowSpaceBetween>
-            <Text>TOTAL CONFIGURATIONS</Text>
-            <Text>{customerProducts.length}</Text>
-          </RowSpaceBetween>
-          <RowSpaceBetween>
-            <Text>UPDATED</Text>
-            <Text>{todayISODate()}</Text>
-          </RowSpaceBetween>
-        </Card>
+      <CardDouble title="CUSTOMER PRODUCTS">
+        <Text>Selected customer:</Text>
+        <br />
+        <select
+          value={selectedCustomerId}
+          onChange={(event) => {
+            setSelectedCustomerId(event.target.value);
+            resetProductForm();
+          }}
+        >
+          <option value="">Select customer...</option>
+          {customers.map((customer) => (
+            <option key={customer.id} value={customer.id}>
+              {customer.name}
+            </option>
+          ))}
+        </select>
+
+        <br />
+        <Input label="PRODUCT NAME" name="product_name" value={productForm.name} onChange={(event) => setProductForm((prev) => ({ ...prev, name: event.target.value }))} disabled={!canEdit} />
+        <Input label="CUSTOMER PART REF" name="customer_part_ref" value={productForm.customerPartRef} onChange={(event) => setProductForm((prev) => ({ ...prev, customerPartRef: event.target.value }))} disabled={!canEdit} />
+        <Input
+          label="DEFAULT QTY"
+          type="number"
+          name="default_qty"
+          value={String(productForm.defaultQty)}
+          onChange={(event) => setProductForm((prev) => ({ ...prev, defaultQty: Math.max(1, numberOrDefault(event.target.value, 1)) }))}
+          disabled={!canEdit}
+        />
+        <Input
+          label="DEFAULT UNIT PRICE ($)"
+          type="number"
+          name="default_price"
+          value={String(productForm.unitPrice)}
+          onChange={(event) => setProductForm((prev) => ({ ...prev, unitPrice: Math.max(0, numberOrDefault(event.target.value, 0)) }))}
+          disabled={!canEdit}
+        />
+        <Input label="NOTES" name="product_notes" value={productForm.note} onChange={(event) => setProductForm((prev) => ({ ...prev, note: event.target.value }))} disabled={!canEdit} />
+
+        <br />
+        <RowSpaceBetween>
+          <ActionButton onClick={saveCustomerProduct}>{isSavingProduct ? 'Saving...' : productForm.id ? 'Update Product' : 'Add Product'}</ActionButton>
+          <ActionButton onClick={resetProductForm}>Reset</ActionButton>
+        </RowSpaceBetween>
+      </CardDouble>
+
+      <Card title="PRODUCT LIST">
+        <Table>
+          <TableRow>
+            <TableColumn style={{ width: '24ch' }}>PRODUCT</TableColumn>
+            <TableColumn style={{ width: '18ch' }}>PART REF</TableColumn>
+            <TableColumn style={{ width: '10ch' }}>DEFAULT QTY</TableColumn>
+            <TableColumn style={{ width: '16ch' }}>DEFAULT PRICE</TableColumn>
+            <TableColumn style={{ width: '24ch' }}>NOTES</TableColumn>
+            <TableColumn>ACTIONS</TableColumn>
+          </TableRow>
+
+          {selectedCustomerProducts.map((product) => {
+            const parsedNotes = parseCustomerProductNotes(product.notes);
+            const fallbackPrice = Number((product as any).negotiated_price || (product as any).unit_price || 0);
+            const price = parsedNotes.unitPrice || fallbackPrice;
+
+            return (
+              <TableRow key={product.id}>
+                <TableColumn>{product.name || product.customer_part_ref || 'Unnamed Product'}</TableColumn>
+                <TableColumn>{product.customer_part_ref || '—'}</TableColumn>
+                <TableColumn>{product.default_qty || 1}</TableColumn>
+                <TableColumn>{formatCurrency(price)}</TableColumn>
+                <TableColumn>{parsedNotes.note || '—'}</TableColumn>
+                <TableColumn>
+                  <RowSpaceBetween>
+                    <ActionButton onClick={() => editProduct(product)}>Edit</ActionButton>
+                    <ActionButton onClick={() => deleteCustomerProduct(product.id)}>Delete</ActionButton>
+                  </RowSpaceBetween>
+                </TableColumn>
+              </TableRow>
+            );
+          })}
+
+          {!selectedCustomerId && (
+            <TableRow>
+              <TableColumn colSpan={6} style={{ textAlign: 'center' }}>
+                Select a customer to view products.
+              </TableColumn>
+            </TableRow>
+          )}
+
+          {selectedCustomerId && !selectedCustomerProducts.length && (
+            <TableRow>
+              <TableColumn colSpan={6} style={{ textAlign: 'center' }}>
+                No products defined for this customer.
+              </TableColumn>
+            </TableRow>
+          )}
+        </Table>
+      </Card>
+
+      <Card title="SUMMARY">
+        <RowSpaceBetween>
+          <Text>ACTIVE CUSTOMERS</Text>
+          <Text>
+            <span className="status-success">{customers.filter((customer) => customer.is_active !== false).length}</span>
+          </Text>
+        </RowSpaceBetween>
+        <RowSpaceBetween>
+          <Text>TOTAL PRODUCTS</Text>
+          <Text>{customerProducts.length}</Text>
+        </RowSpaceBetween>
+        <RowSpaceBetween>
+          <Text>UPDATED</Text>
+          <Text>{todayISODate()}</Text>
+        </RowSpaceBetween>
+      </Card>
     </AppFrame>
   );
 }

@@ -1,6 +1,6 @@
 import { GlassSpecification } from '@utils/calculations';
 
-export type UserRole = 'admin' | 'standard' | 'readonly';
+export type UserRole = 'superadmin' | 'admin' | 'standard' | 'readonly';
 export type OrderStatus = 'open' | 'in_production' | 'fulfilled' | 'cancelled';
 export type PricingSource = 'existing_config' | 'adhoc_calculator';
 
@@ -32,7 +32,8 @@ export interface Product {
 export interface CustomerProduct {
   id: string;
   customer_id: string;
-  product_id: string;
+  name: string;
+  product_id?: string | null;
   customer_part_ref?: string | null;
   default_qty?: number | null;
   notes?: string | null;
@@ -86,7 +87,7 @@ export interface ParsedLineNotes extends LineNotesPayload {
 }
 
 export const ORDER_STATUS_OPTIONS: OrderStatus[] = ['open', 'in_production', 'fulfilled', 'cancelled'];
-export const USER_ROLE_OPTIONS: UserRole[] = ['admin', 'standard', 'readonly'];
+export const USER_ROLE_OPTIONS: UserRole[] = ['superadmin', 'admin', 'standard', 'readonly'];
 
 function toNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {

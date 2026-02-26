@@ -26,6 +26,7 @@ const navigationItems = [
   { icon: '⊹', children: 'Customers', href: '/doors/clients' },
   { icon: '⊹', children: 'Pricing Settings', href: '/settings' },
   { icon: '⊹', children: 'Billing', href: '/settings/billing' },
+  { icon: '⊹', children: 'Users', href: '/settings/users' },
   { icon: '⊹', children: 'Component Library', href: '/examples' },
 ];
 
@@ -140,6 +141,12 @@ export default function PricingSettings() {
         <Text>Configure Stripe subscription billing for Alfab app hosting and maintenance.</Text>
         <br />
         <ActionButton onClick={() => router.push('/settings/billing')}>Open Billing Settings</ActionButton>
+      </Card>
+
+      <Card title="USER MANAGEMENT">
+        <Text>Manage users, roles, permissions, and invite links.</Text>
+        <br />
+        <ActionButton onClick={() => router.push('/settings/users')}>Open User Settings</ActionButton>
       </Card>
 
       <CardDouble title="BASE GLASS PRICES ($ per m²)">

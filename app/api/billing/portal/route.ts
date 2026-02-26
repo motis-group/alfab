@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { hasAppSession } from '@utils/auth-session';
+import { getAppSession, userHasPermission } from '@utils/auth-session';
 import { getBillingDefaults, getRequestOrigin } from '@utils/billing-config';
 import { getBillingAccountByKey } from '@utils/billing-db';
 import { getStripeClient } from '@utils/stripe';
@@ -10,9 +10,13 @@ interface PortalRequestBody {
 }
 
 export async function POST(request: Request) {
-  const isSignedIn = await hasAppSession();
-  if (!isSignedIn) {
+  const session = await getAppSession();
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!userHasPermission(session, 'billing:write')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   try {

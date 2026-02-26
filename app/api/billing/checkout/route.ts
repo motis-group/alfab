@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { hasAppSession } from '@utils/auth-session';
+import { getAppSession, userHasPermission } from '@utils/auth-session';
 import { getBillingEstimate } from '@utils/billing';
 import { getBillingDefaults, getRequestOrigin, normalizeMarginPercent } from '@utils/billing-config';
 import { getBillingAccountByKey, upsertBillingAccount } from '@utils/billing-db';
@@ -22,9 +22,13 @@ function nonEmptyString(value: unknown): string | null {
 }
 
 export async function POST(request: Request) {
-  const isSignedIn = await hasAppSession();
-  if (!isSignedIn) {
+  const session = await getAppSession();
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!userHasPermission(session, 'billing:write')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   try {
@@ -58,7 +62,7 @@ export async function POST(request: Request) {
     const successUrl = `${origin}/settings/billing?checkout=success`;
     const cancelUrl = `${origin}/settings/billing?checkout=cancelled`;
 
-    const session = await stripe.checkout.sessions.create({
+    const checkoutSession = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: stripeCustomerId,
       success_url: successUrl,
@@ -107,8 +111,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({
-      checkoutUrl: session.url,
-      sessionId: session.id,
+      checkoutUrl: checkoutSession.url,
+      sessionId: checkoutSession.id,
       estimate,
     });
   } catch (error: any) {

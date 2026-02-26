@@ -13,7 +13,6 @@ const navigationItems = [
   { icon: '⊹', children: 'Glass Costing', href: '/' },
   { icon: '⊹', children: 'Order Management', href: '/doors' },
   { icon: '⊹', children: 'Customers', href: '/doors/clients' },
-  { icon: '⊹', children: 'Products', href: '/doors/templates' },
   { icon: '⊹', children: 'Pricing Settings', href: '/settings' },
   { icon: '⊹', children: 'Billing', href: '/settings/billing' },
 ];
@@ -157,8 +156,8 @@ export default function SettingsPage() {
         <ActionListItem icon="⭢" href="/doors/clients">
           Manage Clients
         </ActionListItem>
-        <ActionListItem icon="⭢" href="/doors/templates">
-          View Products
+        <ActionListItem icon="⭢" href="/doors/clients">
+          Manage Customer Products
         </ActionListItem>
       </Card>
     </AppFrame>

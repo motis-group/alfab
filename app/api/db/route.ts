@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
-import { hasAppSession } from '@utils/auth-session';
+import { getAppSession, userHasPermission } from '@utils/auth-session';
+import { AppPermission } from '@utils/authz';
 import { dbQuery } from '@utils/db';
 
 export const runtime = 'nodejs';
@@ -30,11 +31,10 @@ interface DbRequestPayload {
 
 const TABLE_COLUMNS: Record<string, Set<string>> = {
   quotes: new Set(['id', 'name', 'client', 'specification', 'cost', 'date']),
-  users: new Set(['id', 'username', 'password_hash', 'role', 'is_active', 'created_at']),
   customers: new Set(['id', 'name', 'contact_name', 'contact_email', 'is_active', 'created_at']),
   product_categories: new Set(['id', 'name', 'description']),
   products: new Set(['id', 'name', 'category_id', 'sku', 'unit_price', 'is_active', 'created_at']),
-  customer_products: new Set(['id', 'customer_id', 'product_id', 'customer_part_ref', 'default_qty', 'notes']),
+  customer_products: new Set(['id', 'customer_id', 'name', 'product_id', 'customer_part_ref', 'default_qty', 'notes']),
   purchase_orders: new Set(['id', 'customer_id', 'po_number', 'received_date', 'required_date', 'status', 'notes', 'created_by', 'updated_by', 'created_at', 'updated_at']),
   purchase_order_lines: new Set(['id', 'purchase_order_id', 'product_id', 'quantity_ordered', 'quantity_fulfilled', 'unit_price_at_order', 'line_notes']),
   billing_accounts: new Set([
@@ -58,6 +58,45 @@ const TABLE_COLUMNS: Record<string, Set<string>> = {
     'updated_at',
   ]),
   billing_events: new Set(['id', 'stripe_event_id', 'event_type', 'account_key', 'payload', 'processed_at']),
+};
+
+const TABLE_PERMISSIONS: Record<string, { read: AppPermission; write: AppPermission }> = {
+  quotes: {
+    read: 'quotes:read',
+    write: 'quotes:write',
+  },
+  customers: {
+    read: 'master_data:read',
+    write: 'master_data:write',
+  },
+  product_categories: {
+    read: 'master_data:read',
+    write: 'master_data:write',
+  },
+  products: {
+    read: 'master_data:read',
+    write: 'master_data:write',
+  },
+  customer_products: {
+    read: 'master_data:read',
+    write: 'master_data:write',
+  },
+  purchase_orders: {
+    read: 'orders:read',
+    write: 'orders:write',
+  },
+  purchase_order_lines: {
+    read: 'orders:read',
+    write: 'orders:write',
+  },
+  billing_accounts: {
+    read: 'billing:read',
+    write: 'billing:write',
+  },
+  billing_events: {
+    read: 'billing:read',
+    write: 'billing:write',
+  },
 };
 
 function getAllowedColumns(table: string): Set<string> {
@@ -98,10 +137,7 @@ function parseColumns(table: string, rawColumns?: string | null): string {
 }
 
 function toDbValue(value: unknown): unknown {
-  if (value === undefined) {
-    return null;
-  }
-  if (value === null) {
+  if (value === undefined || value === null) {
     return null;
   }
   if (value instanceof Date) {
@@ -154,9 +190,39 @@ function normalizeTableName(table: string): string {
   return normalized;
 }
 
+function requiredPermission(table: string, action: Operation): AppPermission {
+  const permissionSet = TABLE_PERMISSIONS[table];
+  if (!permissionSet) {
+    throw new Error(`No permission mapping configured for table "${table}"`);
+  }
+
+  return action === 'select' ? permissionSet.read : permissionSet.write;
+}
+
+function applyServerAuditColumns(table: string, action: Operation, rows: Array<Record<string, unknown>>, sessionUserId: string): void {
+  if (!rows.length || table !== 'purchase_orders') {
+    return;
+  }
+
+  if (action === 'insert') {
+    rows.forEach((row) => {
+      if (!row.created_by) {
+        row.created_by = sessionUserId;
+      }
+      row.updated_by = sessionUserId;
+    });
+  }
+
+  if (action === 'update') {
+    rows.forEach((row) => {
+      row.updated_by = sessionUserId;
+    });
+  }
+}
+
 export async function POST(request: Request) {
-  const isSignedIn = await hasAppSession();
-  if (!isSignedIn) {
+  const session = await getAppSession();
+  if (!session) {
     return NextResponse.json({ error: { message: 'Unauthorized' }, data: null }, { status: 401 });
   }
 
@@ -164,6 +230,20 @@ export async function POST(request: Request) {
     const payload = (await request.json()) as DbRequestPayload;
     const table = normalizeTableName(payload.table);
     const action = payload.action;
+
+    const permission = requiredPermission(table, action);
+    if (!userHasPermission(session, permission)) {
+      return NextResponse.json(
+        {
+          data: null,
+          error: {
+            message: 'Forbidden',
+          },
+        },
+        { status: 403 }
+      );
+    }
+
     const filters = payload.filters || [];
     const params: unknown[] = [];
 
@@ -189,6 +269,8 @@ export async function POST(request: Request) {
       if (!rows.length) {
         throw new Error('Insert payload is empty');
       }
+
+      applyServerAuditColumns(table, action, rows, session.userId);
 
       const columns = requireWritableColumns(table, rows[0]);
       const columnSql = columns.map((column) => requireAllowedColumn(table, column)).join(', ');
@@ -216,6 +298,8 @@ export async function POST(request: Request) {
       if (!filters.length) {
         throw new Error('Update requires at least one filter');
       }
+
+      applyServerAuditColumns(table, action, rows, session.userId);
 
       const values = rows[0];
       const columns = requireWritableColumns(table, values);
