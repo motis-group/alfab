@@ -229,21 +229,42 @@ jobs:
 
           sleep 10
 
-          status="$(curl -sS -o /tmp/smoke_api_db.out -w '%{http_code}' --max-time 20 \
-            -X POST "https://${DEPLOY_DOMAIN}/api/db?smoke=${GITHUB_SHA}" \
-            -H 'Content-Type: application/json' \
-            -H 'Cache-Control: no-cache' \
-            --data '{"table":"customers","action":"select","columns":"*"}' || true)"
+          base_url=""
+          status="000"
 
-          echo "Smoke status: ${status}"
-          sed -n '1,80p' /tmp/smoke_api_db.out || true
+          for scheme in https http; do
+            candidate="${scheme}://${DEPLOY_DOMAIN}"
+            echo "Smoke probing ${candidate}"
 
-          if [[ "${status}" == "404" || "${status}" == "000" ]]; then
-            echo "Production API route is still unavailable (status ${status})." >&2
+            for attempt in {1..12}; do
+              status="$(curl -sS -o /tmp/smoke_api_db.out -w '%{http_code}' --max-time 20 \
+                -X POST "${candidate}/api/db?smoke=${GITHUB_SHA}&attempt=${attempt}" \
+                -H 'Content-Type: application/json' \
+                -H 'Cache-Control: no-cache' \
+                --data '{"table":"customers","action":"select","columns":"*"}' || true)"
+
+              echo "Smoke status (${candidate}, attempt ${attempt}): ${status}"
+              if [[ -f /tmp/smoke_api_db.out ]]; then
+                sed -n '1,40p' /tmp/smoke_api_db.out || true
+              fi
+
+              if [[ "${status}" != "404" && "${status}" != "000" ]]; then
+                base_url="${candidate}"
+                break 2
+              fi
+
+              sleep 5
+            done
+          done
+
+          if [[ -z "${base_url}" ]]; then
+            echo "Production API route is unavailable over HTTP and HTTPS (last status ${status})." >&2
             exit 1
           fi
 
-          curl -sS --max-time 20 "https://${DEPLOY_DOMAIN}/doors?smoke=${GITHUB_SHA}" -H 'Cache-Control: no-cache' > /tmp/smoke_doors.out
+          echo "Smoke validated via ${base_url}"
+
+          curl -sS --max-time 20 "${base_url}/doors?smoke=${GITHUB_SHA}" -H 'Cache-Control: no-cache' > /tmp/smoke_doors.out
           sed -n '1,60p' /tmp/smoke_doors.out || true
 
           if grep -q 'style="width:100%;padding:0.6rem"' /tmp/smoke_doors.out; then
