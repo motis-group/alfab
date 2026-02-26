@@ -142,6 +142,8 @@ fi
 npm ci
 
 DATABASE_URL=""
+ADMIN_PASSWORD=""
+SUPERADMIN_USERNAME=""
 if command -v aws >/dev/null 2>&1; then
   set +e
   SECRET_JSON="$(aws secretsmanager get-secret-value --secret-id "${SECRET_ID}" --region "${AWS_REGION}" --query SecretString --output text 2>/dev/null)"
@@ -150,11 +152,21 @@ if command -v aws >/dev/null 2>&1; then
 
   if [[ ${secret_status} -eq 0 ]]; then
     DATABASE_URL="$(echo "${SECRET_JSON}" | jq -r '.database_url // empty')"
+    ADMIN_PASSWORD="$(echo "${SECRET_JSON}" | jq -r '.admin_password // empty')"
+    SUPERADMIN_USERNAME="$(echo "${SECRET_JSON}" | jq -r '.superadmin_username // empty')"
   fi
 fi
 
 if [[ -z "${DATABASE_URL}" && -f /etc/alfab.env ]]; then
   DATABASE_URL="$(grep -E '^DATABASE_URL=' /etc/alfab.env | tail -n1 | cut -d '=' -f2- || true)"
+fi
+
+if [[ -z "${ADMIN_PASSWORD}" && -f /etc/alfab.env ]]; then
+  ADMIN_PASSWORD="$(grep -E '^ADMIN_PASSWORD=' /etc/alfab.env | tail -n1 | cut -d '=' -f2- || true)"
+fi
+
+if [[ -z "${SUPERADMIN_USERNAME}" && -f /etc/alfab.env ]]; then
+  SUPERADMIN_USERNAME="$(grep -E '^SUPERADMIN_USERNAME=' /etc/alfab.env | tail -n1 | cut -d '=' -f2- || true)"
 fi
 
 if [[ -z "${DATABASE_URL}" || "${DATABASE_URL}" == "null" ]]; then
@@ -169,6 +181,15 @@ DATABASE_URL=${DATABASE_URL}
 DATABASE_SSL=true
 DATABASE_SSL_REJECT_UNAUTHORIZED=false
 ENVVARS
+
+if [[ -n "${SUPERADMIN_USERNAME}" ]]; then
+  echo "SUPERADMIN_USERNAME=${SUPERADMIN_USERNAME}" | run_as_root tee -a /etc/alfab.env >/dev/null
+fi
+
+if [[ -n "${ADMIN_PASSWORD}" ]]; then
+  echo "ADMIN_PASSWORD=${ADMIN_PASSWORD}" | run_as_root tee -a /etc/alfab.env >/dev/null
+fi
+
 run_as_root chmod 600 /etc/alfab.env
 
 set -a

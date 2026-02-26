@@ -42,12 +42,36 @@ create table if not exists auth_sessions (
 
 do $$
 begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = current_schema()
+      and table_name = 'auth_sessions'
+      and column_name = 'session_token_hash'
+  ) and not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = current_schema()
+      and table_name = 'auth_sessions'
+      and column_name = 'token_hash'
+  ) then
+    alter table auth_sessions rename column session_token_hash to token_hash;
+  end if;
+
+  alter table auth_sessions add column if not exists token_hash text;
   alter table auth_sessions add column if not exists assumed_role text;
   alter table auth_sessions add column if not exists last_seen_at timestamptz;
+
+  delete from auth_sessions where token_hash is null;
+
+  alter table auth_sessions alter column token_hash set not null;
+
   update auth_sessions
   set assumed_role = null
   where assumed_role is not null
     and assumed_role not in ('superadmin', 'admin', 'standard', 'readonly');
+
+  create unique index if not exists idx_auth_sessions_token_hash_unique on auth_sessions(token_hash);
   alter table auth_sessions drop constraint if exists auth_sessions_assumed_role_check;
   alter table auth_sessions add constraint auth_sessions_assumed_role_check check (assumed_role in ('superadmin', 'admin', 'standard', 'readonly'));
 exception
