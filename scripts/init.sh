@@ -35,7 +35,7 @@ NGINX_CONFIG="server {
     }
 
     location /_next/static/ {
-        alias $REMOTE_PATH/web-app/.next/static/;
+        alias $REMOTE_PATH/.next/static/;
         expires 365d;
         access_log off;
     }

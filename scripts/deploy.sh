@@ -7,7 +7,6 @@ set -x # Enable command echoing for debugging
 # REMOTE_HOST - SSH host
 # REMOTE_PASSWORD - SSH password
 # REMOTE_PATH - Remote deployment path (e.g., /var/www/alfab)
-# APP_PATH - Local app path (e.g., web-app)
 
 # Function to run remote commands via SSH
 run_remote_cmd() {
@@ -29,7 +28,7 @@ After=network.target
 [Service]
 Type=simple
 User=www-data
-WorkingDirectory=$REMOTE_PATH/web-app
+WorkingDirectory=$REMOTE_PATH
 ExecStart=/usr/bin/npm start
 Restart=on-failure
 Environment=NODE_ENV=production
@@ -54,15 +53,14 @@ run_remote_cmd "
     
     cd $REMOTE_PATH
     if [ -d .git ]; then
-        sudo git reset --hard
-        sudo git pull
+        sudo git fetch origin
+        sudo git checkout main
+        sudo git pull --ff-only origin main
     else
-        cd ..
-        sudo rm -rf $REMOTE_PATH/*
-        sudo git clone https://github.com/motis-group/alfab.git .
+        sudo rm -rf $REMOTE_PATH
+        sudo git clone https://github.com/motis-group/alfab.git $REMOTE_PATH
+        cd $REMOTE_PATH
     fi
-    
-    cd web-app
     
     # Ensure node_modules exists and has correct permissions
     sudo mkdir -p node_modules
@@ -88,7 +86,7 @@ echo "🔄 Restarting services..."
 # Final setup and service restart
 run_remote_cmd "
     sudo chown -R www-data:www-data $REMOTE_PATH
-    cd $REMOTE_PATH/web-app
+    cd $REMOTE_PATH
     sudo systemctl daemon-reload
     sudo systemctl enable nextjs
     sudo systemctl restart nextjs"

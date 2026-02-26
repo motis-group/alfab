@@ -110,3 +110,5 @@ typings/
 .vscode
 .idea
 .vercel
+web-app-project/
+.precheckout-backup-*/

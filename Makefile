@@ -1,5 +1,7 @@
 .PHONY: deploy init down help setup env-setup terraform-init terraform-plan terraform-apply terraform-destroy
 
+# Single-app repository operations
+
 help: ## Show this help message
 	@echo 'Usage:'
 	@echo '  make [target]'
@@ -58,4 +60,3 @@ terraform-destroy: ## Destroy Terraform infrastructure
 
 terraform-setup: terraform-init terraform-apply ## Complete Terraform setup: initialize and apply
 	@echo "🚀 Terraform setup complete! Infrastructure is ready to use."
-
