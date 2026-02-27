@@ -67,6 +67,24 @@ function orderStatusClassName(status: OrderStatus): string {
   }
 }
 
+type ArchiveFilter = 'active' | 'all' | 'archived';
+
+function isOrderArchived(order: PurchaseOrder): boolean {
+  return Boolean(order.archived_at);
+}
+
+function matchesArchiveFilter(order: PurchaseOrder, filter: ArchiveFilter): boolean {
+  if (filter === 'all') {
+    return true;
+  }
+
+  if (filter === 'archived') {
+    return isOrderArchived(order);
+  }
+
+  return !isOrderArchived(order);
+}
+
 export default function OrderDashboardPage() {
   const router = useRouter();
 
@@ -82,6 +100,7 @@ export default function OrderDashboardPage() {
 
   const [customerFilter, setCustomerFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<OrderStatus | ''>('');
+  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>('active');
   const [dateFromFilter, setDateFromFilter] = useState('');
   const [dateToFilter, setDateToFilter] = useState('');
 
@@ -111,8 +130,10 @@ export default function OrderDashboardPage() {
 
   const activeCustomers = useMemo(() => customers.filter((customer) => customer.is_active !== false), [customers]);
 
+  const ordersInScope = useMemo(() => orders.filter((order) => matchesArchiveFilter(order, archiveFilter)), [orders, archiveFilter]);
+
   const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
+    return ordersInScope.filter((order) => {
       if (customerFilter && order.customer_id !== customerFilter) {
         return false;
       }
@@ -124,7 +145,7 @@ export default function OrderDashboardPage() {
       }
       return true;
     });
-  }, [orders, customerFilter, statusFilter, dateFromFilter, dateToFilter]);
+  }, [ordersInScope, customerFilter, statusFilter, dateFromFilter, dateToFilter]);
 
   const selectedOrder = useMemo(() => orders.find((order) => order.id === selectedOrderId) || null, [orders, selectedOrderId]);
 
@@ -137,7 +158,7 @@ export default function OrderDashboardPage() {
 
   const openOrdersByCustomer = useMemo(() => {
     const counts: Record<string, number> = {};
-    orders.forEach((order) => {
+    ordersInScope.forEach((order) => {
       if (order.status !== 'open') {
         return;
       }
@@ -151,7 +172,7 @@ export default function OrderDashboardPage() {
         count,
         name: customerMap[customerId]?.name || 'Unknown Customer',
       }));
-  }, [orders, customerMap]);
+  }, [ordersInScope, customerMap]);
 
   const dueInSevenDays = useMemo(() => {
     const today = todayISODate();
@@ -159,7 +180,7 @@ export default function OrderDashboardPage() {
     inSevenDays.setDate(inSevenDays.getDate() + 7);
     const maxDate = inSevenDays.toISOString().split('T')[0];
 
-    return orders.filter((order) => {
+    return ordersInScope.filter((order) => {
       const requiredDate = order.required_date || '';
       if (!requiredDate) {
         return false;
@@ -169,17 +190,17 @@ export default function OrderDashboardPage() {
       }
       return requiredDate >= today && requiredDate <= maxDate;
     });
-  }, [orders]);
+  }, [ordersInScope]);
 
   const recentOrders = useMemo(() => {
-    return [...orders]
+    return [...ordersInScope]
       .sort((a, b) => {
         const aDate = a.updated_at || a.created_at || a.received_date || '';
         const bDate = b.updated_at || b.created_at || b.received_date || '';
         return bDate.localeCompare(aDate);
       })
       .slice(0, 5);
-  }, [orders]);
+  }, [ordersInScope]);
 
   async function loadData() {
     setIsLoading(true);
@@ -282,6 +303,34 @@ export default function OrderDashboardPage() {
     }
   }
 
+  async function setOrderArchived(orderId: string, archived: boolean) {
+    if (!canEditOrders) {
+      return;
+    }
+
+    setFormError(null);
+
+    try {
+      const db = createClient();
+      const archivedAt = archived ? new Date().toISOString() : null;
+      const { error } = await db.from(TABLE_PURCHASE_ORDERS).update({ archived_at: archivedAt, updated_at: new Date().toISOString() }).eq('id', orderId);
+      if (error) {
+        throw error;
+      }
+
+      setOrders((prev) => prev.map((order) => (order.id === orderId ? { ...order, archived_at: archivedAt, updated_at: new Date().toISOString() } : order)));
+
+      if (selectedOrderId === orderId) {
+        const stillVisible = archived ? archiveFilter !== 'active' : archiveFilter !== 'archived';
+        if (!stillVisible) {
+          setSelectedOrderId(null);
+        }
+      }
+    } catch (error: any) {
+      setFormError(error?.message || 'Failed to update order archive status.');
+    }
+  }
+
   async function saveFulfillmentUpdates() {
     if (!selectedOrder || !canEditOrders) {
       return;
@@ -319,7 +368,7 @@ export default function OrderDashboardPage() {
       navLabel="ORDER DASHBOARD"
       navRight={<ActionButton onClick={() => router.push('/doors/new')}>NEW ORDER</ActionButton>}
       heading="PURCHASE ORDER DASHBOARD"
-      badge={`${orders.length} TOTAL`}
+      badge={`${ordersInScope.length} TOTAL`}
       actionItems={[
         {
           hotkey: '⌘+N',
@@ -362,13 +411,13 @@ export default function OrderDashboardPage() {
         <RowSpaceBetween>
           <Text>OPEN ORDERS</Text>
           <Text>
-            <span className="status-warning">{orders.filter((order) => order.status === 'open').length}</span>
+            <span className="status-warning">{ordersInScope.filter((order) => order.status === 'open').length}</span>
           </Text>
         </RowSpaceBetween>
         <RowSpaceBetween>
           <Text>IN PRODUCTION</Text>
           <Text>
-            <span className="status-warning">{orders.filter((order) => order.status === 'in_production').length}</span>
+            <span className="status-warning">{ordersInScope.filter((order) => order.status === 'in_production').length}</span>
           </Text>
         </RowSpaceBetween>
         <RowSpaceBetween>
@@ -414,7 +463,10 @@ export default function OrderDashboardPage() {
               <TableColumn>{order.po_number}</TableColumn>
               <TableColumn>{customerMap[order.customer_id]?.name || 'Unknown'}</TableColumn>
               <TableColumn>
-                <span className={orderStatusClassName(order.status)}>{statusLabel(order.status)}</span>
+                <>
+                      <span className={orderStatusClassName(order.status)}>{statusLabel(order.status)}</span>
+                      {isOrderArchived(order) ? <span className="status-pill status-pill-warning">ARCHIVED</span> : null}
+                    </>
               </TableColumn>
               <TableColumn>{(order.updated_at || order.created_at || '').replace('T', ' ').slice(0, 16) || '—'}</TableColumn>
             </TableRow>
@@ -442,6 +494,14 @@ export default function OrderDashboardPage() {
               {statusLabel(status)}
             </option>
           ))}
+        </select>
+        <br />
+
+        <Text>ARCHIVE</Text>
+        <select value={archiveFilter} onChange={(event) => setArchiveFilter(event.target.value as ArchiveFilter)}>
+          <option value="active">Active orders only</option>
+          <option value="all">All orders</option>
+          <option value="archived">Archived only</option>
         </select>
         <br />
 
@@ -476,7 +536,10 @@ export default function OrderDashboardPage() {
                   <TableColumn onClick={() => setSelectedOrderId(order.id)}>{order.received_date || '—'}</TableColumn>
                   <TableColumn onClick={() => setSelectedOrderId(order.id)}>{order.required_date || '—'}</TableColumn>
                   <TableColumn onClick={() => setSelectedOrderId(order.id)}>
-                    <span className={orderStatusClassName(order.status)}>{statusLabel(order.status)}</span>
+                    <>
+                      <span className={orderStatusClassName(order.status)}>{statusLabel(order.status)}</span>
+                      {isOrderArchived(order) ? <span className="status-pill status-pill-warning">ARCHIVED</span> : null}
+                    </>
                   </TableColumn>
                   <TableColumn onClick={() => setSelectedOrderId(order.id)}>{lines.length}</TableColumn>
                   <TableColumn onClick={() => setSelectedOrderId(order.id)}>{formatCurrency(total)}</TableColumn>
@@ -484,6 +547,7 @@ export default function OrderDashboardPage() {
                     <RowSpaceBetween>
                       <ActionButton onClick={() => setSelectedOrderId(order.id)}>View</ActionButton>
                       <ActionButton onClick={() => router.push(`/doors/new?orderId=${order.id}`)}>Edit</ActionButton>
+                      <ActionButton onClick={() => setOrderArchived(order.id, !isOrderArchived(order))}>{isOrderArchived(order) ? 'Unarchive' : 'Archive'}</ActionButton>
                       <ActionButton onClick={() => updateOrderStatus(order.id, 'cancelled')}>Cancel</ActionButton>
                     </RowSpaceBetween>
                   </TableColumn>
@@ -511,8 +575,15 @@ export default function OrderDashboardPage() {
           <RowSpaceBetween>
             <Text>STATUS</Text>
             <Text>
-              <span className={orderStatusClassName(selectedOrder.status)}>{statusLabel(selectedOrder.status)}</span>
+              <>
+                <span className={orderStatusClassName(selectedOrder.status)}>{statusLabel(selectedOrder.status)}</span>
+                {isOrderArchived(selectedOrder) ? <span className="status-pill status-pill-warning">ARCHIVED</span> : null}
+              </>
             </Text>
+          </RowSpaceBetween>
+          <RowSpaceBetween>
+            <Text>ARCHIVE</Text>
+            <Text>{isOrderArchived(selectedOrder) ? 'ARCHIVED' : 'ACTIVE'}</Text>
           </RowSpaceBetween>
           <RowSpaceBetween>
             <Text>RECEIVED DATE</Text>
@@ -590,6 +661,7 @@ export default function OrderDashboardPage() {
           <br />
           <RowSpaceBetween>
             <ActionButton onClick={saveFulfillmentUpdates}>Save Fulfillment</ActionButton>
+            <ActionButton onClick={() => setOrderArchived(selectedOrder.id, !isOrderArchived(selectedOrder))}>{isOrderArchived(selectedOrder) ? 'Unarchive Order' : 'Archive Order'}</ActionButton>
             <ActionButton onClick={() => router.push(`/doors/new?orderId=${selectedOrder.id}`)}>Edit Order</ActionButton>
           </RowSpaceBetween>
         </CardDouble>

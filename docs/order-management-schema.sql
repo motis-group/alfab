@@ -180,11 +180,20 @@ create table if not exists purchase_orders (
   required_date date,
   status text not null default 'open' check (status in ('open', 'in_production', 'fulfilled', 'cancelled')),
   notes text,
+  archived_at timestamptz,
   created_by uuid references users(id),
   updated_by uuid references users(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+do $$
+begin
+  alter table purchase_orders add column if not exists archived_at timestamptz;
+exception
+  when undefined_table then
+    null;
+end $$;
 
 create table if not exists purchase_order_lines (
   id uuid primary key default gen_random_uuid(),
@@ -207,6 +216,7 @@ create index if not exists idx_customer_products_product_id on customer_products
 create index if not exists idx_purchase_orders_customer_id on purchase_orders(customer_id);
 create index if not exists idx_purchase_orders_status on purchase_orders(status);
 create index if not exists idx_purchase_orders_received_date on purchase_orders(received_date);
+create index if not exists idx_purchase_orders_archived_at on purchase_orders(archived_at);
 create index if not exists idx_purchase_order_lines_purchase_order_id on purchase_order_lines(purchase_order_id);
 create index if not exists idx_purchase_order_lines_product_id on purchase_order_lines(product_id);
 create index if not exists idx_quotes_date on quotes(date desc);

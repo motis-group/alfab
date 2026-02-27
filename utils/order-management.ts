@@ -51,6 +51,7 @@ export interface PurchaseOrder {
   created_at?: string | null;
   updated_by?: string | null;
   updated_at?: string | null;
+  archived_at?: string | null;
 }
 
 export interface PurchaseOrderLine {

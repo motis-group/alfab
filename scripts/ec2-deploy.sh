@@ -33,11 +33,13 @@ run_as_root() {
 install_runtime_packages() {
   if command -v dnf >/dev/null 2>&1; then
     run_as_root dnf install -y nginx jq tar curl || true
+    run_as_root dnf install -y postgresql15 || run_as_root dnf install -y postgresql || true
   elif command -v apt-get >/dev/null 2>&1; then
     run_as_root apt-get update -y
-    run_as_root apt-get install -y nginx jq tar curl
+    run_as_root apt-get install -y nginx jq tar curl postgresql-client
   elif command -v yum >/dev/null 2>&1; then
     run_as_root yum install -y nginx jq tar curl || true
+    run_as_root yum install -y postgresql || true
   else
     echo "Unsupported OS: no dnf/apt-get/yum available." >&2
     exit 1
@@ -121,6 +123,11 @@ NGINX
 
 install_runtime_packages
 
+if ! command -v psql >/dev/null 2>&1; then
+  echo "psql is required for schema migrations but was not installed." >&2
+  exit 1
+fi
+
 if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
   echo "Node.js and npm are required on the target host." >&2
   exit 1
@@ -195,6 +202,10 @@ run_as_root chmod 600 /etc/alfab.env
 set -a
 source /etc/alfab.env
 set +a
+
+if [[ -x scripts/apply-aws-postgres-schema.sh ]]; then
+  bash scripts/apply-aws-postgres-schema.sh
+fi
 
 npm run build
 
