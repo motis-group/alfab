@@ -8,7 +8,6 @@ import { useRouter } from 'next/navigation';
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
 import Card from '@components/Card';
-import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
 import RowSpaceBetween from '@components/RowSpaceBetween';
 import Table from '@components/Table';
@@ -24,10 +23,8 @@ import {
   PurchaseOrder,
   PurchaseOrderLine,
   UserRole,
-  calculateLineTotal,
   calculateOrderTotal,
   formatCurrency,
-  parseLineNotes,
   statusLabel,
   todayISODate,
 } from '@utils/order-management';
@@ -40,13 +37,38 @@ const TABLE_PURCHASE_ORDER_LINES = 'purchase_order_lines';
 
 const navigationItems = APP_NAVIGATION_ITEMS;
 
-function numberOrFallback(value: string, fallback = 0): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+type ArchiveFilter = 'active' | 'all' | 'archived';
+
+function normalizeDateValue(value?: string | null): string {
+  if (!value) {
+    return '';
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    return '';
+  }
+
+  const isoPrefixMatch = normalized.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (isoPrefixMatch) {
+    return isoPrefixMatch[1];
+  }
+
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    return normalized;
+  }
+
+  return parsed.toISOString().slice(0, 10);
+}
+
+function displayDate(value?: string | null): string {
+  const normalized = normalizeDateValue(value);
+  return normalized || '—';
 }
 
 function orderDateInRange(order: PurchaseOrder, dateFrom: string, dateTo: string): boolean {
-  const orderDate = order.received_date || '';
+  const orderDate = normalizeDateValue(order.received_date);
   if (dateFrom && orderDate < dateFrom) {
     return false;
   }
@@ -66,8 +88,6 @@ function orderStatusClassName(status: OrderStatus): string {
       return 'status-pill status-pill-warning';
   }
 }
-
-type ArchiveFilter = 'active' | 'all' | 'archived';
 
 function isOrderArchived(order: PurchaseOrder): boolean {
   return Boolean(order.archived_at);
@@ -104,11 +124,6 @@ export default function OrderDashboardPage() {
   const [dateFromFilter, setDateFromFilter] = useState('');
   const [dateToFilter, setDateToFilter] = useState('');
 
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [queryOrderId, setQueryOrderId] = useState('');
-  const [lineFulfillmentDrafts, setLineFulfillmentDrafts] = useState<Record<string, number>>({});
-
-  const canEditOrders = role !== 'readonly';
   const customerMap = useMemo(() => {
     const map: Record<string, Customer> = {};
     customers.forEach((customer) => {
@@ -147,15 +162,6 @@ export default function OrderDashboardPage() {
     });
   }, [ordersInScope, customerFilter, statusFilter, dateFromFilter, dateToFilter]);
 
-  const selectedOrder = useMemo(() => orders.find((order) => order.id === selectedOrderId) || null, [orders, selectedOrderId]);
-
-  const selectedOrderLines = useMemo(() => {
-    if (!selectedOrder) {
-      return [];
-    }
-    return linesByOrder[selectedOrder.id] || [];
-  }, [selectedOrder, linesByOrder]);
-
   const openOrdersByCustomer = useMemo(() => {
     const counts: Record<string, number> = {};
     ordersInScope.forEach((order) => {
@@ -181,7 +187,7 @@ export default function OrderDashboardPage() {
     const maxDate = inSevenDays.toISOString().split('T')[0];
 
     return ordersInScope.filter((order) => {
-      const requiredDate = order.required_date || '';
+      const requiredDate = normalizeDateValue(order.required_date);
       if (!requiredDate) {
         return false;
       }
@@ -252,113 +258,6 @@ export default function OrderDashboardPage() {
       await loadData();
     })();
   }, []);
-
-  useEffect(() => {
-    if (!selectedOrder) {
-      setLineFulfillmentDrafts({});
-      return;
-    }
-
-    const nextDrafts: Record<string, number> = {};
-    selectedOrderLines.forEach((line) => {
-      if (line.id) {
-        nextDrafts[line.id] = line.quantity_fulfilled || 0;
-      }
-    });
-    setLineFulfillmentDrafts(nextDrafts);
-  }, [selectedOrder, selectedOrderLines]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const params = new URLSearchParams(window.location.search);
-    setQueryOrderId(params.get('orderId') || '');
-  }, []);
-
-  useEffect(() => {
-    if (!queryOrderId || !orders.length) {
-      return;
-    }
-
-    if (orders.some((order) => order.id === queryOrderId)) {
-      setSelectedOrderId(queryOrderId);
-    }
-  }, [queryOrderId, orders]);
-
-  async function updateOrderStatus(orderId: string, status: OrderStatus) {
-    if (!canEditOrders) {
-      return;
-    }
-
-    try {
-      const db = createClient();
-      const { error } = await db.from(TABLE_PURCHASE_ORDERS).update({ status, updated_at: new Date().toISOString() }).eq('id', orderId);
-      if (error) throw error;
-
-      setOrders((prev) => prev.map((order) => (order.id === orderId ? { ...order, status, updated_at: new Date().toISOString() } : order)));
-    } catch (error: any) {
-      setFormError(error?.message || 'Failed to update order status.');
-    }
-  }
-
-  async function setOrderArchived(orderId: string, archived: boolean) {
-    if (!canEditOrders) {
-      return;
-    }
-
-    setFormError(null);
-
-    try {
-      const db = createClient();
-      const archivedAt = archived ? new Date().toISOString() : null;
-      const { error } = await db.from(TABLE_PURCHASE_ORDERS).update({ archived_at: archivedAt, updated_at: new Date().toISOString() }).eq('id', orderId);
-      if (error) {
-        throw error;
-      }
-
-      setOrders((prev) => prev.map((order) => (order.id === orderId ? { ...order, archived_at: archivedAt, updated_at: new Date().toISOString() } : order)));
-
-      if (selectedOrderId === orderId) {
-        const stillVisible = archived ? archiveFilter !== 'active' : archiveFilter !== 'archived';
-        if (!stillVisible) {
-          setSelectedOrderId(null);
-        }
-      }
-    } catch (error: any) {
-      setFormError(error?.message || 'Failed to update order archive status.');
-    }
-  }
-
-  async function saveFulfillmentUpdates() {
-    if (!selectedOrder || !canEditOrders) {
-      return;
-    }
-
-    setFormError(null);
-
-    try {
-      const db = createClient();
-      const updates = Object.entries(lineFulfillmentDrafts).map(([lineId, qty]) =>
-        db
-          .from(TABLE_PURCHASE_ORDER_LINES)
-          .update({ quantity_fulfilled: Math.max(0, Number(qty) || 0) })
-          .eq('id', lineId)
-          .eq('purchase_order_id', selectedOrder.id)
-      );
-
-      const results = await Promise.all(updates);
-      const failed = results.find((result) => result.error);
-      if (failed?.error) {
-        throw failed.error;
-      }
-
-      await loadData();
-    } catch (error: any) {
-      setFormError(error?.message || 'Failed to update line fulfillment.');
-    }
-  }
 
   return (
     <AppFrame
@@ -450,13 +349,12 @@ export default function OrderDashboardPage() {
         </Table>
 
         <br />
-        <Text>RECENTLY UPDATED ORDERS</Text>
+        <Text>RECENT ORDERS</Text>
         <Table>
           <TableRow>
             <TableColumn style={{ width: '16ch' }}>PO</TableColumn>
             <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
             <TableColumn style={{ width: '16ch' }}>STATUS</TableColumn>
-            <TableColumn>UPDATED</TableColumn>
           </TableRow>
           {recentOrders.map((order) => (
             <TableRow key={order.id}>
@@ -464,11 +362,10 @@ export default function OrderDashboardPage() {
               <TableColumn>{customerMap[order.customer_id]?.name || 'Unknown'}</TableColumn>
               <TableColumn>
                 <>
-                      <span className={orderStatusClassName(order.status)}>{statusLabel(order.status)}</span>
-                      {isOrderArchived(order) ? <span className="status-pill status-pill-warning">ARCHIVED</span> : null}
-                    </>
+                  <span className={orderStatusClassName(order.status)}>{statusLabel(order.status)}</span>
+                  {isOrderArchived(order) ? <span className="status-pill status-pill-warning">ARCHIVED</span> : null}
+                </>
               </TableColumn>
-              <TableColumn>{(order.updated_at || order.created_at || '').replace('T', ' ').slice(0, 16) || '—'}</TableColumn>
             </TableRow>
           ))}
         </Table>
@@ -531,25 +428,20 @@ export default function OrderDashboardPage() {
 
               return (
                 <TableRow key={order.id}>
-                  <TableColumn onClick={() => setSelectedOrderId(order.id)}>{order.po_number}</TableColumn>
-                  <TableColumn onClick={() => setSelectedOrderId(order.id)}>{customerMap[order.customer_id]?.name || 'Unknown Customer'}</TableColumn>
-                  <TableColumn onClick={() => setSelectedOrderId(order.id)}>{order.received_date || '—'}</TableColumn>
-                  <TableColumn onClick={() => setSelectedOrderId(order.id)}>{order.required_date || '—'}</TableColumn>
-                  <TableColumn onClick={() => setSelectedOrderId(order.id)}>
+                  <TableColumn>{order.po_number}</TableColumn>
+                  <TableColumn>{customerMap[order.customer_id]?.name || 'Unknown Customer'}</TableColumn>
+                  <TableColumn>{displayDate(order.received_date)}</TableColumn>
+                  <TableColumn>{displayDate(order.required_date)}</TableColumn>
+                  <TableColumn>
                     <>
                       <span className={orderStatusClassName(order.status)}>{statusLabel(order.status)}</span>
                       {isOrderArchived(order) ? <span className="status-pill status-pill-warning">ARCHIVED</span> : null}
                     </>
                   </TableColumn>
-                  <TableColumn onClick={() => setSelectedOrderId(order.id)}>{lines.length}</TableColumn>
-                  <TableColumn onClick={() => setSelectedOrderId(order.id)}>{formatCurrency(total)}</TableColumn>
+                  <TableColumn>{lines.length}</TableColumn>
+                  <TableColumn>{formatCurrency(total)}</TableColumn>
                   <TableColumn>
-                    <RowSpaceBetween>
-                      <ActionButton onClick={() => setSelectedOrderId(order.id)}>View</ActionButton>
-                      <ActionButton onClick={() => router.push(`/doors/new?orderId=${order.id}`)}>Edit</ActionButton>
-                      <ActionButton onClick={() => setOrderArchived(order.id, !isOrderArchived(order))}>{isOrderArchived(order) ? 'Unarchive' : 'Archive'}</ActionButton>
-                      <ActionButton onClick={() => updateOrderStatus(order.id, 'cancelled')}>Cancel</ActionButton>
-                    </RowSpaceBetween>
+                    <ActionButton onClick={() => router.push(`/doors/new?orderId=${order.id}`)}>View</ActionButton>
                   </TableColumn>
                 </TableRow>
               );
@@ -565,107 +457,6 @@ export default function OrderDashboardPage() {
           </Table>
         )}
       </Card>
-
-      {selectedOrder && (
-        <CardDouble title={`ORDER DETAIL — ${selectedOrder.po_number}`}>
-          <RowSpaceBetween>
-            <Text>CUSTOMER</Text>
-            <Text>{customerMap[selectedOrder.customer_id]?.name || 'Unknown Customer'}</Text>
-          </RowSpaceBetween>
-          <RowSpaceBetween>
-            <Text>STATUS</Text>
-            <Text>
-              <>
-                <span className={orderStatusClassName(selectedOrder.status)}>{statusLabel(selectedOrder.status)}</span>
-                {isOrderArchived(selectedOrder) ? <span className="status-pill status-pill-warning">ARCHIVED</span> : null}
-              </>
-            </Text>
-          </RowSpaceBetween>
-          <RowSpaceBetween>
-            <Text>ARCHIVE</Text>
-            <Text>{isOrderArchived(selectedOrder) ? 'ARCHIVED' : 'ACTIVE'}</Text>
-          </RowSpaceBetween>
-          <RowSpaceBetween>
-            <Text>RECEIVED DATE</Text>
-            <Text>{selectedOrder.received_date || '—'}</Text>
-          </RowSpaceBetween>
-          <RowSpaceBetween>
-            <Text>REQUIRED DATE</Text>
-            <Text>{selectedOrder.required_date || '—'}</Text>
-          </RowSpaceBetween>
-          <RowSpaceBetween>
-            <Text>ORDER TOTAL</Text>
-            <Text>{formatCurrency(calculateOrderTotal(selectedOrderLines))}</Text>
-          </RowSpaceBetween>
-
-          <br />
-          <Text>UPDATE STATUS</Text>
-          <select value={selectedOrder.status} onChange={(event) => updateOrderStatus(selectedOrder.id, event.target.value as OrderStatus)} disabled={!canEditOrders}>
-            {ORDER_STATUS_OPTIONS.map((status) => (
-              <option key={status} value={status}>
-                {statusLabel(status)}
-              </option>
-            ))}
-          </select>
-
-          <br />
-          <Text>LINE ITEMS</Text>
-          <Table>
-            <TableRow>
-              <TableColumn style={{ width: '24ch' }}>ITEM</TableColumn>
-              <TableColumn style={{ width: '10ch' }}>QTY</TableColumn>
-              <TableColumn style={{ width: '14ch' }}>UNIT PRICE</TableColumn>
-              <TableColumn style={{ width: '16ch' }}>LINE TOTAL</TableColumn>
-              <TableColumn style={{ width: '12ch' }}>FULFILLED</TableColumn>
-              <TableColumn>NOTES</TableColumn>
-            </TableRow>
-
-            {selectedOrderLines.map((line) => {
-              const parsedNotes = parseLineNotes(line.line_notes);
-              const isAdhocLine = parsedNotes.pricingSource === 'adhoc_calculator' || !line.product_id;
-              const itemName = isAdhocLine ? parsedNotes.productLabel || 'AD HOC ITEM' : parsedNotes.productLabel || 'Customer Product';
-
-              return (
-                <TableRow key={line.id}>
-                  <TableColumn>{itemName}</TableColumn>
-                  <TableColumn>{line.quantity_ordered}</TableColumn>
-                  <TableColumn>{formatCurrency(line.unit_price_at_order || 0)}</TableColumn>
-                  <TableColumn>{formatCurrency(calculateLineTotal(line))}</TableColumn>
-                  <TableColumn>
-                    <Input
-                      name={`line_fulfilled_${line.id}`}
-                      type="number"
-                      value={lineFulfillmentDrafts[line.id] ?? line.quantity_fulfilled ?? 0}
-                      min={0}
-                      disabled={!canEditOrders}
-                      onChange={(event) => {
-                        const nextValue = Math.max(0, numberOrFallback(event.target.value, 0));
-                        setLineFulfillmentDrafts((prev) => ({ ...prev, [line.id]: nextValue }));
-                      }}
-                    />
-                  </TableColumn>
-                  <TableColumn>{parsedNotes.note || '—'}</TableColumn>
-                </TableRow>
-              );
-            })}
-
-            {!selectedOrderLines.length && (
-              <TableRow>
-                <TableColumn colSpan={6} style={{ textAlign: 'center' }}>
-                  No lines found on this purchase order.
-                </TableColumn>
-              </TableRow>
-            )}
-          </Table>
-
-          <br />
-          <RowSpaceBetween>
-            <ActionButton onClick={saveFulfillmentUpdates}>Save Fulfillment</ActionButton>
-            <ActionButton onClick={() => setOrderArchived(selectedOrder.id, !isOrderArchived(selectedOrder))}>{isOrderArchived(selectedOrder) ? 'Unarchive Order' : 'Archive Order'}</ActionButton>
-            <ActionButton onClick={() => router.push(`/doors/new?orderId=${selectedOrder.id}`)}>Edit Order</ActionButton>
-          </RowSpaceBetween>
-        </CardDouble>
-      )}
     </AppFrame>
   );
 }

@@ -17,7 +17,7 @@ import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 
-import { Customer, CustomerProduct, UserRole, formatCurrency, parseCustomerProductNotes, serializeCustomerProductNotes, todayISODate } from '@utils/order-management';
+import { Customer, CustomerProduct, UserRole, formatCurrency, parseCustomerProductNotes, serializeCustomerProductNotes } from '@utils/order-management';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
@@ -517,10 +517,6 @@ export default function CustomersPage() {
         <RowSpaceBetween>
           <Text>TOTAL PRODUCTS</Text>
           <Text>{customerProducts.length}</Text>
-        </RowSpaceBetween>
-        <RowSpaceBetween>
-          <Text>UPDATED</Text>
-          <Text>{todayISODate()}</Text>
         </RowSpaceBetween>
       </Card>
     </AppFrame>

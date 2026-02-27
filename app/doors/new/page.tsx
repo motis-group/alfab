@@ -158,6 +158,7 @@ export default function NewPurchaseOrderPage() {
   const [formError, setFormError] = useState<string | null>(null);
 
   const [isEditingOrder, setIsEditingOrder] = useState(false);
+  const [archivedAt, setArchivedAt] = useState<string | null>(null);
   const [orderForm, setOrderForm] = useState<OrderFormState>({
     id: null,
     customerId: '',
@@ -226,6 +227,7 @@ export default function NewPurchaseOrderPage() {
       status: order.status,
       notes: order.notes || '',
     });
+    setArchivedAt(order.archived_at || null);
 
     const mappedLines = lines.map((line) => {
       const parsedNotes = parseLineNotes(line.line_notes);
@@ -313,6 +315,7 @@ export default function NewPurchaseOrderPage() {
     setLineDrafts([defaultLine]);
     setActiveLineId(defaultLine.localId);
     setIsEditingOrder(false);
+    setArchivedAt(null);
     setFormError(null);
   }
 
@@ -485,6 +488,44 @@ export default function NewPurchaseOrderPage() {
       setFormError(error?.message || 'Failed to save purchase order.');
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function updateOrderLifecycle(partial: { status?: OrderStatus; archivedAt?: string | null }) {
+    if (!canEditOrders || !isEditingOrder || !orderForm.id) {
+      return;
+    }
+
+    setFormError(null);
+
+    try {
+      const db = createClient();
+      const payload: Record<string, string | null> = {
+        updated_at: new Date().toISOString(),
+      };
+
+      if (partial.status) {
+        payload.status = partial.status;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(partial, 'archivedAt')) {
+        payload.archived_at = partial.archivedAt ?? null;
+      }
+
+      const { error } = await db.from(TABLE_PURCHASE_ORDERS).update(payload).eq('id', orderForm.id);
+      if (error) {
+        throw error;
+      }
+
+      if (partial.status) {
+        setOrderForm((prev) => ({ ...prev, status: partial.status as OrderStatus }));
+      }
+
+      if (Object.prototype.hasOwnProperty.call(partial, 'archivedAt')) {
+        setArchivedAt(partial.archivedAt ?? null);
+      }
+    } catch (error: any) {
+      setFormError(error?.message || 'Failed to update order status.');
     }
   }
 
@@ -1060,6 +1101,23 @@ export default function NewPurchaseOrderPage() {
           <Text>ORDER TOTAL</Text>
           <Text>{formatCurrency(orderTotal)}</Text>
         </RowSpaceBetween>
+        {isEditingOrder && (
+          <>
+            <br />
+            <RowSpaceBetween>
+              <Text>ORDER STATUS</Text>
+              <Text>
+                <span className={orderForm.status === 'cancelled' ? 'status-pill status-pill-error' : 'status-pill status-pill-warning'}>{statusLabel(orderForm.status)}</span>
+                {archivedAt ? <span className="status-pill status-pill-warning">ARCHIVED</span> : null}
+              </Text>
+            </RowSpaceBetween>
+            <br />
+            <RowSpaceBetween>
+              <ActionButton onClick={() => updateOrderLifecycle({ status: 'cancelled' })}>Cancel Order</ActionButton>
+              <ActionButton onClick={() => updateOrderLifecycle({ archivedAt: archivedAt ? null : new Date().toISOString() })}>{archivedAt ? 'Unarchive Order' : 'Archive Order'}</ActionButton>
+            </RowSpaceBetween>
+          </>
+        )}
         <br />
         <RowSpaceBetween>
           <ActionButton onClick={handleSaveOrder}>{isSaving ? 'Saving...' : isEditingOrder ? 'Update Purchase Order' : 'Save Purchase Order'}</ActionButton>
