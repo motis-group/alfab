@@ -514,7 +514,6 @@ export default function NewPurchaseOrderPage() {
       navRight={<ActionButton onClick={() => router.push('/doors')}>BACK TO DASHBOARD</ActionButton>}
       heading={isEditingOrder ? 'EDIT PURCHASE ORDER' : 'CREATE PURCHASE ORDER'}
       badge={isEditingOrder ? 'EDIT MODE' : 'NEW ORDER'}
-      showThemeControls
       actionItems={[
         {
           hotkey: '⌘+S',

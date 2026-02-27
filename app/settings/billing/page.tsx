@@ -206,7 +206,6 @@ export default function BillingSettingsPage() {
       navRight={<ActionButton onClick={() => router.push('/settings')}>BACK TO SETTINGS</ActionButton>}
       heading="HOSTING BILLING"
       badge={badgeLabel}
-      showThemeControls
       actionItems={[
         {
           hotkey: '⌘+R',

@@ -106,6 +106,7 @@ const useGlobalNavigationHotkeys = () => {
 };
 
 interface DefaultActionBarProps {
+  floating?: boolean;
   items?: {
     hotkey: string;
     onClick: () => void;
@@ -114,7 +115,7 @@ interface DefaultActionBarProps {
   }[];
 }
 
-const DefaultActionBar: React.FC<DefaultActionBarProps> = ({ items = [] }) => {
+const DefaultActionBar: React.FC<DefaultActionBarProps> = ({ floating = false, items = [] }) => {
   const [isGrid, setGrid] = React.useState(false);
   useHotkeys('ctrl+g', () => toggleDebugGrid());
 
@@ -140,8 +141,10 @@ const DefaultActionBar: React.FC<DefaultActionBarProps> = ({ items = [] }) => {
     };
   }, []);
 
+  const rootClassName = floating ? `${styles.root} ${styles.floating}` : styles.root;
+
   return (
-    <div className={styles.root}>
+    <div className={rootClassName}>
       <ActionBar
         items={[
           {

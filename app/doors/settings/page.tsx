@@ -21,7 +21,6 @@ export default function SettingsPage() {
       navLabel="PRICING RULES"
       heading="PRICING RULES"
       badge="SYSTEM SETTINGS"
-      showThemeControls
       actionItems={[
         {
           hotkey: '⌘+S',

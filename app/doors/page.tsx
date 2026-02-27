@@ -23,7 +23,6 @@ import {
   OrderStatus,
   PurchaseOrder,
   PurchaseOrderLine,
-  USER_ROLE_OPTIONS,
   UserRole,
   calculateLineTotal,
   calculateOrderTotal,
@@ -33,7 +32,7 @@ import {
   todayISODate,
 } from '@utils/order-management';
 import { createClient } from '@utils/db-client';
-import { CurrentSessionUser, fetchCurrentSessionUser } from '@utils/session-client';
+import { fetchCurrentSessionUser } from '@utils/session-client';
 
 const TABLE_CUSTOMERS = 'customers';
 const TABLE_PURCHASE_ORDERS = 'purchase_orders';
@@ -72,7 +71,6 @@ export default function OrderDashboardPage() {
   const router = useRouter();
 
   const [role, setRole] = useState<UserRole>('readonly');
-  const [sessionUser, setSessionUser] = useState<CurrentSessionUser | null>(null);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
@@ -92,8 +90,6 @@ export default function OrderDashboardPage() {
   const [lineFulfillmentDrafts, setLineFulfillmentDrafts] = useState<Record<string, number>>({});
 
   const canEditOrders = role !== 'readonly';
-  const canManageMasterData = role === 'admin' || role === 'superadmin';
-
   const customerMap = useMemo(() => {
     const map: Record<string, Customer> = {};
     customers.forEach((customer) => {
@@ -221,7 +217,6 @@ export default function OrderDashboardPage() {
       return null;
     }
 
-    setSessionUser(nextUser);
     setRole(nextUser.effectiveRole as UserRole);
     return nextUser;
   }
@@ -270,31 +265,6 @@ export default function OrderDashboardPage() {
       setSelectedOrderId(queryOrderId);
     }
   }, [queryOrderId, orders]);
-
-  async function persistRole(nextRole: UserRole) {
-    if (!sessionUser?.canOverrideSessionRole) {
-      return;
-    }
-
-    const response = await fetch('/api/session-role', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ role: nextRole }),
-    });
-
-    const data = (await response.json().catch(() => null)) as { user?: CurrentSessionUser; error?: string } | null;
-
-    if (!response.ok || !data?.user) {
-      setFormError(data?.error || 'Unable to update session role.');
-      return;
-    }
-
-    setSessionUser(data.user);
-    setRole(data.user.effectiveRole as UserRole);
-    await loadData();
-  }
 
   async function updateOrderStatus(orderId: string, status: OrderStatus) {
     if (!canEditOrders) {
@@ -350,7 +320,6 @@ export default function OrderDashboardPage() {
       navRight={<ActionButton onClick={() => router.push('/doors/new')}>NEW ORDER</ActionButton>}
       heading="PURCHASE ORDER DASHBOARD"
       badge={`${orders.length} TOTAL`}
-      showThemeControls
       actionItems={[
         {
           hotkey: '⌘+N',
@@ -369,33 +338,6 @@ export default function OrderDashboardPage() {
         },
       ]}
     >
-      {sessionUser?.canOverrideSessionRole && (
-        <Card title="SESSION ROLE">
-          <Text>Superadmin can assume a lower role for this session only.</Text>
-          <br />
-          <select value={role} onChange={(event) => persistRole(event.target.value as UserRole)}>
-            {USER_ROLE_OPTIONS.map((roleOption) => (
-              <option key={roleOption} value={roleOption}>
-                {roleOption.toUpperCase()}
-              </option>
-            ))}
-          </select>
-          <br />
-          <Text>
-            {role === 'superadmin' && 'Superadmin: full access including role management.'}
-            {role === 'admin' && 'Admin: manage operations and invite users.'}
-            {role === 'standard' && 'Standard: create/edit orders.'}
-            {role === 'readonly' && 'Read-only: view only.'}
-          </Text>
-        </Card>
-      )}
-
-      {!canManageMasterData && (
-        <Card title="ACCESS NOTE">
-          <Text>Master data management is admin/superadmin only.</Text>
-        </Card>
-      )}
-
       {schemaError && (
         <Card title="DATABASE ERROR">
           <Text>

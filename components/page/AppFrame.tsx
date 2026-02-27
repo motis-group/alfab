@@ -62,7 +62,7 @@ const AppFrame: React.FC<AppFrameProps> = ({
 }) => {
   let left: React.ReactNode = null;
 
-  if (navLabel) {
+  if (navLabel && !showSectionNavigation) {
     if (navigationItems.length) {
       left = (
         <DropdownMenuTrigger items={navigationItems}>
@@ -88,7 +88,7 @@ const AppFrame: React.FC<AppFrameProps> = ({
 
         {showSectionNavigation ? <AppSectionNav /> : null}
 
-        {showThemeControls && <DefaultActionBar />}
+        {showThemeControls && <DefaultActionBar floating />}
 
         {heading && (
           <Row>

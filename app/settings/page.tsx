@@ -10,6 +10,7 @@ import ActionButton from '@components/ActionButton';
 import Card from '@components/Card';
 import CardDouble from '@components/CardDouble';
 import AppFrame from '@components/page/AppFrame';
+import DefaultActionBar from '@components/page/DefaultActionBar';
 import Input from '@components/Input';
 import Row from '@components/Row';
 import RowSpaceBetween from '@components/RowSpaceBetween';
@@ -98,7 +99,6 @@ export default function PricingSettings() {
       navRight={<ActionButton onClick={() => router.push('/')}>BACK TO COSTING</ActionButton>}
       heading="PRICING CONFIGURATION"
       badge={hasChanges ? 'UNSAVED CHANGES' : 'SAVED'}
-      showThemeControls
       actionItems={[
         {
           hotkey: '⌘+S',
@@ -129,6 +129,12 @@ export default function PricingSettings() {
           </RowSpaceBetween>
         </Card>
       )}
+
+      <Card title="APPEARANCE">
+        <Text>Theme and font controls are available here only, to keep the rest of the app clean.</Text>
+        <br />
+        <DefaultActionBar />
+      </Card>
 
       <Card title="HOSTING BILLING">
         <Text>Configure Stripe subscription billing for Alfab app hosting and maintenance.</Text>

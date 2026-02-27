@@ -38,7 +38,9 @@ interface InviteRecord {
   invited_by_username: string | null;
 }
 
-interface UserDraft {
+interface UserEditorDraft {
+  id: string;
+  username: string;
   role: AppRole;
   isActive: boolean;
   password: string;
@@ -56,7 +58,7 @@ export default function UserSettingsPage() {
   const [currentUser, setCurrentUser] = useState<CurrentSessionUser | null>(null);
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [invites, setInvites] = useState<InviteRecord[]>([]);
-  const [drafts, setDrafts] = useState<Record<string, UserDraft>>({});
+  const [editingUser, setEditingUser] = useState<UserEditorDraft | null>(null);
 
   const [createUsername, setCreateUsername] = useState('');
   const [createPassword, setCreatePassword] = useState('');
@@ -88,22 +90,54 @@ export default function UserSettingsPage() {
     setCreateRole('standard');
   }
 
-  function populateDrafts(rows: ManagedUser[]) {
-    const nextDrafts: Record<string, UserDraft> = {};
-    rows.forEach((user) => {
-      nextDrafts[user.id] = {
-        role: user.role,
-        isActive: user.is_active,
-        password: '',
+  function syncEditingUser(rows: ManagedUser[]) {
+    setEditingUser((prev) => {
+      if (!prev) {
+        return null;
+      }
+
+      const match = rows.find((row) => row.id === prev.id);
+      if (!match) {
+        return null;
+      }
+
+      return {
+        ...prev,
+        username: match.username,
+        role: match.role,
+        isActive: match.is_active,
       };
     });
-    setDrafts(nextDrafts);
+  }
+
+  function startEditingUser(user: ManagedUser) {
+    setEditingUser({
+      id: user.id,
+      username: user.username,
+      role: user.role,
+      isActive: user.is_active,
+      password: '',
+    });
+  }
+
+  function cancelEditingUser() {
+    setEditingUser(null);
+  }
+
+  function updateEditingUser(updater: (draft: UserEditorDraft) => UserEditorDraft) {
+    setEditingUser((prev) => {
+      if (!prev) {
+        return null;
+      }
+
+      return updater(prev);
+    });
   }
 
   async function loadUsers() {
     if (!isSuperadmin) {
       setUsers([]);
-      setDrafts({});
+      setEditingUser(null);
       return;
     }
 
@@ -116,7 +150,7 @@ export default function UserSettingsPage() {
 
     const loadedUsers = data?.users || [];
     setUsers(loadedUsers);
-    populateDrafts(loadedUsers);
+    syncEditingUser(loadedUsers);
   }
 
   async function loadInvites() {
@@ -156,10 +190,10 @@ export default function UserSettingsPage() {
         }
         const loadedUsers = data?.users || [];
         setUsers(loadedUsers);
-        populateDrafts(loadedUsers);
+        syncEditingUser(loadedUsers);
       } else {
         setUsers([]);
-        setDrafts({});
+        setEditingUser(null);
       }
 
       if (sessionUser.role === 'superadmin' || sessionUser.effectiveRole === 'admin') {
@@ -182,7 +216,6 @@ export default function UserSettingsPage() {
   useEffect(() => {
     loadAll();
   }, []);
-
 
   async function createInvite() {
     if (!canInvite) {
@@ -256,13 +289,8 @@ export default function UserSettingsPage() {
     }
   }
 
-  async function saveUser(userId: string) {
-    if (!isSuperadmin) {
-      return;
-    }
-
-    const draft = drafts[userId];
-    if (!draft) {
+  async function saveEditedUser() {
+    if (!isSuperadmin || !editingUser) {
       return;
     }
 
@@ -276,10 +304,11 @@ export default function UserSettingsPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          id: userId,
-          role: draft.role,
-          isActive: draft.isActive,
-          password: draft.password || undefined,
+          id: editingUser.id,
+          username: editingUser.username,
+          role: editingUser.role,
+          isActive: editingUser.isActive,
+          password: editingUser.password || undefined,
         }),
       });
 
@@ -289,26 +318,12 @@ export default function UserSettingsPage() {
       }
 
       await loadUsers();
+      setEditingUser(null);
     } catch (saveError: any) {
       setError(saveError?.message || 'Unable to update user.');
     } finally {
       setIsSaving(false);
     }
-  }
-
-  function updateDraft(userId: string, updater: (draft: UserDraft) => UserDraft) {
-    setDrafts((prev) => {
-      const current = prev[userId] || {
-        role: 'standard',
-        isActive: true,
-        password: '',
-      };
-
-      return {
-        ...prev,
-        [userId]: updater(current),
-      };
-    });
   }
 
   return (
@@ -320,7 +335,6 @@ export default function UserSettingsPage() {
       navRight={<ActionButton onClick={() => router.push('/settings')}>BACK TO SETTINGS</ActionButton>}
       heading="USER MANAGEMENT"
       badge={badgeText}
-      showThemeControls
       actionItems={[
         {
           hotkey: '⌘+R',
@@ -410,63 +424,76 @@ export default function UserSettingsPage() {
         </CardDouble>
       )}
 
+      {!isLoading && isSuperadmin && editingUser && (
+        <CardDouble title={`EDIT USER — ${editingUser.username.toUpperCase()}`}>
+          <Text>Update role, status, username, and password from this panel.</Text>
+          <Input
+            label="USERNAME"
+            name="edit_username"
+            value={editingUser.username}
+            onChange={(event) => updateEditingUser((prev) => ({ ...prev, username: event.target.value }))}
+            placeholder="username"
+          />
+
+          <Text>ROLE</Text>
+          <select value={editingUser.role} onChange={(event) => updateEditingUser((prev) => ({ ...prev, role: event.target.value as AppRole }))}>
+            {APP_ROLES.map((role) => (
+              <option key={role} value={role}>
+                {role.toUpperCase()}
+              </option>
+            ))}
+          </select>
+
+          <Text>STATUS</Text>
+          <select value={editingUser.isActive ? 'active' : 'inactive'} onChange={(event) => updateEditingUser((prev) => ({ ...prev, isActive: event.target.value === 'active' }))}>
+            <option value="active">ACTIVE</option>
+            <option value="inactive">INACTIVE</option>
+          </select>
+
+          <Input
+            label="RESET PASSWORD (OPTIONAL)"
+            name="edit_password"
+            type="password"
+            placeholder="leave blank"
+            value={editingUser.password}
+            onChange={(event) => updateEditingUser((prev) => ({ ...prev, password: event.target.value }))}
+          />
+
+          <RowSpaceBetween>
+            <ActionButton onClick={saveEditedUser}>{isSaving ? 'Saving...' : 'Save Changes'}</ActionButton>
+            <ActionButton onClick={cancelEditingUser}>Cancel</ActionButton>
+          </RowSpaceBetween>
+        </CardDouble>
+      )}
+
       {!isLoading && isSuperadmin && (
         <Card title="USERS">
           <Table>
             <TableRow>
-              <TableColumn style={{ width: '20ch' }}>USERNAME</TableColumn>
+              <TableColumn style={{ width: '24ch' }}>USERNAME</TableColumn>
               <TableColumn style={{ width: '14ch' }}>ROLE</TableColumn>
               <TableColumn style={{ width: '12ch' }}>STATUS</TableColumn>
-              <TableColumn style={{ width: '20ch' }}>RESET PASSWORD</TableColumn>
               <TableColumn style={{ width: '20ch' }}>CREATED</TableColumn>
               <TableColumn>ACTIONS</TableColumn>
             </TableRow>
 
-            {users.map((user) => {
-              const draft = drafts[user.id] || {
-                role: user.role,
-                isActive: user.is_active,
-                password: '',
-              };
-
-              return (
-                <TableRow key={user.id}>
-                  <TableColumn>{user.username}</TableColumn>
-                  <TableColumn>
-                    <select value={draft.role} onChange={(event) => updateDraft(user.id, (prev) => ({ ...prev, role: event.target.value as AppRole }))}>
-                      {APP_ROLES.map((role) => (
-                        <option key={role} value={role}>
-                          {role.toUpperCase()}
-                        </option>
-                      ))}
-                    </select>
-                  </TableColumn>
-                  <TableColumn>
-                    <select value={draft.isActive ? 'active' : 'inactive'} onChange={(event) => updateDraft(user.id, (prev) => ({ ...prev, isActive: event.target.value === 'active' }))}>
-                      <option value="active">ACTIVE</option>
-                      <option value="inactive">INACTIVE</option>
-                    </select>
-                  </TableColumn>
-                  <TableColumn>
-                    <Input
-                      name={`reset_password_${user.id}`}
-                      type="password"
-                      placeholder="leave blank"
-                      value={draft.password}
-                      onChange={(event) => updateDraft(user.id, (prev) => ({ ...prev, password: event.target.value }))}
-                    />
-                  </TableColumn>
-                  <TableColumn>{formatDate(user.created_at)}</TableColumn>
-                  <TableColumn>
-                    <ActionButton onClick={() => saveUser(user.id)}>Save</ActionButton>
-                  </TableColumn>
-                </TableRow>
-              );
-            })}
+            {users.map((user) => (
+              <TableRow key={user.id}>
+                <TableColumn>{user.username}</TableColumn>
+                <TableColumn>{user.role.toUpperCase()}</TableColumn>
+                <TableColumn>
+                  {user.is_active ? <span className="status-pill status-pill-success">ACTIVE</span> : <span className="status-pill status-pill-warning">INACTIVE</span>}
+                </TableColumn>
+                <TableColumn>{formatDate(user.created_at)}</TableColumn>
+                <TableColumn>
+                  <ActionButton onClick={() => startEditingUser(user)}>{editingUser?.id === user.id ? 'Editing...' : 'Edit'}</ActionButton>
+                </TableColumn>
+              </TableRow>
+            ))}
 
             {!users.length && (
               <TableRow>
-                <TableColumn colSpan={6} style={{ textAlign: 'center' }}>
+                <TableColumn colSpan={5} style={{ textAlign: 'center' }}>
                   No users found.
                 </TableColumn>
               </TableRow>

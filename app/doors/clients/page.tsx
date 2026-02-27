@@ -305,7 +305,6 @@ export default function CustomersPage() {
       navRight={<ActionButton onClick={() => router.push('/doors')}>ORDER DASHBOARD</ActionButton>}
       heading="CUSTOMER MANAGEMENT"
       badge={`${customers.filter((customer) => customer.is_active !== false).length} ACTIVE`}
-      showThemeControls
       actionItems={[
         {
           hotkey: '⌘+S',
