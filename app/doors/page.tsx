@@ -561,7 +561,8 @@ export default function OrderDashboardPage() {
                   <TableColumn>{formatCurrency(line.unit_price_at_order || 0)}</TableColumn>
                   <TableColumn>{formatCurrency(calculateLineTotal(line))}</TableColumn>
                   <TableColumn>
-                    <input
+                    <Input
+                      name={`line_fulfilled_${line.id}`}
                       type="number"
                       value={lineFulfillmentDrafts[line.id] ?? line.quantity_fulfilled ?? 0}
                       min={0}
