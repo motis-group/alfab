@@ -49,7 +49,18 @@ interface UserEditorDraft {
 const navigationItems = APP_NAVIGATION_ITEMS;
 
 function formatDate(value: string): string {
-  return new Date(value).toLocaleString('en-AU');
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '-';
+  }
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+
+  return day + '/' + month + '/' + year + ' ' + hours + ':' + minutes;
 }
 
 export default function UserSettingsPage() {
@@ -473,7 +484,7 @@ export default function UserSettingsPage() {
               <TableColumn style={{ width: '24ch' }}>USERNAME</TableColumn>
               <TableColumn style={{ width: '14ch' }}>ROLE</TableColumn>
               <TableColumn style={{ width: '12ch' }}>STATUS</TableColumn>
-              <TableColumn style={{ width: '20ch' }}>CREATED</TableColumn>
+              <TableColumn style={{ width: '18ch', whiteSpace: 'nowrap' }}>CREATED</TableColumn>
               <TableColumn>ACTIONS</TableColumn>
             </TableRow>
 
@@ -484,7 +495,7 @@ export default function UserSettingsPage() {
                 <TableColumn>
                   {user.is_active ? <span className="status-pill status-pill-success">ACTIVE</span> : <span className="status-pill status-pill-warning">INACTIVE</span>}
                 </TableColumn>
-                <TableColumn>{formatDate(user.created_at)}</TableColumn>
+                <TableColumn style={{ whiteSpace: 'nowrap' }}>{formatDate(user.created_at)}</TableColumn>
                 <TableColumn>
                   <ActionButton onClick={() => startEditingUser(user)}>{editingUser?.id === user.id ? 'Editing...' : 'Edit'}</ActionButton>
                 </TableColumn>
