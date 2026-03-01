@@ -198,6 +198,21 @@ export default function AdhocQuotePage() {
       sidebarMobileOrder="top"
       sidebar={
         <>
+          <Card title="QUICK ACTIONS">
+            <ActionButton onClick={() => router.push('/doors/new')}>Create Purchase Order</ActionButton>
+            <br />
+            <ActionButton
+              onClick={() => {
+                setUseRecommendedPrice(false);
+                setManualUnitPrice(Number(calculation.recommendedUnitPrice.toFixed(2)));
+              }}
+            >
+              Use Recommended as Manual
+            </ActionButton>
+            <br />
+            <ActionButton onClick={resetCalculator}>Reset Calculator</ActionButton>
+          </Card>
+
           <Card title="QUOTE SUMMARY">
             {calculation.error ? (
               <Text>
@@ -238,19 +253,61 @@ export default function AdhocQuotePage() {
             ) : null}
           </Card>
 
-          <Card title="QUICK ACTIONS">
-            <ActionButton onClick={() => router.push('/doors/new')}>Create Purchase Order</ActionButton>
-            <br />
-            <ActionButton
-              onClick={() => {
-                setUseRecommendedPrice(false);
-                setManualUnitPrice(Number(calculation.recommendedUnitPrice.toFixed(2)));
-              }}
-            >
-              Use Recommended as Manual
-            </ActionButton>
-            <br />
-            <ActionButton onClick={resetCalculator}>Reset Calculator</ActionButton>
+          <Card title="PRICE BREAKDOWN">
+            {calculation.error ? (
+              <Text>
+                <span className="status-error">{calculation.error}</span>
+              </Text>
+            ) : (
+              <>
+                <Table>
+                  <TableRow>
+                    <TableColumn style={{ width: '24ch' }}>COMPONENT</TableColumn>
+                    <TableColumn>COST</TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn>Base Glass</TableColumn>
+                    <TableColumn>{formatCurrency(calculation.breakdown?.baseGlass)}</TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn>Edgework</TableColumn>
+                    <TableColumn>{formatCurrency(calculation.breakdown?.edgework)}</TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn>Holes</TableColumn>
+                    <TableColumn>{formatCurrency(calculation.breakdown?.holes)}</TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn>Shape</TableColumn>
+                    <TableColumn>{formatCurrency(calculation.breakdown?.shape)}</TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn>Ceramic</TableColumn>
+                    <TableColumn>{formatCurrency(calculation.breakdown?.ceramic)}</TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn>Scanning</TableColumn>
+                    <TableColumn>{formatCurrency(calculation.breakdown?.scanning)}</TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn>Subtotal</TableColumn>
+                    <TableColumn>{formatCurrency(calculation.breakdown?.total)}</TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn>Markup ({markupPercent}%)</TableColumn>
+                    <TableColumn>{formatCurrency((calculation.breakdown?.total || 0) * (markupPercent / 100))}</TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn>Unit Price Used</TableColumn>
+                    <TableColumn>{formatCurrency(calculation.unitPrice)}</TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn>Quote Total ({Math.max(1, quantity)} units)</TableColumn>
+                    <TableColumn>{formatCurrency(calculation.totalPrice)}</TableColumn>
+                  </TableRow>
+                </Table>
+              </>
+            )}
           </Card>
         </>
       }
@@ -495,63 +552,6 @@ export default function AdhocQuotePage() {
           disabled={!spec.holes}
         />
       </CardDouble>
-
-      <Card title="PRICE BREAKDOWN">
-        {calculation.error ? (
-          <Text>
-            <span className="status-error">{calculation.error}</span>
-          </Text>
-        ) : (
-          <>
-            <Table>
-              <TableRow>
-                <TableColumn style={{ width: '24ch' }}>COMPONENT</TableColumn>
-                <TableColumn>COST</TableColumn>
-              </TableRow>
-              <TableRow>
-                <TableColumn>Base Glass</TableColumn>
-                <TableColumn>{formatCurrency(calculation.breakdown?.baseGlass)}</TableColumn>
-              </TableRow>
-              <TableRow>
-                <TableColumn>Edgework</TableColumn>
-                <TableColumn>{formatCurrency(calculation.breakdown?.edgework)}</TableColumn>
-              </TableRow>
-              <TableRow>
-                <TableColumn>Holes</TableColumn>
-                <TableColumn>{formatCurrency(calculation.breakdown?.holes)}</TableColumn>
-              </TableRow>
-              <TableRow>
-                <TableColumn>Shape</TableColumn>
-                <TableColumn>{formatCurrency(calculation.breakdown?.shape)}</TableColumn>
-              </TableRow>
-              <TableRow>
-                <TableColumn>Ceramic</TableColumn>
-                <TableColumn>{formatCurrency(calculation.breakdown?.ceramic)}</TableColumn>
-              </TableRow>
-              <TableRow>
-                <TableColumn>Scanning</TableColumn>
-                <TableColumn>{formatCurrency(calculation.breakdown?.scanning)}</TableColumn>
-              </TableRow>
-              <TableRow>
-                <TableColumn>Subtotal</TableColumn>
-                <TableColumn>{formatCurrency(calculation.breakdown?.total)}</TableColumn>
-              </TableRow>
-              <TableRow>
-                <TableColumn>Markup ({markupPercent}%)</TableColumn>
-                <TableColumn>{formatCurrency((calculation.breakdown?.total || 0) * (markupPercent / 100))}</TableColumn>
-              </TableRow>
-              <TableRow>
-                <TableColumn>Unit Price Used</TableColumn>
-                <TableColumn>{formatCurrency(calculation.unitPrice)}</TableColumn>
-              </TableRow>
-              <TableRow>
-                <TableColumn>Quote Total ({Math.max(1, quantity)} units)</TableColumn>
-                <TableColumn>{formatCurrency(calculation.totalPrice)}</TableColumn>
-              </TableRow>
-            </Table>
-          </>
-        )}
-      </Card>
     </AppFrame>
   );
 }
