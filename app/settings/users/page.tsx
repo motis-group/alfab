@@ -346,6 +346,129 @@ export default function UserSettingsPage() {
       navRight={<ActionButton onClick={() => router.push('/settings')}>BACK TO SETTINGS</ActionButton>}
       heading="USER MANAGEMENT"
       badge={badgeText}
+      sidebarWidthCh={52}
+      sidebarMobileOrder="top"
+      sidebar={
+        <>
+          {error && (
+            <Card title="ERROR">
+              <Text>
+                <span className="status-error">{error}</span>
+              </Text>
+            </Card>
+          )}
+
+          {isLoading && (
+            <Card title="LOADING">
+              <Text>Loading user settings...</Text>
+            </Card>
+          )}
+
+          {!isLoading && !canInvite && !isSuperadmin && (
+            <Card title="NO ACCESS">
+              <Text>
+                <span className="status-warning">You do not have permission to manage users.</span>
+              </Text>
+            </Card>
+          )}
+
+          {!isLoading && canInvite && (
+            <CardDouble title="INVITE USERS">
+              <Text>Admins and superadmins can generate one-time join links.</Text>
+              <Input label="EMAIL (OPTIONAL)" name="invite_email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="person@company.com" />
+              <Input label="EXPIRES IN HOURS" name="expires_hours" type="number" value={inviteHours} onChange={(event) => setInviteHours(event.target.value)} />
+
+              <Text>INVITED ROLE</Text>
+              <select value={isSuperadmin ? inviteRole : 'standard'} onChange={(event) => setInviteRole(event.target.value as AppRole)} disabled={!isSuperadmin}>
+                <option value="standard">STANDARD</option>
+                <option value="readonly">READONLY</option>
+                {isSuperadmin && <option value="admin">ADMIN</option>}
+              </select>
+
+              <br />
+              <RowSpaceBetween>
+                <ActionButton onClick={createInvite}>{isSaving ? 'Generating...' : 'Generate Invite Link'}</ActionButton>
+                <ActionButton onClick={() => setLatestInviteUrl('')}>Clear Latest Link</ActionButton>
+              </RowSpaceBetween>
+
+              {latestInviteUrl ? (
+                <>
+                  <br />
+                  <Text>
+                    <span className="status-success">Latest join link:</span>
+                  </Text>
+                  <Input label="JOIN LINK" name="latest_invite_link" value={latestInviteUrl} readOnly />
+                </>
+              ) : null}
+            </CardDouble>
+          )}
+
+          {!isLoading && isSuperadmin && (
+            <CardDouble title="CREATE USER DIRECTLY">
+              <Text>Superadmin can create users directly without invite flow.</Text>
+              <Input label="USERNAME" name="create_username" value={createUsername} onChange={(event) => setCreateUsername(event.target.value)} placeholder="username" />
+              <Input label="PASSWORD" name="create_password" type="password" value={createPassword} onChange={(event) => setCreatePassword(event.target.value)} placeholder="minimum 8 characters" />
+
+              <Text>ROLE</Text>
+              <select value={createRole} onChange={(event) => setCreateRole(event.target.value as AppRole)}>
+                {APP_ROLES.map((role) => (
+                  <option key={role} value={role}>
+                    {role.toUpperCase()}
+                  </option>
+                ))}
+              </select>
+
+              <br />
+              <RowSpaceBetween>
+                <ActionButton onClick={createUser}>{isSaving ? 'Saving...' : 'Create User'}</ActionButton>
+                <ActionButton onClick={resetCreateForm}>Reset</ActionButton>
+              </RowSpaceBetween>
+            </CardDouble>
+          )}
+
+          {!isLoading && isSuperadmin && editingUser && (
+            <CardDouble title={`EDIT USER — ${editingUser.username.toUpperCase()}`}>
+              <Text>Update role, status, username, and password from this panel.</Text>
+              <Input
+                label="USERNAME"
+                name="edit_username"
+                value={editingUser.username}
+                onChange={(event) => updateEditingUser((prev) => ({ ...prev, username: event.target.value }))}
+                placeholder="username"
+              />
+
+              <Text>ROLE</Text>
+              <select value={editingUser.role} onChange={(event) => updateEditingUser((prev) => ({ ...prev, role: event.target.value as AppRole }))}>
+                {APP_ROLES.map((role) => (
+                  <option key={role} value={role}>
+                    {role.toUpperCase()}
+                  </option>
+                ))}
+              </select>
+
+              <Text>STATUS</Text>
+              <select value={editingUser.isActive ? 'active' : 'inactive'} onChange={(event) => updateEditingUser((prev) => ({ ...prev, isActive: event.target.value === 'active' }))}>
+                <option value="active">ACTIVE</option>
+                <option value="inactive">INACTIVE</option>
+              </select>
+
+              <Input
+                label="RESET PASSWORD (OPTIONAL)"
+                name="edit_password"
+                type="password"
+                placeholder="leave blank"
+                value={editingUser.password}
+                onChange={(event) => updateEditingUser((prev) => ({ ...prev, password: event.target.value }))}
+              />
+
+              <RowSpaceBetween>
+                <ActionButton onClick={saveEditedUser}>{isSaving ? 'Saving...' : 'Save Changes'}</ActionButton>
+                <ActionButton onClick={cancelEditingUser}>Cancel</ActionButton>
+              </RowSpaceBetween>
+            </CardDouble>
+          )}
+        </>
+      }
       actionItems={[
         {
           hotkey: '⌘+R',
@@ -359,124 +482,6 @@ export default function UserSettingsPage() {
         },
       ]}
     >
-      {error && (
-        <Card title="ERROR">
-          <Text>
-            <span className="status-error">{error}</span>
-          </Text>
-        </Card>
-      )}
-
-      {isLoading && (
-        <Card title="LOADING">
-          <Text>Loading user settings...</Text>
-        </Card>
-      )}
-
-      {!isLoading && !canInvite && !isSuperadmin && (
-        <Card title="NO ACCESS">
-          <Text>
-            <span className="status-warning">You do not have permission to manage users.</span>
-          </Text>
-        </Card>
-      )}
-
-      {!isLoading && canInvite && (
-        <CardDouble title="INVITE USERS">
-          <Text>Admins and superadmins can generate one-time join links.</Text>
-          <Input label="EMAIL (OPTIONAL)" name="invite_email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="person@company.com" />
-          <Input label="EXPIRES IN HOURS" name="expires_hours" type="number" value={inviteHours} onChange={(event) => setInviteHours(event.target.value)} />
-
-          <Text>INVITED ROLE</Text>
-          <select value={isSuperadmin ? inviteRole : 'standard'} onChange={(event) => setInviteRole(event.target.value as AppRole)} disabled={!isSuperadmin}>
-            <option value="standard">STANDARD</option>
-            <option value="readonly">READONLY</option>
-            {isSuperadmin && <option value="admin">ADMIN</option>}
-          </select>
-
-          <br />
-          <RowSpaceBetween>
-            <ActionButton onClick={createInvite}>{isSaving ? 'Generating...' : 'Generate Invite Link'}</ActionButton>
-            <ActionButton onClick={() => setLatestInviteUrl('')}>Clear Latest Link</ActionButton>
-          </RowSpaceBetween>
-
-          {latestInviteUrl ? (
-            <>
-              <br />
-              <Text>
-                <span className="status-success">Latest join link:</span>
-              </Text>
-              <Input label="JOIN LINK" name="latest_invite_link" value={latestInviteUrl} readOnly />
-            </>
-          ) : null}
-        </CardDouble>
-      )}
-
-      {!isLoading && isSuperadmin && (
-        <CardDouble title="CREATE USER DIRECTLY">
-          <Text>Superadmin can create users directly without invite flow.</Text>
-          <Input label="USERNAME" name="create_username" value={createUsername} onChange={(event) => setCreateUsername(event.target.value)} placeholder="username" />
-          <Input label="PASSWORD" name="create_password" type="password" value={createPassword} onChange={(event) => setCreatePassword(event.target.value)} placeholder="minimum 8 characters" />
-
-          <Text>ROLE</Text>
-          <select value={createRole} onChange={(event) => setCreateRole(event.target.value as AppRole)}>
-            {APP_ROLES.map((role) => (
-              <option key={role} value={role}>
-                {role.toUpperCase()}
-              </option>
-            ))}
-          </select>
-
-          <br />
-          <RowSpaceBetween>
-            <ActionButton onClick={createUser}>{isSaving ? 'Saving...' : 'Create User'}</ActionButton>
-            <ActionButton onClick={resetCreateForm}>Reset</ActionButton>
-          </RowSpaceBetween>
-        </CardDouble>
-      )}
-
-      {!isLoading && isSuperadmin && editingUser && (
-        <CardDouble title={`EDIT USER — ${editingUser.username.toUpperCase()}`}>
-          <Text>Update role, status, username, and password from this panel.</Text>
-          <Input
-            label="USERNAME"
-            name="edit_username"
-            value={editingUser.username}
-            onChange={(event) => updateEditingUser((prev) => ({ ...prev, username: event.target.value }))}
-            placeholder="username"
-          />
-
-          <Text>ROLE</Text>
-          <select value={editingUser.role} onChange={(event) => updateEditingUser((prev) => ({ ...prev, role: event.target.value as AppRole }))}>
-            {APP_ROLES.map((role) => (
-              <option key={role} value={role}>
-                {role.toUpperCase()}
-              </option>
-            ))}
-          </select>
-
-          <Text>STATUS</Text>
-          <select value={editingUser.isActive ? 'active' : 'inactive'} onChange={(event) => updateEditingUser((prev) => ({ ...prev, isActive: event.target.value === 'active' }))}>
-            <option value="active">ACTIVE</option>
-            <option value="inactive">INACTIVE</option>
-          </select>
-
-          <Input
-            label="RESET PASSWORD (OPTIONAL)"
-            name="edit_password"
-            type="password"
-            placeholder="leave blank"
-            value={editingUser.password}
-            onChange={(event) => updateEditingUser((prev) => ({ ...prev, password: event.target.value }))}
-          />
-
-          <RowSpaceBetween>
-            <ActionButton onClick={saveEditedUser}>{isSaving ? 'Saving...' : 'Save Changes'}</ActionButton>
-            <ActionButton onClick={cancelEditingUser}>Cancel</ActionButton>
-          </RowSpaceBetween>
-        </CardDouble>
-      )}
-
       {!isLoading && isSuperadmin && (
         <Card title="USERS">
           <Table>

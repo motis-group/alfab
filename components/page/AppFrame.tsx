@@ -43,6 +43,11 @@ interface AppFrameProps {
   showThemeControls?: boolean;
   showSectionNavigation?: boolean;
   showSessionIndicator?: boolean;
+  sidebar?: React.ReactNode;
+  sidebarAriaLabel?: string;
+  sidebarPosition?: 'left' | 'right';
+  sidebarWidthCh?: number;
+  sidebarMobileOrder?: 'top' | 'bottom';
   children?: React.ReactNode;
 }
 
@@ -58,6 +63,11 @@ const AppFrame: React.FC<AppFrameProps> = ({
   showThemeControls = false,
   showSectionNavigation = true,
   showSessionIndicator = true,
+  sidebar,
+  sidebarAriaLabel = 'Page sidebar',
+  sidebarPosition = 'left',
+  sidebarWidthCh = 42,
+  sidebarMobileOrder = 'top',
   children,
 }) => {
   let left: React.ReactNode = null;
@@ -81,8 +91,10 @@ const AppFrame: React.FC<AppFrameProps> = ({
     </div>
   ) : null;
 
+  const contentStyle = sidebar ? ({ ['--app-sidebar-width' as any]: `${sidebarWidthCh}ch` } as React.CSSProperties) : undefined;
+
   return (
-    <DefaultLayout previewPixelSRC={previewPixelSRC}>
+    <DefaultLayout previewPixelSRC={previewPixelSRC} variant="wide">
       <Grid className={styles.root}>
         <Navigation logo={logo} left={left} right={right} />
 
@@ -98,7 +110,21 @@ const AppFrame: React.FC<AppFrameProps> = ({
         )}
 
         {actionItems.length ? <ActionBar items={actionItems} /> : null}
-        {children}
+
+        {sidebar ? (
+          <section className={styles.columns} data-sidebar-position={sidebarPosition} data-sidebar-mobile-order={sidebarMobileOrder} style={contentStyle}>
+            <aside className={styles.sidebar} aria-label={sidebarAriaLabel}>
+              {sidebar}
+            </aside>
+            <main className={styles.main} aria-label="Main content">
+              {children}
+            </main>
+          </section>
+        ) : (
+          <main className={styles.singleColumn} aria-label="Main content">
+            {children}
+          </main>
+        )}
       </Grid>
     </DefaultLayout>
   );

@@ -1,5 +1,14 @@
 .body {
+  width: 100%;
+  margin: 0 auto;
+}
+
+.narrow {
   max-width: 80ch;
+}
+
+.wide {
+  max-width: 180ch;
 }
 
 .pixel {

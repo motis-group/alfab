@@ -555,6 +555,38 @@ export default function NewPurchaseOrderPage() {
       navRight={<ActionButton onClick={() => router.push('/doors')}>BACK TO DASHBOARD</ActionButton>}
       heading={isEditingOrder ? 'EDIT PURCHASE ORDER' : 'CREATE PURCHASE ORDER'}
       badge={isEditingOrder ? 'EDIT MODE' : 'NEW ORDER'}
+      sidebarWidthCh={44}
+      sidebarMobileOrder="bottom"
+      sidebar={
+        <Card title="SAVE ORDER">
+          <RowSpaceBetween>
+            <Text>ORDER TOTAL</Text>
+            <Text>{formatCurrency(orderTotal)}</Text>
+          </RowSpaceBetween>
+          {isEditingOrder && (
+            <>
+              <br />
+              <RowSpaceBetween>
+                <Text>ORDER STATUS</Text>
+                <Text>
+                  <span className={orderForm.status === 'cancelled' ? 'status-pill status-pill-error' : 'status-pill status-pill-warning'}>{statusLabel(orderForm.status)}</span>
+                  {archivedAt ? <span className="status-pill status-pill-warning">ARCHIVED</span> : null}
+                </Text>
+              </RowSpaceBetween>
+              <br />
+              <RowSpaceBetween>
+                <ActionButton onClick={() => updateOrderLifecycle({ status: 'cancelled' })}>Cancel Order</ActionButton>
+                <ActionButton onClick={() => updateOrderLifecycle({ archivedAt: archivedAt ? null : new Date().toISOString() })}>{archivedAt ? 'Unarchive Order' : 'Archive Order'}</ActionButton>
+              </RowSpaceBetween>
+            </>
+          )}
+          <br />
+          <RowSpaceBetween>
+            <ActionButton onClick={handleSaveOrder}>{isSaving ? 'Saving...' : isEditingOrder ? 'Update Purchase Order' : 'Save Purchase Order'}</ActionButton>
+            <ActionButton onClick={() => router.push('/doors')}>Cancel</ActionButton>
+          </RowSpaceBetween>
+        </Card>
+      }
       actionItems={[
         {
           hotkey: '⌘+S',
@@ -1095,35 +1127,6 @@ export default function NewPurchaseOrderPage() {
           </>
         )}
       </CardDouble>
-
-      <Card title="SAVE ORDER">
-        <RowSpaceBetween>
-          <Text>ORDER TOTAL</Text>
-          <Text>{formatCurrency(orderTotal)}</Text>
-        </RowSpaceBetween>
-        {isEditingOrder && (
-          <>
-            <br />
-            <RowSpaceBetween>
-              <Text>ORDER STATUS</Text>
-              <Text>
-                <span className={orderForm.status === 'cancelled' ? 'status-pill status-pill-error' : 'status-pill status-pill-warning'}>{statusLabel(orderForm.status)}</span>
-                {archivedAt ? <span className="status-pill status-pill-warning">ARCHIVED</span> : null}
-              </Text>
-            </RowSpaceBetween>
-            <br />
-            <RowSpaceBetween>
-              <ActionButton onClick={() => updateOrderLifecycle({ status: 'cancelled' })}>Cancel Order</ActionButton>
-              <ActionButton onClick={() => updateOrderLifecycle({ archivedAt: archivedAt ? null : new Date().toISOString() })}>{archivedAt ? 'Unarchive Order' : 'Archive Order'}</ActionButton>
-            </RowSpaceBetween>
-          </>
-        )}
-        <br />
-        <RowSpaceBetween>
-          <ActionButton onClick={handleSaveOrder}>{isSaving ? 'Saving...' : isEditingOrder ? 'Update Purchase Order' : 'Save Purchase Order'}</ActionButton>
-          <ActionButton onClick={() => router.push('/doors')}>Cancel</ActionButton>
-        </RowSpaceBetween>
-      </Card>
     </AppFrame>
   );
 }

@@ -268,6 +268,111 @@ export default function OrderDashboardPage() {
       navRight={<ActionButton onClick={() => router.push('/doors/new')}>NEW ORDER</ActionButton>}
       heading="PURCHASE ORDER DASHBOARD"
       badge={`${ordersInScope.length} TOTAL`}
+      sidebarWidthCh={44}
+      sidebarMobileOrder="top"
+      sidebar={
+        <>
+          <Card title="ORDER DASHBOARD">
+            <RowSpaceBetween>
+              <Text>OPEN ORDERS</Text>
+              <Text>
+                <span className="status-warning">{ordersInScope.filter((order) => order.status === 'open').length}</span>
+              </Text>
+            </RowSpaceBetween>
+            <RowSpaceBetween>
+              <Text>IN PRODUCTION</Text>
+              <Text>
+                <span className="status-warning">{ordersInScope.filter((order) => order.status === 'in_production').length}</span>
+              </Text>
+            </RowSpaceBetween>
+            <RowSpaceBetween>
+              <Text>DUE WITHIN 7 DAYS</Text>
+              <Text>
+                <span className="status-warning">{dueInSevenDays.length}</span>
+              </Text>
+            </RowSpaceBetween>
+
+            <br />
+            <Text>OPEN ORDERS BY CUSTOMER</Text>
+            <Table>
+              <TableRow>
+                <TableColumn style={{ width: '26ch' }}>CUSTOMER</TableColumn>
+                <TableColumn>OPEN ORDERS</TableColumn>
+              </TableRow>
+              {openOrdersByCustomer.map((entry) => (
+                <TableRow key={entry.customerId}>
+                  <TableColumn>{entry.name}</TableColumn>
+                  <TableColumn>{entry.count}</TableColumn>
+                </TableRow>
+              ))}
+              {!openOrdersByCustomer.length && (
+                <TableRow>
+                  <TableColumn colSpan={2} style={{ textAlign: 'center' }}>
+                    No open orders.
+                  </TableColumn>
+                </TableRow>
+              )}
+            </Table>
+
+            <br />
+            <Text>RECENT ORDERS</Text>
+            <Table>
+              <TableRow>
+                <TableColumn style={{ width: '16ch' }}>PO</TableColumn>
+                <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
+                <TableColumn style={{ width: '16ch' }}>STATUS</TableColumn>
+              </TableRow>
+              {recentOrders.map((order) => (
+                <TableRow key={order.id}>
+                  <TableColumn>{order.po_number}</TableColumn>
+                  <TableColumn>{customerMap[order.customer_id]?.name || 'Unknown'}</TableColumn>
+                  <TableColumn>
+                    <>
+                      <span className={orderStatusClassName(order.status)}>{statusLabel(order.status)}</span>
+                      {isOrderArchived(order) ? <span className="status-pill status-pill-warning">ARCHIVED</span> : null}
+                    </>
+                  </TableColumn>
+                </TableRow>
+              ))}
+            </Table>
+          </Card>
+
+          <Card title="ORDER LIST FILTERS">
+            <Text>CUSTOMER</Text>
+            <select value={customerFilter} onChange={(event) => setCustomerFilter(event.target.value)}>
+              <option value="">All customers</option>
+              {activeCustomers.map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
+            <br />
+
+            <Text>STATUS</Text>
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as OrderStatus | '')}>
+              <option value="">All statuses</option>
+              {ORDER_STATUS_OPTIONS.map((status) => (
+                <option key={status} value={status}>
+                  {statusLabel(status)}
+                </option>
+              ))}
+            </select>
+            <br />
+
+            <Text>ARCHIVE</Text>
+            <select value={archiveFilter} onChange={(event) => setArchiveFilter(event.target.value as ArchiveFilter)}>
+              <option value="active">Active orders only</option>
+              <option value="all">All orders</option>
+              <option value="archived">Archived only</option>
+            </select>
+            <br />
+
+            <Input label="RECEIVED DATE FROM" type="date" name="received_from" value={dateFromFilter} onChange={(event) => setDateFromFilter(event.target.value)} />
+            <Input label="RECEIVED DATE TO" type="date" name="received_to" value={dateToFilter} onChange={(event) => setDateToFilter(event.target.value)} />
+          </Card>
+        </>
+      }
       actionItems={[
         {
           hotkey: '⌘+N',
@@ -305,106 +410,6 @@ export default function OrderDashboardPage() {
           </Text>
         </Card>
       )}
-
-      <Card title="ORDER DASHBOARD">
-        <RowSpaceBetween>
-          <Text>OPEN ORDERS</Text>
-          <Text>
-            <span className="status-warning">{ordersInScope.filter((order) => order.status === 'open').length}</span>
-          </Text>
-        </RowSpaceBetween>
-        <RowSpaceBetween>
-          <Text>IN PRODUCTION</Text>
-          <Text>
-            <span className="status-warning">{ordersInScope.filter((order) => order.status === 'in_production').length}</span>
-          </Text>
-        </RowSpaceBetween>
-        <RowSpaceBetween>
-          <Text>DUE WITHIN 7 DAYS</Text>
-          <Text>
-            <span className="status-warning">{dueInSevenDays.length}</span>
-          </Text>
-        </RowSpaceBetween>
-
-        <br />
-        <Text>OPEN ORDERS BY CUSTOMER</Text>
-        <Table>
-          <TableRow>
-            <TableColumn style={{ width: '26ch' }}>CUSTOMER</TableColumn>
-            <TableColumn>OPEN ORDERS</TableColumn>
-          </TableRow>
-          {openOrdersByCustomer.map((entry) => (
-            <TableRow key={entry.customerId}>
-              <TableColumn>{entry.name}</TableColumn>
-              <TableColumn>{entry.count}</TableColumn>
-            </TableRow>
-          ))}
-          {!openOrdersByCustomer.length && (
-            <TableRow>
-              <TableColumn colSpan={2} style={{ textAlign: 'center' }}>
-                No open orders.
-              </TableColumn>
-            </TableRow>
-          )}
-        </Table>
-
-        <br />
-        <Text>RECENT ORDERS</Text>
-        <Table>
-          <TableRow>
-            <TableColumn style={{ width: '16ch' }}>PO</TableColumn>
-            <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
-            <TableColumn style={{ width: '16ch' }}>STATUS</TableColumn>
-          </TableRow>
-          {recentOrders.map((order) => (
-            <TableRow key={order.id}>
-              <TableColumn>{order.po_number}</TableColumn>
-              <TableColumn>{customerMap[order.customer_id]?.name || 'Unknown'}</TableColumn>
-              <TableColumn>
-                <>
-                  <span className={orderStatusClassName(order.status)}>{statusLabel(order.status)}</span>
-                  {isOrderArchived(order) ? <span className="status-pill status-pill-warning">ARCHIVED</span> : null}
-                </>
-              </TableColumn>
-            </TableRow>
-          ))}
-        </Table>
-      </Card>
-
-      <Card title="ORDER LIST FILTERS">
-        <Text>CUSTOMER</Text>
-        <select value={customerFilter} onChange={(event) => setCustomerFilter(event.target.value)}>
-          <option value="">All customers</option>
-          {activeCustomers.map((customer) => (
-            <option key={customer.id} value={customer.id}>
-              {customer.name}
-            </option>
-          ))}
-        </select>
-        <br />
-
-        <Text>STATUS</Text>
-        <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as OrderStatus | '')}>
-          <option value="">All statuses</option>
-          {ORDER_STATUS_OPTIONS.map((status) => (
-            <option key={status} value={status}>
-              {statusLabel(status)}
-            </option>
-          ))}
-        </select>
-        <br />
-
-        <Text>ARCHIVE</Text>
-        <select value={archiveFilter} onChange={(event) => setArchiveFilter(event.target.value as ArchiveFilter)}>
-          <option value="active">Active orders only</option>
-          <option value="all">All orders</option>
-          <option value="archived">Archived only</option>
-        </select>
-        <br />
-
-        <Input label="RECEIVED DATE FROM" type="date" name="received_from" value={dateFromFilter} onChange={(event) => setDateFromFilter(event.target.value)} />
-        <Input label="RECEIVED DATE TO" type="date" name="received_to" value={dateToFilter} onChange={(event) => setDateToFilter(event.target.value)} />
-      </Card>
 
       <Card title="PURCHASE ORDERS">
         {isLoading ? (

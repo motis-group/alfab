@@ -21,6 +21,21 @@ export default function SettingsPage() {
       navLabel="PRICING RULES"
       heading="PRICING RULES"
       badge="SYSTEM SETTINGS"
+      sidebarWidthCh={36}
+      sidebarMobileOrder="top"
+      sidebar={
+        <Card title="QUICK ACTIONS">
+          <ActionListItem icon="⭢" href="/doors">
+            Return to Dashboard
+          </ActionListItem>
+          <ActionListItem icon="⭢" href="/doors/clients">
+            Manage Clients
+          </ActionListItem>
+          <ActionListItem icon="⭢" href="/doors/clients">
+            Manage Customer Products
+          </ActionListItem>
+        </Card>
+      }
       actionItems={[
         {
           hotkey: '⌘+S',
@@ -139,20 +154,8 @@ export default function SettingsPage() {
           </TableRow>
         </Table>
         <br />
-        <ActionButton>Edit Processing Prices</ActionButton>
+          <ActionButton>Edit Processing Prices</ActionButton>
       </CardDouble>
-
-      <Card title="QUICK ACTIONS">
-        <ActionListItem icon="⭢" href="/doors">
-          Return to Dashboard
-        </ActionListItem>
-        <ActionListItem icon="⭢" href="/doors/clients">
-          Manage Clients
-        </ActionListItem>
-        <ActionListItem icon="⭢" href="/doors/clients">
-          Manage Customer Products
-        </ActionListItem>
-      </Card>
     </AppFrame>
   );
 }

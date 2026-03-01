@@ -206,6 +206,81 @@ export default function BillingSettingsPage() {
       navRight={<ActionButton onClick={() => router.push('/settings')}>BACK TO SETTINGS</ActionButton>}
       heading="HOSTING BILLING"
       badge={badgeLabel}
+      sidebarWidthCh={46}
+      sidebarMobileOrder="top"
+      sidebar={
+        <>
+          {(checkoutState === 'success' || checkoutState === 'cancelled') && (
+            <Card title="CHECKOUT STATUS">
+              <Text>
+                {checkoutState === 'success' ? (
+                  <span className="status-pill status-pill-success">Stripe checkout completed. Wait up to a few seconds, then reload.</span>
+                ) : (
+                  <span className="status-pill status-pill-warning">Stripe checkout was cancelled.</span>
+                )}
+              </Text>
+            </Card>
+          )}
+
+          {error && (
+            <Card title="BILLING ERROR">
+              <Text>
+                <span className="status-error">{error}</span>
+              </Text>
+            </Card>
+          )}
+
+          <CardDouble title="STRIPE SUBSCRIPTION">
+            {isLoading ? (
+              <Text>Loading subscription status...</Text>
+            ) : (
+              <>
+                <Text>Set the margin and create a monthly Stripe subscription for Alfab.</Text>
+                <br />
+                <Input label="MARGIN PERCENT (%)" type="number" step="0.1" min="0" value={marginPercent} onChange={(event) => setMarginPercent(event.target.value)} />
+                <br />
+                <Table>
+                  <TableRow>
+                    <TableColumn style={{ width: '24ch' }}>FIELD</TableColumn>
+                    <TableColumn>VALUE</TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn>Account Key</TableColumn>
+                    <TableColumn>{account?.account_key || defaults?.accountKey || '-'}</TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn>Company</TableColumn>
+                    <TableColumn>{account?.company_name || defaults?.companyName || '-'}</TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn>Billing Email</TableColumn>
+                    <TableColumn>{account?.billing_email || defaults?.billingEmail || '-'}</TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn>Subscription Status</TableColumn>
+                    <TableColumn>{account?.subscription_status || 'not_started'}</TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn>Current Period</TableColumn>
+                    <TableColumn>
+                      {shortDate(account?.current_period_start || null)} - {shortDate(account?.current_period_end || null)}
+                    </TableColumn>
+                  </TableRow>
+                  <TableRow>
+                    <TableColumn>Cancel At Period End</TableColumn>
+                    <TableColumn>{account?.cancel_at_period_end ? 'yes' : 'no'}</TableColumn>
+                  </TableRow>
+                </Table>
+                <br />
+                <RowSpaceBetween>
+                  <ActionButton onClick={isCheckoutLoading ? undefined : startCheckout}>{isCheckoutLoading ? 'Starting Stripe checkout...' : 'Start / Update Stripe Checkout'}</ActionButton>
+                  <ActionButton onClick={isPortalLoading ? undefined : openPortal}>{isPortalLoading ? 'Opening portal...' : 'Open Stripe Billing Portal'}</ActionButton>
+                </RowSpaceBetween>
+              </>
+            )}
+          </CardDouble>
+        </>
+      }
       actionItems={[
         {
           hotkey: '⌘+R',
@@ -219,22 +294,6 @@ export default function BillingSettingsPage() {
         },
       ]}
     >
-      {(checkoutState === 'success' || checkoutState === 'cancelled') && (
-        <Card title="CHECKOUT STATUS">
-          <Text>
-            {checkoutState === 'success' ? <span className="status-pill status-pill-success">Stripe checkout completed. Wait up to a few seconds, then reload.</span> : <span className="status-pill status-pill-warning">Stripe checkout was cancelled.</span>}
-          </Text>
-        </Card>
-      )}
-
-      {error && (
-        <Card title="BILLING ERROR">
-          <Text>
-            <span className="status-error">{error}</span>
-          </Text>
-        </Card>
-      )}
-
       <CardDouble title="MONTHLY COST MODEL (AUD)">
         {isLoading || !estimate ? (
           <Text>Loading billing estimate...</Text>
@@ -292,56 +351,6 @@ export default function BillingSettingsPage() {
                 </TableColumn>
               </TableRow>
             </Table>
-          </>
-        )}
-      </CardDouble>
-
-      <CardDouble title="STRIPE SUBSCRIPTION">
-        {isLoading ? (
-          <Text>Loading subscription status...</Text>
-        ) : (
-          <>
-            <Text>Set the margin and create a monthly Stripe subscription for Alfab.</Text>
-            <br />
-            <Input label="MARGIN PERCENT (%)" type="number" step="0.1" min="0" value={marginPercent} onChange={(event) => setMarginPercent(event.target.value)} />
-            <br />
-            <Table>
-              <TableRow>
-                <TableColumn style={{ width: '24ch' }}>FIELD</TableColumn>
-                <TableColumn>VALUE</TableColumn>
-              </TableRow>
-              <TableRow>
-                <TableColumn>Account Key</TableColumn>
-                <TableColumn>{account?.account_key || defaults?.accountKey || '-'}</TableColumn>
-              </TableRow>
-              <TableRow>
-                <TableColumn>Company</TableColumn>
-                <TableColumn>{account?.company_name || defaults?.companyName || '-'}</TableColumn>
-              </TableRow>
-              <TableRow>
-                <TableColumn>Billing Email</TableColumn>
-                <TableColumn>{account?.billing_email || defaults?.billingEmail || '-'}</TableColumn>
-              </TableRow>
-              <TableRow>
-                <TableColumn>Subscription Status</TableColumn>
-                <TableColumn>{account?.subscription_status || 'not_started'}</TableColumn>
-              </TableRow>
-              <TableRow>
-                <TableColumn>Current Period</TableColumn>
-                <TableColumn>
-                  {shortDate(account?.current_period_start || null)} - {shortDate(account?.current_period_end || null)}
-                </TableColumn>
-              </TableRow>
-              <TableRow>
-                <TableColumn>Cancel At Period End</TableColumn>
-                <TableColumn>{account?.cancel_at_period_end ? 'yes' : 'no'}</TableColumn>
-              </TableRow>
-            </Table>
-            <br />
-            <RowSpaceBetween>
-              <ActionButton onClick={isCheckoutLoading ? undefined : startCheckout}>{isCheckoutLoading ? 'Starting Stripe checkout...' : 'Start / Update Stripe Checkout'}</ActionButton>
-              <ActionButton onClick={isPortalLoading ? undefined : openPortal}>{isPortalLoading ? 'Opening portal...' : 'Open Stripe Billing Portal'}</ActionButton>
-            </RowSpaceBetween>
           </>
         )}
       </CardDouble>

@@ -305,6 +305,88 @@ export default function CustomersPage() {
       navRight={<ActionButton onClick={() => router.push('/doors')}>ORDER DASHBOARD</ActionButton>}
       heading="CUSTOMER MANAGEMENT"
       badge={`${customers.filter((customer) => customer.is_active !== false).length} ACTIVE`}
+      sidebarWidthCh={50}
+      sidebarMobileOrder="top"
+      sidebar={
+        <>
+          <CardDouble title={customerForm.id ? 'EDIT CUSTOMER' : 'NEW CUSTOMER'}>
+            <Input label="CUSTOMER NAME" name="customer_name" value={customerForm.name} onChange={(event) => setCustomerForm((prev) => ({ ...prev, name: event.target.value }))} disabled={!canEdit} />
+            <Input label="CONTACT NAME" name="contact_name" value={customerForm.contactName} onChange={(event) => setCustomerForm((prev) => ({ ...prev, contactName: event.target.value }))} disabled={!canEdit} />
+            <Input label="CONTACT EMAIL" name="contact_email" value={customerForm.contactEmail} onChange={(event) => setCustomerForm((prev) => ({ ...prev, contactEmail: event.target.value }))} disabled={!canEdit} />
+
+            <Text>STATUS</Text>
+            <select value={customerForm.isActive ? 'active' : 'inactive'} onChange={(event) => setCustomerForm((prev) => ({ ...prev, isActive: event.target.value === 'active' }))} disabled={!canEdit}>
+              <option value="active">ACTIVE</option>
+              <option value="inactive">INACTIVE</option>
+            </select>
+
+            <br />
+            <RowSpaceBetween>
+              <ActionButton onClick={saveCustomer}>{isSavingCustomer ? 'Saving...' : customerForm.id ? 'Update Customer' : 'Create Customer'}</ActionButton>
+              <ActionButton onClick={resetCustomerForm}>Reset</ActionButton>
+            </RowSpaceBetween>
+          </CardDouble>
+
+          <CardDouble title="CUSTOMER PRODUCTS">
+            <Text>Selected customer:</Text>
+            <br />
+            <select
+              value={selectedCustomerId}
+              onChange={(event) => {
+                setSelectedCustomerId(event.target.value);
+                resetProductForm();
+              }}
+            >
+              <option value="">Select customer...</option>
+              {customers.map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
+
+            <br />
+            <Input label="PRODUCT NAME" name="product_name" value={productForm.name} onChange={(event) => setProductForm((prev) => ({ ...prev, name: event.target.value }))} disabled={!canEdit} />
+            <Input label="CUSTOMER PART REF" name="customer_part_ref" value={productForm.customerPartRef} onChange={(event) => setProductForm((prev) => ({ ...prev, customerPartRef: event.target.value }))} disabled={!canEdit} />
+            <Input
+              label="DEFAULT QTY"
+              type="number"
+              name="default_qty"
+              value={String(productForm.defaultQty)}
+              onChange={(event) => setProductForm((prev) => ({ ...prev, defaultQty: Math.max(1, numberOrDefault(event.target.value, 1)) }))}
+              disabled={!canEdit}
+            />
+            <Input
+              label="DEFAULT UNIT PRICE ($)"
+              type="number"
+              name="default_price"
+              value={String(productForm.unitPrice)}
+              onChange={(event) => setProductForm((prev) => ({ ...prev, unitPrice: Math.max(0, numberOrDefault(event.target.value, 0)) }))}
+              disabled={!canEdit}
+            />
+            <Input label="NOTES" name="product_notes" value={productForm.note} onChange={(event) => setProductForm((prev) => ({ ...prev, note: event.target.value }))} disabled={!canEdit} />
+
+            <br />
+            <RowSpaceBetween>
+              <ActionButton onClick={saveCustomerProduct}>{isSavingProduct ? 'Saving...' : productForm.id ? 'Update Product' : 'Add Product'}</ActionButton>
+              <ActionButton onClick={resetProductForm}>Reset</ActionButton>
+            </RowSpaceBetween>
+          </CardDouble>
+
+          <Card title="SUMMARY">
+            <RowSpaceBetween>
+              <Text>ACTIVE CUSTOMERS</Text>
+              <Text>
+                <span className="status-success">{customers.filter((customer) => customer.is_active !== false).length}</span>
+              </Text>
+            </RowSpaceBetween>
+            <RowSpaceBetween>
+              <Text>TOTAL PRODUCTS</Text>
+              <Text>{customerProducts.length}</Text>
+            </RowSpaceBetween>
+          </Card>
+        </>
+      }
       actionItems={[
         {
           hotkey: '⌘+S',
@@ -336,24 +418,6 @@ export default function CustomersPage() {
           </Text>
         </Card>
       )}
-
-      <CardDouble title={customerForm.id ? 'EDIT CUSTOMER' : 'NEW CUSTOMER'}>
-        <Input label="CUSTOMER NAME" name="customer_name" value={customerForm.name} onChange={(event) => setCustomerForm((prev) => ({ ...prev, name: event.target.value }))} disabled={!canEdit} />
-        <Input label="CONTACT NAME" name="contact_name" value={customerForm.contactName} onChange={(event) => setCustomerForm((prev) => ({ ...prev, contactName: event.target.value }))} disabled={!canEdit} />
-        <Input label="CONTACT EMAIL" name="contact_email" value={customerForm.contactEmail} onChange={(event) => setCustomerForm((prev) => ({ ...prev, contactEmail: event.target.value }))} disabled={!canEdit} />
-
-        <Text>STATUS</Text>
-        <select value={customerForm.isActive ? 'active' : 'inactive'} onChange={(event) => setCustomerForm((prev) => ({ ...prev, isActive: event.target.value === 'active' }))} disabled={!canEdit}>
-          <option value="active">ACTIVE</option>
-          <option value="inactive">INACTIVE</option>
-        </select>
-
-        <br />
-        <RowSpaceBetween>
-          <ActionButton onClick={saveCustomer}>{isSavingCustomer ? 'Saving...' : customerForm.id ? 'Update Customer' : 'Create Customer'}</ActionButton>
-          <ActionButton onClick={resetCustomerForm}>Reset</ActionButton>
-        </RowSpaceBetween>
-      </CardDouble>
 
       <Card title="CUSTOMER LIST">
         {isLoading ? (
@@ -410,52 +474,6 @@ export default function CustomersPage() {
         )}
       </Card>
 
-      <CardDouble title="CUSTOMER PRODUCTS">
-        <Text>Selected customer:</Text>
-        <br />
-        <select
-          value={selectedCustomerId}
-          onChange={(event) => {
-            setSelectedCustomerId(event.target.value);
-            resetProductForm();
-          }}
-        >
-          <option value="">Select customer...</option>
-          {customers.map((customer) => (
-            <option key={customer.id} value={customer.id}>
-              {customer.name}
-            </option>
-          ))}
-        </select>
-
-        <br />
-        <Input label="PRODUCT NAME" name="product_name" value={productForm.name} onChange={(event) => setProductForm((prev) => ({ ...prev, name: event.target.value }))} disabled={!canEdit} />
-        <Input label="CUSTOMER PART REF" name="customer_part_ref" value={productForm.customerPartRef} onChange={(event) => setProductForm((prev) => ({ ...prev, customerPartRef: event.target.value }))} disabled={!canEdit} />
-        <Input
-          label="DEFAULT QTY"
-          type="number"
-          name="default_qty"
-          value={String(productForm.defaultQty)}
-          onChange={(event) => setProductForm((prev) => ({ ...prev, defaultQty: Math.max(1, numberOrDefault(event.target.value, 1)) }))}
-          disabled={!canEdit}
-        />
-        <Input
-          label="DEFAULT UNIT PRICE ($)"
-          type="number"
-          name="default_price"
-          value={String(productForm.unitPrice)}
-          onChange={(event) => setProductForm((prev) => ({ ...prev, unitPrice: Math.max(0, numberOrDefault(event.target.value, 0)) }))}
-          disabled={!canEdit}
-        />
-        <Input label="NOTES" name="product_notes" value={productForm.note} onChange={(event) => setProductForm((prev) => ({ ...prev, note: event.target.value }))} disabled={!canEdit} />
-
-        <br />
-        <RowSpaceBetween>
-          <ActionButton onClick={saveCustomerProduct}>{isSavingProduct ? 'Saving...' : productForm.id ? 'Update Product' : 'Add Product'}</ActionButton>
-          <ActionButton onClick={resetProductForm}>Reset</ActionButton>
-        </RowSpaceBetween>
-      </CardDouble>
-
       <Card title="PRODUCT LIST">
         <Table>
           <TableRow>
@@ -505,19 +523,6 @@ export default function CustomersPage() {
             </TableRow>
           )}
         </Table>
-      </Card>
-
-      <Card title="SUMMARY">
-        <RowSpaceBetween>
-          <Text>ACTIVE CUSTOMERS</Text>
-          <Text>
-            <span className="status-success">{customers.filter((customer) => customer.is_active !== false).length}</span>
-          </Text>
-        </RowSpaceBetween>
-        <RowSpaceBetween>
-          <Text>TOTAL PRODUCTS</Text>
-          <Text>{customerProducts.length}</Text>
-        </RowSpaceBetween>
       </Card>
     </AppFrame>
   );

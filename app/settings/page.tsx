@@ -12,7 +12,6 @@ import CardDouble from '@components/CardDouble';
 import AppFrame from '@components/page/AppFrame';
 import DefaultActionBar from '@components/page/DefaultActionBar';
 import Input from '@components/Input';
-import Row from '@components/Row';
 import RowSpaceBetween from '@components/RowSpaceBetween';
 import Table from '@components/Table';
 import TableColumn from '@components/TableColumn';
@@ -99,6 +98,42 @@ export default function PricingSettings() {
       navRight={<ActionButton onClick={() => router.push('/')}>BACK TO COSTING</ActionButton>}
       heading="PRICING CONFIGURATION"
       badge={hasChanges ? 'UNSAVED CHANGES' : 'SAVED'}
+      sidebarWidthCh={44}
+      sidebarMobileOrder="top"
+      sidebar={
+        <>
+          {hasChanges && (
+            <Card title="UNSAVED CHANGES">
+              <Text>
+                <span className="status-warning">You have unsaved changes. Save before leaving this page.</span>
+              </Text>
+              <br />
+              <RowSpaceBetween>
+                <ActionButton onClick={handleSave}>Save Changes</ActionButton>
+                <ActionButton onClick={handleReset}>Reset to Defaults</ActionButton>
+              </RowSpaceBetween>
+            </Card>
+          )}
+
+          <Card title="APPEARANCE">
+            <Text>Theme and font controls are available here only, to keep the rest of the app clean.</Text>
+            <br />
+            <DefaultActionBar />
+          </Card>
+
+          <Card title="HOSTING BILLING">
+            <Text>Configure Stripe subscription billing for Alfab app hosting and maintenance.</Text>
+            <br />
+            <ActionButton onClick={() => router.push('/settings/billing')}>Open Billing Settings</ActionButton>
+          </Card>
+
+          <Card title="USER MANAGEMENT">
+            <Text>Manage users, roles, permissions, and invite links.</Text>
+            <br />
+            <ActionButton onClick={() => router.push('/settings/users')}>Open User Settings</ActionButton>
+          </Card>
+        </>
+      }
       actionItems={[
         {
           hotkey: '⌘+S',
@@ -117,37 +152,6 @@ export default function PricingSettings() {
         },
       ]}
     >
-      {hasChanges && (
-        <Card title="UNSAVED CHANGES">
-          <Text>
-            <span className="status-warning">You have unsaved changes. Save before leaving this page.</span>
-          </Text>
-          <br />
-          <RowSpaceBetween>
-            <ActionButton onClick={handleSave}>Save Changes</ActionButton>
-            <ActionButton onClick={handleReset}>Reset to Defaults</ActionButton>
-          </RowSpaceBetween>
-        </Card>
-      )}
-
-      <Card title="APPEARANCE">
-        <Text>Theme and font controls are available here only, to keep the rest of the app clean.</Text>
-        <br />
-        <DefaultActionBar />
-      </Card>
-
-      <Card title="HOSTING BILLING">
-        <Text>Configure Stripe subscription billing for Alfab app hosting and maintenance.</Text>
-        <br />
-        <ActionButton onClick={() => router.push('/settings/billing')}>Open Billing Settings</ActionButton>
-      </Card>
-
-      <Card title="USER MANAGEMENT">
-        <Text>Manage users, roles, permissions, and invite links.</Text>
-        <br />
-        <ActionButton onClick={() => router.push('/settings/users')}>Open User Settings</ActionButton>
-      </Card>
-
       <CardDouble title="BASE GLASS PRICES ($ per m²)">
         <Text>Configure the base price per square meter for each glass type and thickness combination.</Text>
         <br />
@@ -208,7 +212,14 @@ export default function PricingSettings() {
         <Text>Configure additional service and feature pricing.</Text>
         <br />
 
-        <Row>
+        <div
+          style={{
+            display: 'grid',
+            gap: 'calc(var(--font-size) * var(--theme-line-height-base))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(32ch, 1fr))',
+            alignItems: 'start',
+          }}
+        >
           <div style={{ flex: 1 }}>
             <Text>
               <strong>HOLES</strong>
@@ -226,10 +237,17 @@ export default function PricingSettings() {
             <Input label="Complex Shape 4-6mm ($)" type="number" name="shape-complex-4-6" value={otherPrices.shapeComplex4to6.toString()} onChange={(event) => updateOtherPrice('shapeComplex4to6', event.target.value)} step="0.01" />
             <Input label="Complex Shape 8-12mm ($)" type="number" name="shape-complex-8-12" value={otherPrices.shapeComplex8to12.toString()} onChange={(event) => updateOtherPrice('shapeComplex8to12', event.target.value)} step="0.01" />
           </div>
-        </Row>
+        </div>
 
         <br />
-        <Row>
+        <div
+          style={{
+            display: 'grid',
+            gap: 'calc(var(--font-size) * var(--theme-line-height-base))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(32ch, 1fr))',
+            alignItems: 'start',
+          }}
+        >
           <div style={{ flex: 1 }}>
             <Text>
               <strong>ADDITIONAL SERVICES</strong>
@@ -237,7 +255,7 @@ export default function PricingSettings() {
             <Input label="Ceramic Banding ($)" type="number" name="ceramic" value={otherPrices.ceramicBanding.toString()} onChange={(event) => updateOtherPrice('ceramicBanding', event.target.value)} step="0.01" />
             <Input label="Scanning Service ($)" type="number" name="scanning" value={otherPrices.scanning.toString()} onChange={(event) => updateOtherPrice('scanning', event.target.value)} step="0.01" />
           </div>
-        </Row>
+        </div>
 
         <br />
         <RowSpaceBetween>
