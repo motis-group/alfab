@@ -4,13 +4,11 @@ import * as React from 'react';
 
 import ActionBar from '@components/ActionBar';
 import ActionButton from '@components/ActionButton';
-import Badge from '@components/Badge';
 import DefaultActionBar from '@components/page/DefaultActionBar';
 import DefaultLayout from '@components/page/DefaultLayout';
 import DropdownMenuTrigger from '@components/DropdownMenuTrigger';
 import Grid from '@components/Grid';
 import Navigation from '@components/Navigation';
-import Row from '@components/Row';
 import AppSectionNav from '@components/page/AppSectionNav';
 import AppSessionIndicator from '@components/page/AppSessionIndicator';
 
@@ -57,8 +55,6 @@ const AppFrame: React.FC<AppFrameProps> = ({
   navigationItems = [],
   navLabel,
   navRight,
-  heading,
-  badge,
   actionItems = [],
   showThemeControls = false,
   showSectionNavigation = true,
@@ -101,13 +97,6 @@ const AppFrame: React.FC<AppFrameProps> = ({
         {showSectionNavigation ? <AppSectionNav /> : null}
 
         {showThemeControls && <DefaultActionBar floating />}
-
-        {heading && (
-          <Row>
-            {heading}
-            {badge ? <Badge>{badge}</Badge> : null}
-          </Row>
-        )}
 
         {actionItems.length ? <ActionBar items={actionItems} /> : null}
 
