@@ -287,15 +287,14 @@ else
   echo "TLS certificate not found at ${SSL_CERT_DIR}; configuring HTTP-only nginx."
 fi
 
-if [[ -d /etc/nginx/conf.d ]]; then
-  render_nginx_config | run_as_root tee /etc/nginx/conf.d/alfab.conf >/dev/null
-  run_as_root rm -f /etc/nginx/conf.d/default.conf
-fi
-
 if [[ -d /etc/nginx/sites-available ]]; then
   render_nginx_config | run_as_root tee /etc/nginx/sites-available/alfab >/dev/null
   run_as_root ln -sf /etc/nginx/sites-available/alfab /etc/nginx/sites-enabled/alfab
   run_as_root rm -f /etc/nginx/sites-enabled/default
+  run_as_root rm -f /etc/nginx/conf.d/alfab.conf
+elif [[ -d /etc/nginx/conf.d ]]; then
+  render_nginx_config | run_as_root tee /etc/nginx/conf.d/alfab.conf >/dev/null
+  run_as_root rm -f /etc/nginx/conf.d/default.conf
 fi
 
 run_as_root chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
