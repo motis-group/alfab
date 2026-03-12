@@ -149,6 +149,9 @@ fi
 npm ci
 
 DATABASE_URL=""
+DATABASE_SSL=""
+DATABASE_SSL_REJECT_UNAUTHORIZED=""
+NODE_OPTIONS_VALUE="${NODE_OPTIONS:-}"
 ADMIN_PASSWORD=""
 SUPERADMIN_USERNAME=""
 if command -v aws >/dev/null 2>&1; then
@@ -159,6 +162,8 @@ if command -v aws >/dev/null 2>&1; then
 
   if [[ ${secret_status} -eq 0 ]]; then
     DATABASE_URL="$(echo "${SECRET_JSON}" | jq -r '.database_url // empty')"
+    DATABASE_SSL="$(echo "${SECRET_JSON}" | jq -r '.database_ssl // empty')"
+    DATABASE_SSL_REJECT_UNAUTHORIZED="$(echo "${SECRET_JSON}" | jq -r '.database_ssl_reject_unauthorized // empty')"
     ADMIN_PASSWORD="$(echo "${SECRET_JSON}" | jq -r '.admin_password // empty')"
     SUPERADMIN_USERNAME="$(echo "${SECRET_JSON}" | jq -r '.superadmin_username // empty')"
   fi
@@ -172,6 +177,18 @@ if [[ -z "${ADMIN_PASSWORD}" && -f /etc/alfab.env ]]; then
   ADMIN_PASSWORD="$(grep -E '^ADMIN_PASSWORD=' /etc/alfab.env | tail -n1 | cut -d '=' -f2- || true)"
 fi
 
+if [[ -z "${DATABASE_SSL}" && -f /etc/alfab.env ]]; then
+  DATABASE_SSL="$(grep -E '^DATABASE_SSL=' /etc/alfab.env | tail -n1 | cut -d '=' -f2- || true)"
+fi
+
+if [[ -z "${DATABASE_SSL_REJECT_UNAUTHORIZED}" && -f /etc/alfab.env ]]; then
+  DATABASE_SSL_REJECT_UNAUTHORIZED="$(grep -E '^DATABASE_SSL_REJECT_UNAUTHORIZED=' /etc/alfab.env | tail -n1 | cut -d '=' -f2- || true)"
+fi
+
+if [[ -z "${NODE_OPTIONS_VALUE}" && -f /etc/alfab.env ]]; then
+  NODE_OPTIONS_VALUE="$(grep -E '^NODE_OPTIONS=' /etc/alfab.env | tail -n1 | cut -d '=' -f2- || true)"
+fi
+
 if [[ -z "${SUPERADMIN_USERNAME}" && -f /etc/alfab.env ]]; then
   SUPERADMIN_USERNAME="$(grep -E '^SUPERADMIN_USERNAME=' /etc/alfab.env | tail -n1 | cut -d '=' -f2- || true)"
 fi
@@ -181,13 +198,42 @@ if [[ -z "${DATABASE_URL}" || "${DATABASE_URL}" == "null" ]]; then
   exit 1
 fi
 
+if [[ -z "${DATABASE_SSL}" || "${DATABASE_SSL}" == "null" ]]; then
+  DATABASE_URL_WITHOUT_SCHEME="${DATABASE_URL#*://}"
+  DATABASE_URL_AUTHORITY="${DATABASE_URL_WITHOUT_SCHEME%%/*}"
+  if [[ "${DATABASE_URL_AUTHORITY}" == *"@"* ]]; then
+    DATABASE_URL_AUTHORITY="${DATABASE_URL_AUTHORITY#*@}"
+  fi
+
+  DATABASE_URL_HOST="${DATABASE_URL_AUTHORITY%%:*}"
+  DATABASE_URL_HOST="${DATABASE_URL_HOST#[}"
+  DATABASE_URL_HOST="${DATABASE_URL_HOST%]}"
+
+  case "${DATABASE_URL_HOST}" in
+    127.0.0.1|localhost|::1)
+      DATABASE_SSL="false"
+      ;;
+    *)
+      DATABASE_SSL="true"
+      ;;
+  esac
+fi
+
+if [[ -z "${DATABASE_SSL_REJECT_UNAUTHORIZED}" || "${DATABASE_SSL_REJECT_UNAUTHORIZED}" == "null" ]]; then
+  DATABASE_SSL_REJECT_UNAUTHORIZED="false"
+fi
+
 cat <<ENVVARS | run_as_root tee /etc/alfab.env >/dev/null
 NODE_ENV=production
 PORT=3000
 DATABASE_URL=${DATABASE_URL}
-DATABASE_SSL=true
-DATABASE_SSL_REJECT_UNAUTHORIZED=false
+DATABASE_SSL=${DATABASE_SSL}
+DATABASE_SSL_REJECT_UNAUTHORIZED=${DATABASE_SSL_REJECT_UNAUTHORIZED}
 ENVVARS
+
+if [[ -n "${NODE_OPTIONS_VALUE}" ]]; then
+  echo "NODE_OPTIONS=${NODE_OPTIONS_VALUE}" | run_as_root tee -a /etc/alfab.env >/dev/null
+fi
 
 if [[ -n "${SUPERADMIN_USERNAME}" ]]; then
   echo "SUPERADMIN_USERNAME=${SUPERADMIN_USERNAME}" | run_as_root tee -a /etc/alfab.env >/dev/null

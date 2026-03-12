@@ -19,3 +19,7 @@ npm run build
 
 Use the `Makefile` targets (`init`, `deploy`, `down`) for server-side deploy scripts,
 or the GitHub Actions workflows in `.github/workflows`.
+
+For AWS RDS -> VPS migration and VPS cutover steps, see:
+
+- `docs/vps-postgres-cutover.md`
