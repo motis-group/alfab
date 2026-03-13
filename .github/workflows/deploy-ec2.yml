@@ -36,7 +36,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Validate deploy configuration
         run: |
@@ -51,7 +51,7 @@ jobs:
           fi
 
       - name: Use Node.js 20
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
           cache: npm
@@ -63,10 +63,16 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Start SSH agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.DO_DEPLOY_SSH_KEY }}
+      - name: Write deploy SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DO_DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_SSH_KEY:?Missing DO_DEPLOY_SSH_KEY secret}"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/alfab_deploy_key
+          chmod 600 ~/.ssh/alfab_deploy_key
 
       - name: Add deploy host to known_hosts
         run: |
@@ -97,14 +103,14 @@ jobs:
         run: |
           set -euo pipefail
           deploy_port="${DEPLOY_PORT:-22}"
-          scp -P "${deploy_port}" "/tmp/alfab-${RELEASE_ID}.tgz" "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/alfab-${RELEASE_ID}.tgz"
+          scp -i ~/.ssh/alfab_deploy_key -P "${deploy_port}" "/tmp/alfab-${RELEASE_ID}.tgz" "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/alfab-${RELEASE_ID}.tgz"
 
       - name: Deploy release on Droplet
         run: |
           set -euo pipefail
           deploy_port="${DEPLOY_PORT:-22}"
 
-          ssh -p "${deploy_port}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+          ssh -i ~/.ssh/alfab_deploy_key -p "${deploy_port}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "set -euo pipefail
             release_dir='${RELEASES_DIR}/${RELEASE_ID}'
             mkdir -p '${RELEASES_DIR}'
@@ -124,3 +130,7 @@ jobs:
           curl -fsS -D /tmp/prod-login.headers -o /tmp/prod-login.html --max-time 20 "https://${DEPLOY_DOMAIN}/login"
           grep -qi '^HTTP/.* 200' /tmp/prod-login.headers
           grep -qi '<form' /tmp/prod-login.html
+
+      - name: Remove deploy SSH key
+        if: ${{ always() }}
+        run: rm -f ~/.ssh/alfab_deploy_key

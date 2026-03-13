@@ -45,7 +45,10 @@ sudo APP_DIR="${RELEASE_DIR}" DEPLOY_DOMAIN="${DEPLOY_DOMAIN}" ALT_DEPLOY_DOMAIN
 
 log "Updating current symlink"
 sudo mkdir -p "$(dirname "${CURRENT_LINK}")"
-sudo ln -sfn "${RELEASE_DIR}" "${CURRENT_LINK}"
+if [[ -e "${CURRENT_LINK}" && ! -L "${CURRENT_LINK}" ]]; then
+  sudo rm -rf "${CURRENT_LINK}"
+fi
+sudo ln -sfnT "${RELEASE_DIR}" "${CURRENT_LINK}"
 
 log "Pruning old releases"
 mapfile -t release_paths < <(sudo ls -1dt "${RELEASES_DIR}"/* 2>/dev/null || true)
