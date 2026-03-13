@@ -6,6 +6,7 @@ import { applySessionCookie, createAppSession } from '@utils/auth-session';
 import { AppRole } from '@utils/authz';
 import { getDbPool } from '@utils/db';
 import { hashPassword } from '@utils/password';
+import { applyThemePreferencesCookie, loadUserThemePreferences } from '@utils/theme-preferences-server';
 
 export const runtime = 'nodejs';
 
@@ -176,16 +177,19 @@ export async function POST(request: NextRequest) {
     await client.query('commit');
 
     const sessionToken = await createAppSession(createdUser.id);
+    const themePreferences = await loadUserThemePreferences(createdUser.id);
     const response = NextResponse.json({
       success: true,
       user: {
         id: createdUser.id,
         username: createdUser.username,
         role,
+        themePreferences,
       },
     });
 
     applySessionCookie(response, sessionToken);
+    applyThemePreferencesCookie(response, themePreferences);
 
     return response;
   } catch (error: any) {

@@ -1,4 +1,5 @@
 import { AppPermission, AppRole } from '@utils/authz';
+import { ThemePreferences } from '@utils/theme-preferences';
 
 export interface CurrentSessionUser {
   id: string;
@@ -6,6 +7,7 @@ export interface CurrentSessionUser {
   role: AppRole;
   effectiveRole: AppRole;
   assumedRole: AppRole | null;
+  themePreferences: ThemePreferences;
   permissions: AppPermission[];
   basePermissions: AppPermission[];
   canOverrideSessionRole: boolean;
