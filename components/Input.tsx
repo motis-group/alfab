@@ -30,6 +30,39 @@ function Input({ caretChars, isBlink = true, label, placeholder, onChange, type,
     }
   }, [rest.value]);
 
+  React.useEffect(() => {
+    const inputEl = inputRef.current;
+    if (!inputEl || type !== 'number') {
+      return;
+    }
+
+    const selectNumberValue = () => {
+      if (!inputEl.value) {
+        return;
+      }
+
+      inputEl.select();
+      setSelectionStart(0);
+    };
+
+    const onMouseUp = (event: MouseEvent) => {
+      if (!inputEl.value) {
+        return;
+      }
+
+      event.preventDefault();
+      selectNumberValue();
+    };
+
+    inputEl.addEventListener('focus', selectNumberValue);
+    inputEl.addEventListener('mouseup', onMouseUp);
+
+    return () => {
+      inputEl.removeEventListener('focus', selectNumberValue);
+      inputEl.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [type]);
+
   const onHandleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setText(value);
@@ -42,6 +75,10 @@ function Input({ caretChars, isBlink = true, label, placeholder, onChange, type,
   const onHandleFocus = () => {
     setIsFocused(true);
     if (!inputRef.current) return;
+
+    if (type === 'number') {
+      return;
+    }
 
     if (lastFocusDirectionRef.current === 'down') {
       setSelectionStart(text.length);
@@ -64,6 +101,11 @@ function Input({ caretChars, isBlink = true, label, placeholder, onChange, type,
   const onHandleClick = (e: React.MouseEvent<HTMLInputElement>) => {
     const inputEl = e.currentTarget as HTMLInputElement;
     inputEl.focus();
+
+    if (type === 'number') {
+      return;
+    }
+
     setSelectionStart(inputEl.selectionStart ?? text.length);
   };
 
@@ -102,7 +144,21 @@ function Input({ caretChars, isBlink = true, label, placeholder, onChange, type,
           {!isPlaceholderVisible && <span className={Utilities.classNames(styles.block, isBlink && isFocused && styles.blink)}>{caretChars || ''}</span>}
           {!isPlaceholderVisible && afterCaretText}
         </div>
-        <input id={inputId} ref={inputRef} className={styles.hidden} value={text} aria-placeholder={placeholder} type={type} onFocus={onHandleFocus} onBlur={onHandleBlur} onChange={onHandleChange} onSelect={onHandleSelect} onClick={onHandleClick} onKeyDown={onHandleKeyDown} {...rest} />
+        <input
+          id={inputId}
+          ref={inputRef}
+          className={styles.hidden}
+          value={text}
+          aria-placeholder={placeholder}
+          type={type}
+          onFocus={onHandleFocus}
+          onBlur={onHandleBlur}
+          onChange={onHandleChange}
+          onSelect={onHandleSelect}
+          onClick={onHandleClick}
+          onKeyDown={onHandleKeyDown}
+          {...rest}
+        />
       </div>
     </div>
   );
