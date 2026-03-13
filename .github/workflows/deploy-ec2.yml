@@ -7,22 +7,27 @@ on:
   workflow_dispatch:
 
 permissions:
-  id-token: write
   contents: read
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: true
+
 env:
-  AWS_REGION: ap-southeast-2
-  APP_DIR: /opt/alfab/current
-  SECRET_ID: alfab/prod/database
-  REMOTE_PATH: /var/www/alfab
+  RELEASE_ID: ${{ github.sha }}
   DEPLOY_DOMAIN: www.alfabvic.com.au
+  ALT_DEPLOY_DOMAIN: alfabvic.com.au
+  RELEASES_DIR: /opt/alfab/releases
+  CURRENT_LINK: /opt/alfab/current
+  KEEP_RELEASES: 5
 
 jobs:
   deploy:
+    if: ${{ secrets.DO_DEPLOY_HOST != '' && secrets.DO_DEPLOY_USER != '' && secrets.DO_DEPLOY_SSH_KEY != '' }}
     runs-on: ubuntu-latest
-    env:
-      HAS_SSM: ${{ secrets.AWS_DEPLOY_ROLE_ARN != '' && secrets.ALFAB_DEPLOY_BUCKET != '' }}
-      HAS_SSH: ${{ secrets.REMOTE_USER != '' && secrets.REMOTE_HOST != '' && secrets.REMOTE_PASSWORD != '' }}
+    environment:
+      name: production
+      url: https://www.alfabvic.com.au
 
     steps:
       - name: Checkout
@@ -41,264 +46,73 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Configure AWS credentials
-        id: configure_aws
-        if: env.HAS_SSM == 'true'
-        continue-on-error: true
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          ssh-private-key: ${{ secrets.DO_DEPLOY_SSH_KEY }}
 
-      - name: Discover deploy targets
-        id: discover_targets
-        if: env.HAS_SSM == 'true' && steps.configure_aws.outcome == 'success'
-        continue-on-error: true
+      - name: Add deploy host to known_hosts
         env:
-          DEPLOY_DOMAIN: ${{ env.DEPLOY_DOMAIN }}
-          FALLBACK_INSTANCE_ID: ${{ secrets.ALFAB_EC2_INSTANCE_ID }}
-          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
-          DISCOVERY_REGIONS: ${{ env.AWS_REGION }} us-west-2 us-east-1
+          DEPLOY_HOST: ${{ secrets.DO_DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DO_DEPLOY_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
-          chmod +x scripts/discover-deploy-targets.sh
-          scripts/discover-deploy-targets.sh
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
 
-      - name: Deploy with SSM
-        id: ssm_deploy
-        if: env.HAS_SSM == 'true' && steps.configure_aws.outcome == 'success'
-        continue-on-error: true
-        env:
-          DEPLOY_BUCKET: ${{ secrets.ALFAB_DEPLOY_BUCKET }}
-          TARGET_INSTANCE_TARGETS: ${{ steps.discover_targets.outputs.instance_targets }}
-          FALLBACK_INSTANCE_ID: ${{ secrets.ALFAB_EC2_INSTANCE_ID }}
+          if [[ -n "${DEPLOY_KNOWN_HOSTS}" ]]; then
+            printf '%s\n' "${DEPLOY_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -H "${DEPLOY_HOST}" > ~/.ssh/known_hosts
+          fi
+
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Package release
         run: |
           set -euo pipefail
-
-          target_instance_targets="${TARGET_INSTANCE_TARGETS:-}"
-          if [[ -z "${target_instance_targets}" && -n "${FALLBACK_INSTANCE_ID:-}" ]]; then
-            target_instance_targets="${AWS_REGION}:${FALLBACK_INSTANCE_ID}"
-          fi
-
-          if [[ -z "${target_instance_targets}" ]]; then
-            echo "No EC2 targets available for SSM deployment." >&2
-            exit 1
-          fi
-
-          echo "Target instances: ${target_instance_targets}"
-
           tar \
             --exclude='.git' \
             --exclude='.github' \
             --exclude='.next' \
             --exclude='node_modules' \
             --exclude='tsconfig.tsbuildinfo' \
-            -czf /tmp/app-src.tgz .
+            -czf "/tmp/alfab-${RELEASE_ID}.tgz" .
 
-          artifact_key="app-src-${GITHUB_SHA}.tgz"
-          aws s3 cp /tmp/app-src.tgz "s3://${DEPLOY_BUCKET}/${artifact_key}"
-
-          cat > /tmp/ssm-deploy.sh <<SCRIPT
-          set -euo pipefail
-          mkdir -p /opt/alfab
-          aws s3 cp "s3://${DEPLOY_BUCKET}/${artifact_key}" /opt/alfab/src.tgz
-          rm -rf "${APP_DIR}"
-          mkdir -p "${APP_DIR}"
-          tar -xzf /opt/alfab/src.tgz -C "${APP_DIR}"
-          cd "${APP_DIR}"
-          chmod +x scripts/*.sh
-          AWS_REGION="${AWS_REGION}" SECRET_ID="${SECRET_ID}" APP_DIR="${APP_DIR}" bash scripts/ec2-deploy.sh
-          SCRIPT
-
-          jq -Rs '{commands:[.]}' /tmp/ssm-deploy.sh > /tmp/ssm-params.json
-
-          success_count=0
-
-          for target in ${target_instance_targets}; do
-            instance_region="${AWS_REGION}"
-            instance_id="${target}"
-
-            if [[ "${target}" == *:* ]]; then
-              instance_region="${target%%:*}"
-              instance_id="${target##*:}"
-            fi
-
-            if [[ -z "${instance_region}" || -z "${instance_id}" ]]; then
-              echo "Skipping malformed target: ${target}"
-              continue
-            fi
-
-            echo "Deploying to instance ${instance_id} in ${instance_region}"
-
-            command_id="$(aws ssm send-command \
-              --region "${instance_region}" \
-              --instance-ids "${instance_id}" \
-              --document-name AWS-RunShellScript \
-              --comment "Deploy ALFAB from GitHub Actions" \
-              --parameters file:///tmp/ssm-params.json \
-              --query 'Command.CommandId' \
-              --output text 2>/dev/null || true)"
-
-            if [[ -z "${command_id}" || "${command_id}" == "None" ]]; then
-              echo "Could not start SSM command for ${instance_id} in ${instance_region}."
-              continue
-            fi
-
-            echo "SSM command for ${instance_id} (${instance_region}): ${command_id}"
-
-            status="Pending"
-            for _ in {1..180}; do
-              status="$(aws ssm get-command-invocation \
-                --region "${instance_region}" \
-                --command-id "${command_id}" \
-                --instance-id "${instance_id}" \
-                --query 'Status' \
-                --output text 2>/dev/null || true)"
-
-              echo "${instance_id} (${instance_region}) status: ${status}"
-
-              case "${status}" in
-                Success|Failed|Cancelled|TimedOut)
-                  break
-                  ;;
-              esac
-
-              sleep 5
-            done
-
-            invocation_json="$(aws ssm get-command-invocation \
-              --region "${instance_region}" \
-              --command-id "${command_id}" \
-              --instance-id "${instance_id}" \
-              --query '{InstanceId:InstanceId,Status:Status,ResponseCode:ResponseCode,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
-              --output json 2>/dev/null || true)"
-
-            echo "${invocation_json}" | jq --arg region "${instance_region}" '. + {Region:$region}'
-
-            final_status="$(echo "${invocation_json}" | jq -r '.Status // empty')"
-            if [[ "${final_status}" == "Success" ]]; then
-              success_count=$((success_count + 1))
-              echo "SSM deployment succeeded on ${instance_id} (${instance_region})."
-            else
-              echo "SSM deployment failed on ${instance_id} (${instance_region})."
-            fi
-          done
-
-          if [[ "${success_count}" -eq 0 ]]; then
-            echo "SSM deployment failed on all target instances." >&2
-            exit 1
-          fi
-
-      - name: Invalidate CloudFront cache
-        if: steps.ssm_deploy.outcome == 'success' && steps.discover_targets.outputs.distribution_id != ''
-        continue-on-error: true
+      - name: Upload release artifact
         env:
-          DIST_ID: ${{ steps.discover_targets.outputs.distribution_id }}
+          DEPLOY_HOST: ${{ secrets.DO_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DO_DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DO_DEPLOY_PORT || '22' }}
         run: |
           set -euo pipefail
-          echo "Invalidating CloudFront distribution ${DIST_ID}"
-          aws cloudfront create-invalidation --distribution-id "${DIST_ID}" --paths '/*'
+          scp -P "${DEPLOY_PORT}" "/tmp/alfab-${RELEASE_ID}.tgz" "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/alfab-${RELEASE_ID}.tgz"
 
-      - name: Install sshpass
-        if: env.HAS_SSH == 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y sshpass
-
-      - name: Deploy with SSH
-        id: ssh_deploy
-        if: env.HAS_SSH == 'true'
-        continue-on-error: true
+      - name: Deploy release on Droplet
         env:
-          REMOTE_USER: ${{ secrets.REMOTE_USER }}
-          REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
-          REMOTE_PASSWORD: ${{ secrets.REMOTE_PASSWORD }}
-          REMOTE_PATH: ${{ env.REMOTE_PATH }}
+          DEPLOY_HOST: ${{ secrets.DO_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DO_DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DO_DEPLOY_PORT || '22' }}
         run: |
           set -euo pipefail
-          chmod +x scripts/load-env.sh scripts/deploy.sh
-          source scripts/load-env.sh
-          load_env
-          ./scripts/deploy.sh
 
-      - name: Smoke test production API route
-        id: smoke
-        if: steps.ssm_deploy.outcome == 'success' || steps.ssh_deploy.outcome == 'success'
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "set -euo pipefail
+            release_dir='${RELEASES_DIR}/${RELEASE_ID}'
+            mkdir -p '${RELEASES_DIR}'
+            rm -rf \"\${release_dir}\"
+            mkdir -p \"\${release_dir}\"
+            tar -xzf '/tmp/alfab-${RELEASE_ID}.tgz' -C \"\${release_dir}\"
+            rm -f '/tmp/alfab-${RELEASE_ID}.tgz'
+            cd \"\${release_dir}\"
+            RELEASE_DIR=\"\${release_dir}\" CURRENT_LINK='${CURRENT_LINK}' RELEASES_DIR='${RELEASES_DIR}' KEEP_RELEASES='${KEEP_RELEASES}' DEPLOY_DOMAIN='${DEPLOY_DOMAIN}' ALT_DEPLOY_DOMAIN='${ALT_DEPLOY_DOMAIN}' bash scripts/remote-release-deploy.sh"
+
+      - name: Smoke test production login
         run: |
           set -euo pipefail
 
           sleep 10
 
-          base_url=""
-          status="000"
-
-          for scheme in https http; do
-            candidate="${scheme}://${DEPLOY_DOMAIN}"
-            echo "Smoke probing ${candidate}"
-
-            for attempt in {1..12}; do
-              status="$(curl -sS -o /tmp/smoke_api_db.out -w '%{http_code}' --max-time 20 \
-                -X POST "${candidate}/api/db?smoke=${GITHUB_SHA}&attempt=${attempt}" \
-                -H 'Content-Type: application/json' \
-                -H 'Cache-Control: no-cache' \
-                --data '{"table":"customers","action":"select","columns":"*"}' || true)"
-
-              echo "Smoke status (${candidate}, attempt ${attempt}): ${status}"
-              if [[ -f /tmp/smoke_api_db.out ]]; then
-                sed -n '1,40p' /tmp/smoke_api_db.out || true
-              fi
-
-              if [[ "${status}" != "404" && "${status}" != "000" ]]; then
-                base_url="${candidate}"
-                break 2
-              fi
-
-              sleep 5
-            done
-          done
-
-          if [[ -z "${base_url}" ]]; then
-            echo "Production API route is unavailable over HTTP and HTTPS (last status ${status})." >&2
-            exit 1
-          fi
-
-          echo "Smoke validated via ${base_url}"
-
-          curl -sS --max-time 20 "${base_url}/doors?smoke=${GITHUB_SHA}" -H 'Cache-Control: no-cache' > /tmp/smoke_doors.out
-          sed -n '1,60p' /tmp/smoke_doors.out || true
-
-          if grep -q 'style="width:100%;padding:0.6rem"' /tmp/smoke_doors.out; then
-            echo "Prod is still serving stale dropdown markup." >&2
-            exit 1
-          fi
-
-      - name: Validate deployment
-        if: always()
-        run: |
-          set -euo pipefail
-
-          echo "HAS_SSM=${HAS_SSM}"
-          echo "HAS_SSH=${HAS_SSH}"
-          echo "configure_aws=${{ steps.configure_aws.outcome }}"
-          echo "discover_targets=${{ steps.discover_targets.outcome }}"
-          echo "distribution_id=${{ steps.discover_targets.outputs.distribution_id }}"
-          echo "origin_domains=${{ steps.discover_targets.outputs.origin_domains }}"
-          echo "discovery_regions=${{ steps.discover_targets.outputs.discovery_regions }}"
-          echo "instance_targets=${{ steps.discover_targets.outputs.instance_targets }}"
-          echo "instance_ids=${{ steps.discover_targets.outputs.instance_ids }}"
-          echo "ssm_deploy=${{ steps.ssm_deploy.outcome }}"
-          echo "ssh_deploy=${{ steps.ssh_deploy.outcome }}"
-          echo "smoke=${{ steps.smoke.outcome }}"
-
-          if [[ "${HAS_SSM}" != "true" && "${HAS_SSH}" != "true" ]]; then
-            echo "No deployment secrets are configured (SSM or SSH)." >&2
-            exit 1
-          fi
-
-          if [[ ("${{ steps.ssm_deploy.outcome }}" == "success" || "${{ steps.ssh_deploy.outcome }}" == "success") && "${{ steps.smoke.outcome }}" == "success" ]]; then
-            echo "Deployment succeeded."
-            exit 0
-          fi
-
-          echo "Deployment failed for all configured methods." >&2
-          exit 1
+          curl -fsS -D /tmp/prod-login.headers -o /tmp/prod-login.html --max-time 20 "https://${DEPLOY_DOMAIN}/login"
+          grep -qi '^HTTP/.* 200' /tmp/prod-login.headers
+          grep -qi '<form' /tmp/prod-login.html
