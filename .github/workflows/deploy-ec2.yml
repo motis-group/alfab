@@ -23,15 +23,32 @@ env:
 
 jobs:
   deploy:
-    if: ${{ secrets.DO_DEPLOY_HOST != '' && secrets.DO_DEPLOY_USER != '' && secrets.DO_DEPLOY_SSH_KEY != '' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     environment:
       name: production
       url: https://www.alfabvic.com.au
+    env:
+      DEPLOY_HOST: ${{ secrets.DO_DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DO_DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.DO_DEPLOY_PORT }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DO_DEPLOY_KNOWN_HOSTS }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Validate deploy configuration
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_HOST:?Missing DO_DEPLOY_HOST secret}"
+          : "${DEPLOY_USER:?Missing DO_DEPLOY_USER secret}"
+
+          deploy_port="${DEPLOY_PORT:-22}"
+          if ! [[ "${deploy_port}" =~ ^[0-9]+$ ]]; then
+            echo "DO_DEPLOY_PORT must be a numeric SSH port." >&2
+            exit 1
+          fi
 
       - name: Use Node.js 20
         uses: actions/setup-node@v4
@@ -52,9 +69,6 @@ jobs:
           ssh-private-key: ${{ secrets.DO_DEPLOY_SSH_KEY }}
 
       - name: Add deploy host to known_hosts
-        env:
-          DEPLOY_HOST: ${{ secrets.DO_DEPLOY_HOST }}
-          DEPLOY_KNOWN_HOSTS: ${{ secrets.DO_DEPLOY_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           mkdir -p ~/.ssh
@@ -80,23 +94,17 @@ jobs:
             -czf "/tmp/alfab-${RELEASE_ID}.tgz" .
 
       - name: Upload release artifact
-        env:
-          DEPLOY_HOST: ${{ secrets.DO_DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DO_DEPLOY_USER }}
-          DEPLOY_PORT: ${{ secrets.DO_DEPLOY_PORT || '22' }}
         run: |
           set -euo pipefail
-          scp -P "${DEPLOY_PORT}" "/tmp/alfab-${RELEASE_ID}.tgz" "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/alfab-${RELEASE_ID}.tgz"
+          deploy_port="${DEPLOY_PORT:-22}"
+          scp -P "${deploy_port}" "/tmp/alfab-${RELEASE_ID}.tgz" "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/alfab-${RELEASE_ID}.tgz"
 
       - name: Deploy release on Droplet
-        env:
-          DEPLOY_HOST: ${{ secrets.DO_DEPLOY_HOST }}
-          DEPLOY_USER: ${{ secrets.DO_DEPLOY_USER }}
-          DEPLOY_PORT: ${{ secrets.DO_DEPLOY_PORT || '22' }}
         run: |
           set -euo pipefail
+          deploy_port="${DEPLOY_PORT:-22}"
 
-          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+          ssh -p "${deploy_port}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
             "set -euo pipefail
             release_dir='${RELEASES_DIR}/${RELEASE_ID}'
             mkdir -p '${RELEASES_DIR}'
