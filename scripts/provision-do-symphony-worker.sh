@@ -10,19 +10,24 @@ DO_TAGS="${DO_TAGS:-symphony,alfab}"
 DO_ENABLE_MONITORING="${DO_ENABLE_MONITORING:-1}"
 DO_ENABLE_PRIVATE_NETWORKING="${DO_ENABLE_PRIVATE_NETWORKING:-1}"
 
+WORKER_INSTANCE="${WORKER_INSTANCE:-alfab}"
+
 BOOTSTRAP_REPO_URL="${BOOTSTRAP_REPO_URL:-https://github.com/motis-group/alfab.git}"
 BOOTSTRAP_REPO_BRANCH="${BOOTSTRAP_REPO_BRANCH:-main}"
 BOOTSTRAP_DIR="${BOOTSTRAP_DIR:-/opt/alfab-bootstrap}"
 
 WORKFLOW_REPO_URL="${WORKFLOW_REPO_URL:-${BOOTSTRAP_REPO_URL}}"
 WORKFLOW_REPO_BRANCH="${WORKFLOW_REPO_BRANCH:-${BOOTSTRAP_REPO_BRANCH}}"
-WORKFLOW_REPO_DIR="${WORKFLOW_REPO_DIR:-/opt/alfab-symphony-config}"
+SYMPHONY_PROJECTS_ROOT="${SYMPHONY_PROJECTS_ROOT:-/opt/symphony-projects}"
+WORKFLOW_REPO_DIR="${WORKFLOW_REPO_DIR:-${SYMPHONY_PROJECTS_ROOT}/${WORKER_INSTANCE}/repo}"
+WORKFLOW_FILE_RELATIVE_PATH="${WORKFLOW_FILE_RELATIVE_PATH:-WORKFLOW.md}"
+
 SYMPHONY_REPO_URL="${SYMPHONY_REPO_URL:-https://github.com/odysseus0/symphony.git}"
 SYMPHONY_REPO_BRANCH="${SYMPHONY_REPO_BRANCH:-main}"
 SYMPHONY_REPO_DIR="${SYMPHONY_REPO_DIR:-/opt/symphony}"
-WORKSPACE_ROOT="${WORKSPACE_ROOT:-/home/symphony/code/symphony-workspaces}"
+WORKSPACE_ROOT="${WORKSPACE_ROOT:-/home/symphony/code/symphony-workspaces/${WORKER_INSTANCE}}"
 PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/opt/playwright}"
-SYMPHONY_LOGS_ROOT="${SYMPHONY_LOGS_ROOT:-/var/lib/symphony/logs}"
+SYMPHONY_LOGS_ROOT="${SYMPHONY_LOGS_ROOT:-/var/lib/symphony/logs/${WORKER_INSTANCE}}"
 SYMPHONY_DASHBOARD_PORT="${SYMPHONY_DASHBOARD_PORT:-}"
 SWAP_SIZE_GB="${SWAP_SIZE_GB:-4}"
 NODE_MAJOR="${NODE_MAJOR:-20}"
@@ -45,6 +50,7 @@ log() {
 require_env() {
   local name="$1"
   local value="$2"
+
   if [[ -z "${value}" ]]; then
     echo "${name} is required." >&2
     exit 1
@@ -62,6 +68,7 @@ append_env_line() {
   local file="$1"
   local name="$2"
   local value="$3"
+
   printf "%s=%q\n" "${name}" "${value}" >>"${file}"
 }
 
@@ -72,6 +79,7 @@ require_prereqs() {
   require_command mktemp
 
   require_env LINEAR_API_KEY "${LINEAR_API_KEY}"
+
   if [[ -z "${OPENAI_API_KEY}" && -z "${CODEX_AUTH_JSON_B64}" ]]; then
     if [[ -f "${HOME}/.codex/auth.json" ]]; then
       CODEX_AUTH_JSON_B64="$(base64 < "${HOME}/.codex/auth.json" | tr -d '\n')"
@@ -110,6 +118,7 @@ resolve_ssh_key() {
   fi
 
   local key_count
+
   key_count="$(doctl compute ssh-key list --no-header --format ID | sed '/^$/d' | wc -l | tr -d ' ')"
   if [[ "${key_count}" == "1" ]]; then
     doctl compute ssh-key list --no-header --format ID | sed '/^$/d'
@@ -123,6 +132,7 @@ resolve_ssh_key() {
 wait_for_ssh() {
   local ip="$1"
   local -a ssh_args
+
   ssh_args=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=5)
   if [[ -n "${SSH_IDENTITY_FILE}" ]]; then
     ssh_args+=(-i "${SSH_IDENTITY_FILE}")
@@ -150,9 +160,12 @@ write_remote_env_file() {
     append_env_line "${temp_file}" CODEX_AUTH_JSON_B64 "${CODEX_AUTH_JSON_B64}"
   fi
   append_env_line "${temp_file}" GITHUB_TOKEN "${GITHUB_TOKEN}"
+  append_env_line "${temp_file}" WORKER_INSTANCE "${WORKER_INSTANCE}"
   append_env_line "${temp_file}" WORKFLOW_REPO_URL "${WORKFLOW_REPO_URL}"
   append_env_line "${temp_file}" WORKFLOW_REPO_BRANCH "${WORKFLOW_REPO_BRANCH}"
+  append_env_line "${temp_file}" SYMPHONY_PROJECTS_ROOT "${SYMPHONY_PROJECTS_ROOT}"
   append_env_line "${temp_file}" WORKFLOW_REPO_DIR "${WORKFLOW_REPO_DIR}"
+  append_env_line "${temp_file}" WORKFLOW_FILE_RELATIVE_PATH "${WORKFLOW_FILE_RELATIVE_PATH}"
   append_env_line "${temp_file}" SYMPHONY_REPO_URL "${SYMPHONY_REPO_URL}"
   append_env_line "${temp_file}" SYMPHONY_REPO_BRANCH "${SYMPHONY_REPO_BRANCH}"
   append_env_line "${temp_file}" SYMPHONY_REPO_DIR "${SYMPHONY_REPO_DIR}"
@@ -216,15 +229,16 @@ print_summary() {
 
   cat <<EOF
 
-DigitalOcean Symphony worker ready.
+DigitalOcean Symphony host ready.
 - Droplet ID: ${droplet_id}
 - Hostname: ${WORKER_NAME}
 - Public IP: ${ip}
+- First instance: ${WORKER_INSTANCE}
 
 Useful commands:
 - ssh root@${ip}
-- ssh root@${ip} 'systemctl status symphony-worker --no-pager'
-- ssh root@${ip} 'journalctl -u symphony-worker -f'
+- ssh root@${ip} 'systemctl status symphony-worker@${WORKER_INSTANCE} --no-pager'
+- ssh root@${ip} 'journalctl -u symphony-worker@${WORKER_INSTANCE} -f'
 EOF
 
   if [[ -n "${SYMPHONY_DASHBOARD_PORT}" ]]; then
@@ -243,6 +257,7 @@ main() {
 
   local droplet_output
   local -a create_args
+
   create_args=(
     compute droplet create "${WORKER_NAME}"
     --region "${DO_REGION}"
@@ -253,6 +268,7 @@ main() {
     --format ID,Name,PublicIPv4,Status
     --no-header
   )
+
   if [[ -n "${DO_PROJECT_ID}" ]]; then
     create_args+=(--project-id "${DO_PROJECT_ID}")
   fi
@@ -265,11 +281,13 @@ main() {
   if [[ "${DO_ENABLE_PRIVATE_NETWORKING}" == "1" ]]; then
     create_args+=(--enable-private-networking)
   fi
+
   log "Creating droplet ${WORKER_NAME} in ${DO_REGION} (${DO_SIZE})."
   droplet_output="$(doctl "${create_args[@]}")"
 
   local droplet_id
   local droplet_ip
+
   droplet_id="$(awk '{print $1}' <<<"${droplet_output}")"
   droplet_ip="$(awk '{print $3}' <<<"${droplet_output}")"
 
