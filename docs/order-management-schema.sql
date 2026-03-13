@@ -17,14 +17,38 @@ create table if not exists users (
   username text not null unique,
   password_hash text not null,
   role text not null check (role in ('superadmin', 'admin', 'standard', 'readonly')),
+  theme_mode text not null default 'light' check (theme_mode in ('light', 'dark', 'system')),
+  theme_tint text not null default 'none' check (theme_tint in ('none', 'blue', 'green', 'orange', 'purple', 'red', 'yellow', 'pink')),
   is_active boolean not null default true,
   created_at timestamptz not null default now()
 );
 
 do $$
 begin
+  alter table users add column if not exists theme_mode text;
+  alter table users add column if not exists theme_tint text;
+
+  update users
+  set theme_mode = 'light'
+  where theme_mode is null
+    or theme_mode not in ('light', 'dark', 'system');
+
+  update users
+  set theme_tint = 'none'
+  where theme_tint is null
+    or theme_tint not in ('none', 'blue', 'green', 'orange', 'purple', 'red', 'yellow', 'pink');
+
+  alter table users alter column theme_mode set default 'light';
+  alter table users alter column theme_mode set not null;
+  alter table users alter column theme_tint set default 'none';
+  alter table users alter column theme_tint set not null;
+
   alter table users drop constraint if exists users_role_check;
   alter table users add constraint users_role_check check (role in ('superadmin', 'admin', 'standard', 'readonly'));
+  alter table users drop constraint if exists users_theme_mode_check;
+  alter table users add constraint users_theme_mode_check check (theme_mode in ('light', 'dark', 'system'));
+  alter table users drop constraint if exists users_theme_tint_check;
+  alter table users add constraint users_theme_tint_check check (theme_tint in ('none', 'blue', 'green', 'orange', 'purple', 'red', 'yellow', 'pink'));
 exception
   when undefined_table then
     null;
