@@ -2,6 +2,11 @@ ALFAB web application repository.
 
 This repository is now a single Next.js app (not a monorepo).
 
+## Symphony
+
+Symphony is configured for this repository. Track active work in the `Alfab`
+Linear project.
+
 ## Local development
 
 ```bash
