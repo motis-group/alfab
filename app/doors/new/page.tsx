@@ -36,6 +36,7 @@ import {
   statusLabel,
   todayISODate,
 } from '@utils/order-management';
+import { QuoteToOrderDraft, buildQuoteDraftLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
@@ -143,6 +144,10 @@ function normalizeLineNote(parsed: ParsedLineNotes, fallbackRaw?: string | null)
   return fallbackRaw || '';
 }
 
+function normalizeCustomerLookupName(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 export default function NewPurchaseOrderPage() {
   const router = useRouter();
 
@@ -198,8 +203,16 @@ export default function NewPurchaseOrderPage() {
       throw customerProductRes.error;
     }
 
-    setCustomers((customerRes.data as Customer[]) || []);
-    setCustomerProducts((customerProductRes.data as CustomerProduct[]) || []);
+    const loadedCustomers = (customerRes.data as Customer[]) || [];
+    const loadedCustomerProducts = (customerProductRes.data as CustomerProduct[]) || [];
+
+    setCustomers(loadedCustomers);
+    setCustomerProducts(loadedCustomerProducts);
+
+    return {
+      customers: loadedCustomers,
+      customerProducts: loadedCustomerProducts,
+    };
   }
 
   async function loadOrderForEdit(orderId: string) {
@@ -273,11 +286,23 @@ export default function NewPurchaseOrderPage() {
         }
 
         setRole(user.effectiveRole as UserRole);
-        await loadBaseData();
+        const { customers: loadedCustomers } = await loadBaseData();
 
-        const editOrderId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('orderId') : null;
+        const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        const editOrderId = searchParams?.get('orderId');
         if (editOrderId) {
           await loadOrderForEdit(editOrderId);
+        } else if (searchParams?.get('fromQuote') === '1') {
+          const quoteDraft = consumeQuoteToOrderDraft();
+          if (quoteDraft) {
+            applyQuoteDraft(quoteDraft, loadedCustomers);
+          }
+
+          if (typeof window !== 'undefined') {
+            const nextUrl = new URL(window.location.href);
+            nextUrl.searchParams.delete('fromQuote');
+            window.history.replaceState({}, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+          }
         }
       } catch (error: any) {
         setSchemaError(error?.message || 'Unable to load order management data.');
@@ -354,6 +379,39 @@ export default function NewPurchaseOrderPage() {
         error: error?.message || 'Unable to calculate ad hoc price.',
       };
     }
+  }
+
+  function applyQuoteDraft(quoteDraft: QuoteToOrderDraft, availableCustomers: Customer[]) {
+    const normalizedQuoteCustomer = normalizeCustomerLookupName(quoteDraft.customerName);
+    const matchedCustomers = normalizedQuoteCustomer
+      ? availableCustomers.filter((customer) => customer.is_active !== false && normalizeCustomerLookupName(customer.name) === normalizedQuoteCustomer)
+      : [];
+    const matchedCustomerId = matchedCustomers.length === 1 ? matchedCustomers[0].id : '';
+
+    const draftLine = createLineDraft({
+      pricingSource: 'adhoc_calculator',
+      quantityOrdered: quoteDraft.quantity,
+      unitPriceAtOrder: quoteDraft.unitPrice,
+      lineNote: buildQuoteDraftLineDescription(quoteDraft),
+      adhocSpec: { ...quoteDraft.spec },
+      markupPercent: quoteDraft.markupPercent,
+    });
+
+    const draftNotes = [
+      quoteDraft.quoteNotes.trim(),
+      quoteDraft.customerName.trim() && !matchedCustomerId ? `Calculator customer: ${quoteDraft.customerName.trim()}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    setOrderForm((prev) => ({
+      ...prev,
+      customerId: matchedCustomerId,
+      receivedDate: quoteDraft.quoteDate || prev.receivedDate,
+      notes: draftNotes,
+    }));
+    setLineDrafts([draftLine]);
+    setActiveLineId(draftLine.localId);
   }
 
   function applyCustomerConfig(lineId: string, customerProductId: string) {
