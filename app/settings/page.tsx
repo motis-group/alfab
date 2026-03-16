@@ -10,25 +10,21 @@ import ActionButton from '@components/ActionButton';
 import Card from '@components/Card';
 import CardDouble from '@components/CardDouble';
 import AppFrame from '@components/page/AppFrame';
-import DefaultActionBar from '@components/page/DefaultActionBar';
 import Input from '@components/Input';
 import RowSpaceBetween from '@components/RowSpaceBetween';
 import Table from '@components/Table';
 import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
-import { useThemePreferences } from '@components/ThemeProvider';
 
 import { usePricing } from '@components/PricingProvider';
 import { EdgeworkType, GlassThickness, GlassType } from '@utils/calculations';
-import { THEME_MODE_OPTIONS, THEME_TINT_OPTIONS } from '@utils/theme-preferences';
 
 const navigationItems = APP_NAVIGATION_ITEMS;
 
 export default function PricingSettings() {
   const router = useRouter();
   const { pricingData, updatePricingData, resetToDefaults } = usePricing();
-  const { themePreferences, isSaving, error: themeError } = useThemePreferences();
   const [basePrices, setBasePrices] = useState(pricingData.basePrices);
   const [edgeworkPrices, setEdgeworkPrices] = useState(pricingData.edgeworkPrices);
   const [otherPrices, setOtherPrices] = useState(pricingData.otherPrices);
@@ -91,17 +87,15 @@ export default function PricingSettings() {
   const glassTypes: GlassType[] = ['Clear', 'Green', 'Grey', 'Dark Grey', 'Super Grey'];
   const edgeworkTypes: EdgeworkType[] = ['ROUGH ARRIS', 'FLAT GRIND - STRAIGHT', 'FLAT GRIND - CURVED', 'FLAT POLISH - STRAIGHT', 'FLAT POLISH - CURVED'];
   const thicknesses: GlassThickness[] = [4, 5, 6, 8, 10, 12];
-  const currentModeLabel = THEME_MODE_OPTIONS.find((option) => option.value === themePreferences.mode)?.label || 'Light';
-  const currentTintLabel = THEME_TINT_OPTIONS.find((option) => option.value === themePreferences.tint)?.label || 'None';
 
   return (
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⚙"
       navigationItems={navigationItems}
-      navLabel="PRICING SETTINGS"
+      navLabel="COSTING SETTINGS"
       navRight={<ActionButton onClick={() => router.push('/')}>BACK TO COSTING</ActionButton>}
-      heading="PRICING CONFIGURATION"
+      heading="COSTING CONFIGURATION"
       badge={hasChanges ? 'UNSAVED CHANGES' : 'SAVED'}
       sidebarWidthCh={44}
       sidebarMobileOrder="top"
@@ -120,30 +114,10 @@ export default function PricingSettings() {
             </Card>
           )}
 
-          <Card title="APPEARANCE">
-            <Text>Theme, tint, and font controls save automatically for the signed-in user and apply across app pages.</Text>
+          <Card title="OPERATIONS SETTINGS">
+            <Text>Use this page for calculator pricing only. Billing for the app itself lives on its own operational page.</Text>
             <br />
-            <DefaultActionBar />
-            <br />
-            {themeError ? (
-              <Text>
-                <span className="status-error">{themeError}</span>
-              </Text>
-            ) : (
-              <Text style={{ opacity: 0.75 }}>{isSaving ? 'Saving theme preferences...' : `Saved: ${currentModeLabel} / ${currentTintLabel}`}</Text>
-            )}
-          </Card>
-
-          <Card title="HOSTING BILLING">
-            <Text>Configure Stripe subscription billing for Alfab app hosting and maintenance.</Text>
-            <br />
-            <ActionButton onClick={() => router.push('/settings/billing')}>Open Billing Settings</ActionButton>
-          </Card>
-
-          <Card title="USER MANAGEMENT">
-            <Text>Manage users, roles, permissions, and invite links.</Text>
-            <br />
-            <ActionButton onClick={() => router.push('/settings/users')}>Open User Settings</ActionButton>
+            <ActionButton onClick={() => router.push('/settings/billing')}>Open Hosting Billing</ActionButton>
           </Card>
         </>
       }
