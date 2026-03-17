@@ -5,11 +5,12 @@ import styles from '@components/page/DefaultActionBar.module.scss';
 import * as React from 'react';
 import * as Utilities from '@common/utilities';
 
+import { useThemePreferences } from '@components/ThemeProvider';
 import { toggleDebugGrid } from '@components/DebugGrid';
 import { useHotkeys } from '@modules/hotkeys';
 
 import ActionBar from '@components/ActionBar';
-import ButtonGroup from '@components/ButtonGroup';
+import { THEME_MODE_OPTIONS, THEME_TINT_OPTIONS } from '@utils/theme-preferences';
 
 function isElement(target: EventTarget | null): target is Element {
   return target instanceof Element;
@@ -116,30 +117,10 @@ interface DefaultActionBarProps {
 }
 
 const DefaultActionBar: React.FC<DefaultActionBarProps> = ({ floating = false, items = [] }) => {
-  const [isGrid, setGrid] = React.useState(false);
+  const { themePreferences, setThemeMode, setThemeTint } = useThemePreferences();
   useHotkeys('ctrl+g', () => toggleDebugGrid());
 
   useGlobalNavigationHotkeys();
-
-  React.useEffect(() => {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
-
-    const applyTheme = (e: MediaQueryList | MediaQueryListEvent) => {
-      if (e.matches) {
-        Utilities.onHandleAppearanceChange('theme-dark');
-      } else {
-        Utilities.onHandleAppearanceChange('');
-      }
-    };
-
-    applyTheme(prefersDark);
-
-    prefersDark.addEventListener('change', applyTheme);
-
-    return () => {
-      prefersDark.removeEventListener('change', applyTheme);
-    };
-  }, []);
 
   const rootClassName = floating ? `${styles.root} ${styles.floating}` : styles.root;
 
@@ -336,67 +317,23 @@ const DefaultActionBar: React.FC<DefaultActionBarProps> = ({ floating = false, i
           },
           {
             hotkey: '⌃+A',
-            body: 'Appearance',
+            body: 'Theme',
             openHotkey: 'ctrl+a',
-            items: [
-              {
-                icon: '⊹',
-                children: 'Light',
-                onClick: () => Utilities.onHandleAppearanceChange(''),
-              },
-              {
-                icon: '⊹',
-                children: 'Dark',
-                onClick: () => Utilities.onHandleAppearanceChange('theme-dark'),
-              },
-            ],
+            items: THEME_MODE_OPTIONS.map((option) => ({
+              icon: themePreferences.mode === option.value ? '◉' : '◌',
+              children: option.label,
+              onClick: () => setThemeMode(option.value),
+            })),
           },
           {
             hotkey: '⌃+T',
-            body: 'Mode',
+            body: 'Tint',
             openHotkey: 'ctrl+t',
-            items: [
-              {
-                icon: '⊹',
-                children: 'None',
-                onClick: () => Utilities.onHandleAppearanceModeChange(''),
-              },
-              {
-                icon: '⊹',
-                children: 'Blue',
-                onClick: () => Utilities.onHandleAppearanceModeChange('tint-blue'),
-              },
-              {
-                icon: '⊹',
-                children: 'Green',
-                onClick: () => Utilities.onHandleAppearanceModeChange('tint-green'),
-              },
-              {
-                icon: '⊹',
-                children: 'Orange',
-                onClick: () => Utilities.onHandleAppearanceModeChange('tint-orange'),
-              },
-              {
-                icon: '⊹',
-                children: 'Purple',
-                onClick: () => Utilities.onHandleAppearanceModeChange('tint-purple'),
-              },
-              {
-                icon: '⊹',
-                children: 'Red',
-                onClick: () => Utilities.onHandleAppearanceModeChange('tint-red'),
-              },
-              {
-                icon: '⊹',
-                children: 'Yellow',
-                onClick: () => Utilities.onHandleAppearanceModeChange('tint-yellow'),
-              },
-              {
-                icon: '⊹',
-                children: 'Pink',
-                onClick: () => Utilities.onHandleAppearanceModeChange('tint-pink'),
-              },
-            ],
+            items: THEME_TINT_OPTIONS.map((option) => ({
+              icon: themePreferences.tint === option.value ? '◉' : '◌',
+              children: option.label,
+              onClick: () => setThemeTint(option.value),
+            })),
           },
           {
             hotkey: '⌃+G',

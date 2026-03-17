@@ -16,7 +16,7 @@ function isSelectedPath(pathname: string, item: AppSectionItem): boolean {
   }
 
   if (item.href === '/settings') {
-    return pathname === '/settings' || (pathname.startsWith('/settings/') && !pathname.startsWith('/settings/billing') && !pathname.startsWith('/settings/users'));
+    return pathname === '/settings' || (pathname.startsWith('/settings/') && !pathname.startsWith('/settings/billing'));
   }
 
   return pathname === item.href || pathname.startsWith(`${item.href}/`);

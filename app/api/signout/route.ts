@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { clearSessionCookie, readSessionTokenFromCookie, revokeAppSessionByToken } from '@utils/auth-session';
 import { getRequestOrigin } from '@utils/billing-config';
+import { clearThemePreferencesCookie } from '@utils/theme-preferences-server';
 
 export const runtime = 'nodejs';
 
@@ -32,6 +33,7 @@ export async function POST() {
 
   const response = NextResponse.json({ success: true });
   clearSessionCookie(response);
+  clearThemePreferencesCookie(response);
 
   return response;
 }
@@ -46,5 +48,6 @@ export async function GET(request: Request) {
 
   const response = NextResponse.redirect(redirectUrl);
   clearSessionCookie(response);
+  clearThemePreferencesCookie(response);
   return response;
 }

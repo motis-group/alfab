@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 
 import { AppPermission, AppRole, getRolePermissions, isAppRole, normalizeAppRole, roleHasPermission } from '@utils/authz';
 import { dbQuery } from '@utils/db';
+import { ThemePreferences, normalizeThemePreferences } from '@utils/theme-preferences';
 
 const SESSION_COOKIE = 'session';
 const SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -16,6 +17,8 @@ interface RawSessionRow {
   role: string;
   is_active: boolean;
   assumed_role?: string | null;
+  theme_mode?: string | null;
+  theme_tint?: string | null;
   expires_at: string;
 }
 
@@ -26,6 +29,7 @@ export interface AppSession {
   role: AppRole;
   effectiveRole: AppRole;
   assumedRole: AppRole | null;
+  themePreferences: ThemePreferences;
   permissions: AppPermission[];
   expiresAt: string;
 }
@@ -55,6 +59,10 @@ function mapRawSession(row: RawSessionRow): AppSession {
     role,
     effectiveRole,
     assumedRole,
+    themePreferences: normalizeThemePreferences({
+      mode: row.theme_mode,
+      tint: row.theme_tint,
+    }),
     permissions: getRolePermissions(effectiveRole),
     expiresAt: row.expires_at,
   };
@@ -75,7 +83,9 @@ async function loadSessionByToken(sessionToken: string): Promise<AppSession | nu
           s.expires_at,
           u.username,
           u.role,
-          u.is_active
+          u.is_active,
+          u.theme_mode,
+          u.theme_tint
         from auth_sessions s
         join users u on u.id = s.user_id
         where s.token_hash = $1
@@ -85,8 +95,10 @@ async function loadSessionByToken(sessionToken: string): Promise<AppSession | nu
       [tokenHash]
     );
   } catch (error: any) {
-    // Backward compatibility for pre-migration schemas without auth_sessions.assumed_role.
-    if (error?.code !== '42703' || !String(error?.message || '').includes('assumed_role')) {
+    const message = String(error?.message || '');
+
+    // Backward compatibility for pre-migration schemas without auth_sessions.assumed_role or users theme preference columns.
+    if (error?.code !== '42703' || (!message.includes('assumed_role') && !message.includes('theme_mode') && !message.includes('theme_tint'))) {
       throw error;
     }
 
@@ -99,7 +111,9 @@ async function loadSessionByToken(sessionToken: string): Promise<AppSession | nu
           s.expires_at,
           u.username,
           u.role,
-          u.is_active
+          u.is_active,
+          null::text as theme_mode,
+          null::text as theme_tint
         from auth_sessions s
         join users u on u.id = s.user_id
         where s.token_hash = $1

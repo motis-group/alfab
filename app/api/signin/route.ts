@@ -4,6 +4,7 @@ import { applySessionCookie, createAppSession } from '@utils/auth-session';
 import { normalizeAppRole } from '@utils/authz';
 import { dbQuery } from '@utils/db';
 import { hashPassword, verifyPassword } from '@utils/password';
+import { applyThemePreferencesCookie, loadUserThemePreferences } from '@utils/theme-preferences-server';
 
 export const runtime = 'nodejs';
 
@@ -133,6 +134,7 @@ export async function POST(request: NextRequest) {
     }
 
     const token = await createAppSession(user.id);
+    const themePreferences = await loadUserThemePreferences(user.id);
     const response = new NextResponse(
       JSON.stringify({
         success: true,
@@ -140,6 +142,7 @@ export async function POST(request: NextRequest) {
           id: user.id,
           username: user.username,
           role: normalizeAppRole(user.role, 'readonly'),
+          themePreferences,
         },
       }),
       {
@@ -149,6 +152,7 @@ export async function POST(request: NextRequest) {
     );
 
     applySessionCookie(response, token);
+    applyThemePreferencesCookie(response, themePreferences);
 
     return response;
   } catch (error: any) {

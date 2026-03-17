@@ -97,8 +97,7 @@ export default function JoinPage() {
         throw new Error(data?.error || 'Unable to accept invite.');
       }
 
-      router.push('/');
-      router.refresh();
+      window.location.assign('/');
     } catch (submitError: any) {
       setError(submitError?.message || 'Unable to accept invite.');
     } finally {
