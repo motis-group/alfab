@@ -19,6 +19,7 @@ import { useThemePreferences } from '@components/ThemeProvider';
 
 import { CurrentSessionUser, fetchCurrentSessionUser } from '@utils/session-client';
 import { THEME_MODE_OPTIONS, THEME_TINT_OPTIONS } from '@utils/theme-preferences';
+import { APP_ACCOUNT_SECTION_ITEMS } from '@utils/app-navigation';
 
 const navigationItems = APP_NAVIGATION_ITEMS;
 
@@ -80,9 +81,9 @@ export default function AccountSettingsPage() {
       previewPixelSRC="/pixel.gif"
       logo="⚙"
       navigationItems={navigationItems}
-      navLabel="USER SETTINGS"
-      navRight={<ActionButton onClick={() => router.push('/settings')}>GO TO COSTING</ActionButton>}
-      heading="USER SETTINGS"
+      navLabel="APPEARANCE"
+      heading="APPEARANCE"
+      sectionNavigationItems={APP_ACCOUNT_SECTION_ITEMS}
       badge={badgeText}
       sidebarWidthCh={48}
       sidebarMobileOrder="top"

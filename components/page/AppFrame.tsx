@@ -11,6 +11,7 @@ import Grid from '@components/Grid';
 import Navigation from '@components/Navigation';
 import AppSectionNav from '@components/page/AppSectionNav';
 import AppSessionIndicator from '@components/page/AppSessionIndicator';
+import { AppSectionItem } from '@utils/app-navigation';
 
 interface NavigationItem {
   icon?: React.ReactNode;
@@ -40,6 +41,7 @@ interface AppFrameProps {
   actionItems?: FrameActionItem[];
   showThemeControls?: boolean;
   showSectionNavigation?: boolean;
+  sectionNavigationItems?: AppSectionItem[];
   showSessionIndicator?: boolean;
   sidebar?: React.ReactNode;
   sidebarAriaLabel?: string;
@@ -58,6 +60,7 @@ const AppFrame: React.FC<AppFrameProps> = ({
   actionItems = [],
   showThemeControls = false,
   showSectionNavigation = true,
+  sectionNavigationItems,
   showSessionIndicator = true,
   sidebar,
   sidebarAriaLabel = 'Page sidebar',
@@ -94,7 +97,7 @@ const AppFrame: React.FC<AppFrameProps> = ({
       <Grid className={styles.root}>
         <Navigation logo={logo} left={left} right={right} />
 
-        {showSectionNavigation ? <AppSectionNav /> : null}
+        {showSectionNavigation ? <AppSectionNav items={sectionNavigationItems} /> : null}
 
         {showThemeControls && <DefaultActionBar floating />}
 

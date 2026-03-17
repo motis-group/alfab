@@ -18,6 +18,7 @@ import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 
 import { APP_ROLES, AppRole } from '@utils/authz';
+import { APP_ACCOUNT_SECTION_ITEMS } from '@utils/app-navigation';
 import { CurrentSessionUser, fetchCurrentSessionUser } from '@utils/session-client';
 
 interface ManagedUser {
@@ -342,9 +343,9 @@ export default function TeamAccessPage() {
       previewPixelSRC="/pixel.gif"
       logo="⚙"
       navigationItems={navigationItems}
-      navLabel="TEAM ACCESS"
-      navRight={<ActionButton onClick={() => router.push('/account')}>BACK TO USER SETTINGS</ActionButton>}
-      heading="TEAM ACCESS"
+      navLabel="TEAM"
+      heading="TEAM"
+      sectionNavigationItems={APP_ACCOUNT_SECTION_ITEMS}
       badge={badgeText}
       sidebarWidthCh={52}
       sidebarMobileOrder="top"
@@ -477,7 +478,7 @@ export default function TeamAccessPage() {
         },
         {
           hotkey: '⌘+B',
-          body: 'Account',
+          body: 'Appearance',
           onClick: () => router.push('/account'),
         },
       ]}

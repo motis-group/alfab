@@ -69,8 +69,23 @@ export default function AppSessionIndicator() {
     ? [
         {
           icon: '⊹',
-          children: 'USER SETTINGS',
+          children: 'Appearance',
           href: '/account',
+        },
+        {
+          icon: '⊹',
+          children: 'Costing',
+          href: '/settings',
+        },
+        {
+          icon: '⊹',
+          children: 'Team',
+          href: '/account/team',
+        },
+        {
+          icon: '⊹',
+          children: 'Billing',
+          href: '/settings/billing',
         },
         {
           icon: '⊹',

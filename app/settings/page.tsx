@@ -18,6 +18,7 @@ import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 
 import { usePricing } from '@components/PricingProvider';
+import { APP_ACCOUNT_SECTION_ITEMS } from '@utils/app-navigation';
 import { EdgeworkType, GlassThickness, GlassType } from '@utils/calculations';
 
 const navigationItems = APP_NAVIGATION_ITEMS;
@@ -93,9 +94,10 @@ export default function PricingSettings() {
       previewPixelSRC="/pixel.gif"
       logo="⚙"
       navigationItems={navigationItems}
-      navLabel="COSTING SETTINGS"
+      navLabel="COSTING"
       navRight={<ActionButton onClick={() => router.push('/')}>BACK TO COSTING</ActionButton>}
-      heading="COSTING CONFIGURATION"
+      heading="COSTING"
+      sectionNavigationItems={APP_ACCOUNT_SECTION_ITEMS}
       badge={hasChanges ? 'UNSAVED CHANGES' : 'SAVED'}
       sidebarWidthCh={44}
       sidebarMobileOrder="top"
