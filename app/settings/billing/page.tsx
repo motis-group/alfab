@@ -16,6 +16,7 @@ import Table from '@components/Table';
 import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
+import { APP_ACCOUNT_SECTION_ITEMS } from '@utils/app-navigation';
 
 const navigationItems = APP_NAVIGATION_ITEMS;
 
@@ -202,9 +203,9 @@ export default function BillingSettingsPage() {
       previewPixelSRC="/pixel.gif"
       logo="⚙"
       navigationItems={navigationItems}
-      navLabel="HOSTING BILLING"
-      navRight={<ActionButton onClick={() => router.push('/settings')}>BACK TO COSTING SETTINGS</ActionButton>}
-      heading="HOSTING BILLING"
+      navLabel="BILLING"
+      heading="BILLING"
+      sectionNavigationItems={APP_ACCOUNT_SECTION_ITEMS}
       badge={badgeLabel}
       sidebarWidthCh={46}
       sidebarMobileOrder="top"
@@ -289,7 +290,7 @@ export default function BillingSettingsPage() {
         },
         {
           hotkey: '⌘+B',
-          body: 'Back',
+          body: 'Costing',
           onClick: () => router.push('/settings'),
         },
       ]}
