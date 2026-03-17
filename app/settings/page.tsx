@@ -114,9 +114,6 @@ export default function PricingSettings() {
             </Card>
           )}
 
-          <Card title="HOSTING BILLING">
-            <ActionButton onClick={() => router.push('/settings/billing')}>Open Billing</ActionButton>
-          </Card>
         </>
       }
       actionItems={[
