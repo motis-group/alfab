@@ -10,7 +10,6 @@ import ActionButton from '@components/ActionButton';
 import Card from '@components/Card';
 import CardDouble from '@components/CardDouble';
 import AppFrame from '@components/page/AppFrame';
-import DefaultActionBar from '@components/page/DefaultActionBar';
 import Input from '@components/Input';
 import RowSpaceBetween from '@components/RowSpaceBetween';
 import Table from '@components/Table';
@@ -94,9 +93,9 @@ export default function PricingSettings() {
       previewPixelSRC="/pixel.gif"
       logo="⚙"
       navigationItems={navigationItems}
-      navLabel="PRICING SETTINGS"
+      navLabel="COSTING SETTINGS"
       navRight={<ActionButton onClick={() => router.push('/')}>BACK TO COSTING</ActionButton>}
-      heading="PRICING CONFIGURATION"
+      heading="COSTING CONFIGURATION"
       badge={hasChanges ? 'UNSAVED CHANGES' : 'SAVED'}
       sidebarWidthCh={44}
       sidebarMobileOrder="top"
@@ -114,12 +113,6 @@ export default function PricingSettings() {
               </RowSpaceBetween>
             </Card>
           )}
-
-          <Card title="APPEARANCE">
-            <Text>Theme and font controls are available here only, to keep the rest of the app clean.</Text>
-            <br />
-            <DefaultActionBar />
-          </Card>
 
         </>
       }

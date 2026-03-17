@@ -20,6 +20,7 @@ import { defaultPricingData } from '@components/PricingProvider';
 import { GlassSpecification, calculateCost, getAvailableGlassTypes, getAvailableThicknesses } from '@utils/calculations';
 import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import { UserRole, formatCurrency, todayISODate } from '@utils/order-management';
+import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
 const navigationItems = APP_NAVIGATION_ITEMS;
@@ -185,6 +186,25 @@ export default function AdhocQuotePage() {
     }
   }
 
+  function handleCreatePurchaseOrder() {
+    if (!calculation.error) {
+      persistQuoteToOrderDraft({
+        quoteName,
+        customerName,
+        quoteDate,
+        quantity,
+        unitPrice: calculation.unitPrice,
+        markupPercent,
+        quoteNotes,
+        spec,
+      });
+      router.push('/doors/new?fromQuote=1');
+      return;
+    }
+
+    router.push('/doors/new');
+  }
+
   return (
     <AppFrame
       previewPixelSRC="/pixel.gif"
@@ -199,7 +219,7 @@ export default function AdhocQuotePage() {
       sidebar={
         <>
           <Card title="QUICK ACTIONS">
-            <ActionButton onClick={() => router.push('/doors/new')}>Create Purchase Order</ActionButton>
+            <ActionButton onClick={handleCreatePurchaseOrder}>Create Purchase Order</ActionButton>
             <br />
             <ActionButton
               onClick={() => {
@@ -325,7 +345,7 @@ export default function AdhocQuotePage() {
         {
           hotkey: '⌘+N',
           body: 'New PO',
-          onClick: () => router.push('/doors/new'),
+          onClick: handleCreatePurchaseOrder,
         },
       ]}
     >

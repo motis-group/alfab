@@ -202,8 +202,8 @@ export default function BillingSettingsPage() {
       previewPixelSRC="/pixel.gif"
       logo="⚙"
       navigationItems={navigationItems}
-      navLabel="BILLING"
-      navRight={<ActionButton onClick={() => router.push('/settings')}>BACK TO SETTINGS</ActionButton>}
+      navLabel="HOSTING BILLING"
+      navRight={<ActionButton onClick={() => router.push('/settings')}>BACK TO COSTING SETTINGS</ActionButton>}
       heading="HOSTING BILLING"
       badge={badgeLabel}
       sidebarWidthCh={46}

@@ -3,7 +3,6 @@
 import '@root/global.scss';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 import Button from '@components/Button';
 import Card from '@components/Card';
@@ -14,8 +13,6 @@ import Input from '@components/Input';
 import Text from '@components/Text';
 
 export default function LoginPage() {
-  const router = useRouter();
-
   const [nextPath, setNextPath] = useState('/');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -58,8 +55,7 @@ export default function LoginPage() {
         throw new Error(data?.error || 'Unable to sign in.');
       }
 
-      router.push(nextPath || '/');
-      router.refresh();
+      window.location.assign(nextPath || '/');
     } catch (submitError: any) {
       setError(submitError?.message || 'Unable to sign in.');
     } finally {

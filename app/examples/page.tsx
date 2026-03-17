@@ -73,7 +73,7 @@ import TextArea from '@components/TextArea';
 import TreeView from '@components/TreeView';
 import UpdatingDataTable from '@components/examples/UpdatingDataTable';
 
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 
 // NOTE(jimmylee)
 // https://nextjs.org/docs/app/api-reference/functions/generate-metadata

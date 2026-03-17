@@ -2,18 +2,13 @@
 
 import styles from '@components/page/AppSessionIndicator.module.scss';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import ActionButton from '@components/ActionButton';
 import DropdownMenuTrigger from '@components/DropdownMenuTrigger';
 
-import { APP_ROLES, AppRole } from '@utils/authz';
 import { CurrentSessionUser, fetchCurrentSessionUser } from '@utils/session-client';
-
-function formatRoleLabel(role: string): string {
-  return role.replace('_', ' ').toUpperCase();
-}
 
 export default function AppSessionIndicator() {
   const router = useRouter();
@@ -50,48 +45,17 @@ export default function AppSessionIndicator() {
     window.location.assign('/api/signout?next=/login');
   }
 
-  async function switchSessionRole(nextRole: AppRole) {
-    if (!sessionUser?.canOverrideSessionRole) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/session-role', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ role: nextRole }),
-      });
-
-      const data = (await response.json().catch(() => null)) as { user?: CurrentSessionUser; error?: string } | null;
-      if (!response.ok || !data?.user) {
-        throw new Error(data?.error || 'Unable to switch session role.');
-      }
-
-      setSessionUser(data.user);
-      router.refresh();
-    } catch (switchError: any) {
-      setError(switchError?.message || 'Unable to switch session role.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  const label = useMemo(() => {
+  const label = (() => {
     if (isLoading) {
-      return 'Session...';
+      return 'User...';
     }
 
     if (!sessionUser) {
       return 'Sign In';
     }
 
-    return `${sessionUser.username.toUpperCase()} [${formatRoleLabel(sessionUser.effectiveRole)}]`;
-  }, [isLoading, sessionUser]);
+    return sessionUser.username.toUpperCase();
+  })();
 
   if (!isLoading && !sessionUser) {
     return (
@@ -105,27 +69,8 @@ export default function AppSessionIndicator() {
     ? [
         {
           icon: '⊹',
-          children: `USER ${sessionUser.username.toUpperCase()}`,
-        },
-        {
-          icon: '⊹',
-          children: `BASE ROLE ${formatRoleLabel(sessionUser.role)}`,
-        },
-        {
-          icon: '⊹',
-          children: `SESSION ROLE ${formatRoleLabel(sessionUser.effectiveRole)}`,
-        },
-        ...(sessionUser.canOverrideSessionRole
-          ? APP_ROLES.map((role) => ({
-              icon: sessionUser.effectiveRole === role ? '◉' : '◌',
-              children: `SWITCH TO ${formatRoleLabel(role)}`,
-              onClick: () => switchSessionRole(role),
-            }))
-          : []),
-        {
-          icon: '⊹',
-          children: 'OPEN USER SETTINGS',
-          href: '/settings/users',
+          children: 'USER SETTINGS',
+          href: '/account',
         },
         {
           icon: '⊹',
