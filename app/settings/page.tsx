@@ -114,10 +114,8 @@ export default function PricingSettings() {
             </Card>
           )}
 
-          <Card title="OPERATIONS SETTINGS">
-            <Text>Use this page for calculator pricing only. Billing for the app itself lives on its own operational page.</Text>
-            <br />
-            <ActionButton onClick={() => router.push('/settings/billing')}>Open Hosting Billing</ActionButton>
+          <Card title="HOSTING BILLING">
+            <ActionButton onClick={() => router.push('/settings/billing')}>Open Billing</ActionButton>
           </Card>
         </>
       }

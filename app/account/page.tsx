@@ -102,28 +102,7 @@ export default function AccountSettingsPage() {
             </Card>
           ) : null}
 
-          {!isLoading && currentUser ? (
-            <Card title="ACCOUNT SUMMARY">
-              <Table>
-                <TableRow>
-                  <TableColumn style={{ width: '20ch' }}>USERNAME</TableColumn>
-                  <TableColumn>{currentUser.username}</TableColumn>
-                </TableRow>
-                <TableRow>
-                  <TableColumn>BASE ROLE</TableColumn>
-                  <TableColumn>{formatRoleLabel(currentUser.role)}</TableColumn>
-                </TableRow>
-                <TableRow>
-                  <TableColumn>CURRENT ACCESS</TableColumn>
-                  <TableColumn>{formatRoleLabel(currentUser.effectiveRole)}</TableColumn>
-                </TableRow>
-              </Table>
-            </Card>
-          ) : null}
-
           <CardDouble title="APPEARANCE">
-            <Text>Theme, tint, and font choices are personal settings and now live outside the costing pages.</Text>
-            <br />
             <DefaultActionBar />
             <br />
             {themeError ? (
@@ -137,8 +116,6 @@ export default function AccountSettingsPage() {
 
           {!isLoading && canManageTeam ? (
             <Card title="TEAM ACCESS">
-              <Text>Invite teammates, create users, and reset passwords from a dedicated access page.</Text>
-              <br />
               <ActionButton onClick={() => router.push('/account/team')}>Open Team Access</ActionButton>
             </Card>
           ) : null}
@@ -157,36 +134,30 @@ export default function AccountSettingsPage() {
         },
       ]}
     >
-      <CardDouble title="SETTINGS MAP">
-        <Text>Operational configuration stays in the app navigation. Personal and access controls stay here.</Text>
-        <br />
-        <Table>
-          <TableRow>
-            <TableColumn style={{ width: '22ch' }}>DESTINATION</TableColumn>
-            <TableColumn>USE</TableColumn>
-          </TableRow>
-          <TableRow>
-            <TableColumn>COSTING SETTINGS</TableColumn>
-            <TableColumn>Update glass, edgework, and service pricing for the calculator.</TableColumn>
-          </TableRow>
-          <TableRow>
-            <TableColumn>HOSTING BILLING</TableColumn>
-            <TableColumn>Manage subscription billing for the app itself.</TableColumn>
-          </TableRow>
-          <TableRow>
-            <TableColumn>USER SETTINGS</TableColumn>
-            <TableColumn>Change your personal appearance preferences and review access details.</TableColumn>
-          </TableRow>
-          <TableRow>
-            <TableColumn>TEAM ACCESS</TableColumn>
-            <TableColumn>Invite teammates or manage user passwords and roles when your access level allows it.</TableColumn>
-          </TableRow>
-        </Table>
-      </CardDouble>
+      {!isLoading && currentUser ? (
+        <CardDouble title="ACCOUNT SUMMARY">
+          <Table>
+            <TableRow>
+              <TableColumn style={{ width: '20ch' }}>USERNAME</TableColumn>
+              <TableColumn>{currentUser.username}</TableColumn>
+            </TableRow>
+            <TableRow>
+              <TableColumn>BASE ROLE</TableColumn>
+              <TableColumn>{formatRoleLabel(currentUser.role)}</TableColumn>
+            </TableRow>
+            <TableRow>
+              <TableColumn>CURRENT ACCESS</TableColumn>
+              <TableColumn>{formatRoleLabel(currentUser.effectiveRole)}</TableColumn>
+            </TableRow>
+          </Table>
+        </CardDouble>
+      ) : null}
 
-      <Card title="WHY THIS PAGE EXISTS">
-        <Text>Costing and billing are operational admin tasks. Appearance, account context, and teammate access are user settings, so they should not compete with the top-level workflow navigation.</Text>
-      </Card>
+      {!isLoading && canManageTeam ? (
+        <Card title="TEAM ACCESS">
+          <ActionButton onClick={() => router.push('/account/team')}>Open Team Access</ActionButton>
+        </Card>
+      ) : null}
     </AppFrame>
   );
 }
