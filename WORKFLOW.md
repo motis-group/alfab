@@ -83,8 +83,8 @@ The agent talks to Linear via the `linear_graphql` tool injected by Symphony's a
 - Spend extra effort up front on planning and verification design before implementation.
 - Reproduce first: always confirm the current behavior/issue signal before changing code so the fix target is explicit.
 - Keep ticket metadata current (state, checklist, acceptance criteria, links).
-- Treat a single persistent Linear comment as the source of truth for progress.
-- Use that single workpad comment for all progress and handoff notes; do not post separate "done"/summary comments.
+- Treat a single live Linear comment as the source of truth for progress during the current attempt.
+- Use that live workpad comment for all progress and handoff notes; when a fresh attempt starts, create a new live workpad instead of rewriting the previous attempt's comment. Do not post separate "done"/summary comments.
 - Treat any ticket-authored `Validation`, `Test Plan`, or `Testing` section as non-negotiable acceptance input: mirror it in the workpad and execute it before considering the work complete.
 - When meaningful out-of-scope improvements are discovered during execution,
   file a separate Linear issue instead of expanding scope. The follow-up issue
@@ -121,7 +121,7 @@ The agent talks to Linear via the `linear_graphql` tool injected by Symphony's a
 2. Read the current state.
 3. Route to the matching flow:
    - `Backlog` -> do not modify issue content/state; stop and wait for human to move it to `Todo`.
-   - `Todo` -> immediately move to `In Progress`, then ensure bootstrap workpad comment exists (create if missing), then start execution flow.
+   - `Todo` -> immediately move to `In Progress`, decide whether this `Todo` entry starts a fresh attempt, then ensure the correct live workpad comment exists, then start execution flow.
      - If PR is already attached, start by reviewing all open PR comments and deciding required changes vs explicit pushback responses.
    - `In Progress` -> continue execution flow from current scratchpad comment.
    - `Human Review` -> wait and poll for decision/review updates.
@@ -133,18 +133,22 @@ The agent talks to Linear via the `linear_graphql` tool injected by Symphony's a
    - Create a fresh branch from `origin/main` and restart execution flow as a new attempt.
 5. For `Todo` tickets, do startup sequencing in this exact order:
    - `update_issue(..., state: "In Progress")`
-   - find/create `## Codex Workpad` bootstrap comment
+   - inspect issue comments to decide whether newer human feedback started a fresh attempt
+   - find/create the live `## Codex Workpad` comment for this attempt
    - only then begin analysis/planning/implementation work.
 6. Add a short comment if state and issue content are inconsistent, then proceed with the safest flow.
 
 ## Step 1: Start/continue execution (Todo or In Progress)
 
-1.  Find or create a single persistent scratchpad comment for the issue:
-    - Search existing comments for a marker header: `## Codex Workpad`.
-    - Ignore resolved comments while searching; only active/unresolved comments are eligible to be reused as the live workpad.
-    - If found, reuse that comment; do not create a new workpad comment.
-    - If not found, create one workpad comment and use it for all updates.
-    - Persist the workpad comment ID and only write progress updates to that ID.
+1.  Find or create the live scratchpad comment for the current attempt:
+    - Read all issue comments first; always use all comments, including older workpads, as context.
+    - Search existing comments for the marker header: `## Codex Workpad`.
+    - Ignore resolved comments only when choosing the live workpad; resolved comments still count as historical context.
+    - If arriving from `Todo` and there is a newer human-authored non-workpad comment after the most recent active `## Codex Workpad`, treat that as a fresh attempt.
+    - For a fresh `Todo` attempt, create a new `## Codex Workpad` comment and leave older workpads untouched for history/context.
+    - Otherwise, reuse the most recent active `## Codex Workpad` comment if one exists.
+    - If no active workpad exists, create one workpad comment and use it for all updates in this attempt.
+    - Persist the live workpad comment ID and only write progress updates to that ID.
 2.  If arriving from `Todo`, do not delay on additional status transitions: the issue should already be `In Progress` before this step begins.
 3.  Immediately reconcile the workpad before new edits:
     - Check off items that are already done.
@@ -255,7 +259,7 @@ Use this only when completion is blocked by missing required tools or missing au
 1. Treat `Rework` as a full approach reset, not incremental patching.
 2. Re-read the full issue body and all human comments; explicitly identify what will be done differently this attempt.
 3. Close the existing PR tied to the issue.
-4. Remove the existing `## Codex Workpad` comment from the issue.
+4. Remove the current live `## Codex Workpad` comment from the issue.
 5. Create a fresh branch from `origin/main`.
 6. Start over from the normal kickoff flow:
    - If current issue state is `Todo`, move it to `In Progress`; otherwise keep the current state.
@@ -264,7 +268,7 @@ Use this only when completion is blocked by missing required tools or missing au
 
 ## Completion bar before Human Review
 
-- Step 1/2 checklist is fully complete and accurately reflected in the single workpad comment.
+- Step 1/2 checklist is fully complete and accurately reflected in the current live workpad comment.
 - Acceptance criteria and required ticket-provided validation items are complete.
 - Validation/tests are green for the latest commit.
 - PR feedback sweep is complete and no actionable comments remain.
@@ -278,7 +282,7 @@ Use this only when completion is blocked by missing required tools or missing au
 - For closed/merged branch PRs, create a new branch from `origin/main` and restart from reproduction/planning as if starting fresh.
 - If issue state is `Backlog`, do not modify it; wait for human to move to `Todo`.
 - Do not edit the issue body/description for planning or progress tracking.
-- Use exactly one persistent workpad comment (`## Codex Workpad`) per issue.
+- Maintain exactly one live workpad comment (`## Codex Workpad`) per active attempt; older workpads may remain for history/context.
 - If comment editing is unavailable in-session, use the update script. Only report blocked if both `linear_graphql` editing and script-based editing are unavailable.
 - Temporary proof edits are allowed only for local verification and must be reverted before commit.
 - If out-of-scope improvements are found, create a separate Backlog issue rather
