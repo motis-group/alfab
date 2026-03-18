@@ -103,6 +103,7 @@ The agent talks to Linear via the `linear_graphql` tool injected by Symphony's a
 - `push`: keep remote branch current and publish updates.
 - `pull`: keep branch updated with latest `origin/main` before handoff.
 - `land`: when ticket reaches `Merging`, use the `land` skill, which includes the merge loop.
+- `userinterface-wiki`: use for frontend, UI, UX, motion, typography, and visual design work. Consult it during planning and again during final self-review for non-trivial UI changes.
 
 ## Status map
 
@@ -164,6 +165,7 @@ The agent talks to Linear via the `linear_graphql` tool injected by Symphony's a
     - If changes touch app files or app behavior, add explicit app-specific flow checks to `Acceptance Criteria` in the workpad (for example: launch path, changed interaction path, and expected result path).
     - If the ticket description/comment context includes `Validation`, `Test Plan`, or `Testing` sections, copy those requirements into the workpad `Acceptance Criteria` and `Validation` sections as required checkboxes (no optional downgrade).
 7.  Run a principal-style self-review of the plan and refine it in the comment.
+    - If the ticket touches frontend or UX behavior, consult `userinterface-wiki` before implementation and fold the relevant guidance into the plan.
 8.  Before implementing, capture a concrete reproduction signal and record it in the workpad `Notes` section (command/output, screenshot, or deterministic UI behavior).
 9.  Run the `pull` skill to sync with latest `origin/main` before any code edits, then record the pull/sync result in the workpad `Notes`.
     - Include a `pull skill evidence` note with:
@@ -221,6 +223,7 @@ Use this only when completion is blocked by missing required tools or missing au
     - Document these temporary proof steps and outcomes in the workpad `Validation`/`Notes` sections so reviewers can follow the evidence.
     - If app-touching, run runtime validation and capture screenshots/recordings. Upload media to Linear using the `linear` skill's `fileUpload` flow and embed in the workpad comment.
 6.  Re-check all acceptance criteria and close any gaps.
+    - For frontend/UI changes, run a final `userinterface-wiki` self-review and record the most relevant categories or rules in the workpad `Notes`.
 7.  Before every `git push` attempt, run the required validation for your scope and confirm it passes; if it fails, address issues and rerun until green, then commit and push changes.
 8.  Attach PR URL to the issue (prefer attachment; use the workpad comment only if attachment is unavailable).
     - Ensure the GitHub PR has label `symphony` (add it if missing).
