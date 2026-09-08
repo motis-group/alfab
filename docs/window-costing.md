@@ -177,6 +177,13 @@ Saving rates keeps the document it replaced as an archive row, `v-<the stamp it 
 Costings and purchase order lines record the stamp of the rates that priced them. Resetting to the
 defaults leaves the archive rows in place.
 
+The archive id is built from `updated_at`, so it depends on the `set_updated_at` trigger on
+`window_costing_rates` and `glass_costing_rates`. Apply a table without its trigger and the stamp
+never advances: the second save writes an archive id that already exists, the store treats a
+duplicate as nothing to do, and every save after the first archives nothing. There is no error,
+and the loss only shows up later as a costing that cannot be repriced on the rates that made it.
+Both triggers ship in `docs/order-management-schema.sql`; keep them with their tables.
+
 A saved costing stores its priced lines, so reopening one shows what was quoted rather than
 repricing it. **Compare** on the saved costings list shows three numbers: what was quoted, what the
 same window costs on today's rates, and what it recomputes to on the rates that priced it. The third
