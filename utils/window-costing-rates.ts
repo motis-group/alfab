@@ -357,7 +357,13 @@ function mergeValue(base: unknown, saved: unknown): unknown {
     return merged;
   }
   if (typeof base === 'number' || base === null) {
-    return typeof saved === 'number' && Number.isFinite(saved) ? saved : saved === null ? null : base;
+    if (typeof saved === 'number' && Number.isFinite(saved)) {
+      return saved;
+    }
+    // A blank is only kept where the rate is blank by default, which is how the sheet's own gaps are
+    // recorded. Keeping a blank on a rate that had a number would read as zero in the arithmetic and
+    // quietly drop cost from every quote, so that falls back to the default instead.
+    return base;
   }
   if (typeof base === 'string') {
     return typeof saved === 'string' ? saved : base;

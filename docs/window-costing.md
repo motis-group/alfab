@@ -13,6 +13,8 @@ only; the Queensland branch of the sheet is not implemented (`state` is fixed to
 | Rates editor | `/settings/windows` (`pricing:write` to save; every role can read) |
 | Costing page | `app/glass/windows/page.tsx` |
 | Printed sheet | `components/WindowCostingSheet.tsx`, print styles in `global.scss` |
+| Rate severity | `utils/window-rate-health.ts` |
+| Glossary | `utils/window-costing-glossary.ts`, shown by `components/WindowCostingGlossary.tsx` |
 | Saved costings | `utils/window-quote-store.ts`, table `quotes` |
 | Golden checks | `utils/window-costing.test.ts` (`npm test`) |
 
@@ -98,8 +100,41 @@ and unknown keys are dropped. A blank value means not priced: the line costs $0 
 warns. Items the source sheet could not price: black anodising, 015-03 flat and 015-07
 medium stays, keeper saddles (sash & frame), laminate c/view holes.
 
+### Which rates are wrong
+
+A rate can be blank for two very different reasons, and the editor colours them apart.
+
+**Yellow, not priced.** The legacy sheet never held this price: black anodising, flat and medium
+stays, keeper saddles, and laminate c/view holes. The costing charges the line as nil and says so.
+The quote is short by whatever the item really costs.
+
+**Red, fix before saving.** A value that makes every quote wrong without saying so:
+
+- A rate that had a price, left blank. JavaScript reads the blank as zero once the value reaches
+  arithmetic, so the quote still prints a confident price. Blanking the hourly labour rate takes 38
+  to 56 percent off, silently.
+- Zero on a rate the whole costing leans on: the labour rate, a supplier price per kilogram, a glass
+  price per square metre, the etch anodising rate. Zero is never reported as not priced.
+- A value below zero, which turns a cost line into a credit.
+- A fraction above 1, which is a percentage typed as a whole number: 40 instead of 0.4 multiplies
+  the price by 41.
+
+Saving is blocked while any red field is present. `mergeWindowRates` is the second guard: a blank on
+a rate that has a default price falls back to that default, so an older saved document cannot make a
+quote wrong either. Only rates that are blank by default stay blank.
+
 Each section carries the date its prices were last known good. The editor shows the date, a
 search box, the unit of every rate, and the resulting price per metre for each extrusion.
+
+## The words the sheet assumed
+
+`utils/window-costing-glossary.ts` defines the terms a new estimator has to be told: margin, uplift,
+packing, loading, offcut, minimum charge, made to size against shaped, per pair, development and
+sundry labour, the anodising options, Marine Window Service, arris and the edge finishes, c/view
+holes, second choice glazing. Both the costing page and the rates editor show it.
+
+The uplift entry says plainly that the sheet never recorded what the charge covers. Keep it that way
+until someone confirms it.
 
 ## Reproducing an old price
 

@@ -793,3 +793,15 @@ select option {
     border-top: 0.25pt solid #999;
   }
 }
+
+/* Rate severity in the window rates editor. Applied per cell: a class on a table row would
+   replace the row's own class rather than merge with it. */
+.rate-cell-warning {
+  background: var(--theme-status-warning-subdued);
+  color: var(--theme-status-warning);
+}
+
+.rate-cell-error {
+  background: var(--theme-status-error-subdued);
+  color: var(--theme-status-error);
+}

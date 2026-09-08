@@ -19,9 +19,11 @@ import Text from '@components/Text';
 import { APP_ACCOUNT_SECTION_ITEMS, APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import { formatCurrency } from '@utils/order-management';
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
+import WindowCostingGlossary from '@components/WindowCostingGlossary';
 import { extrusionRate } from '@utils/window-costing';
 import { WindowRates, mergeWindowRates } from '@utils/window-costing-rates';
 import { loadWindowRates, resetWindowRates, saveWindowRates } from '@utils/window-costing-store';
+import { RateIssue, checkRateValue } from '@utils/window-rate-health';
 
 const navigationItems = APP_NAVIGATION_ITEMS;
 
@@ -56,6 +58,7 @@ interface RateField {
   label: string;
   unit: string;
   value: number | null;
+  issue: RateIssue | null;
 }
 
 interface RateSection {
@@ -64,6 +67,8 @@ interface RateSection {
   note: string;
   asAt: string;
   fields: RateField[];
+  errors: number;
+  warnings: number;
 }
 
 function humanise(segment: string): string {
@@ -119,13 +124,15 @@ function collectFields(value: unknown, segments: string[], out: RateField[]): vo
     if (SKIP_LEAVES.has(leaf)) {
       return;
     }
+    const path = segments.join('.');
     out.push({
-      path: segments.join('.'),
+      path,
       segments,
       group: segments.length > 2 ? segments[1] : '',
       label: segments.length > 2 ? segments.slice(2).map(humanise).join(' / ') : humanise(leaf),
       unit: unitFor(segments),
       value,
+      issue: checkRateValue(path, value),
     });
     return;
   }
@@ -139,11 +146,21 @@ function collectFields(value: unknown, segments: string[], out: RateField[]): vo
 
 function buildSections(rates: WindowRates): RateSection[] {
   return Object.entries(rates)
-    .filter(([key, value]) => key !== 'asAt' && (typeof value === 'number' || (value && typeof value === 'object')))
+    // A blanked top-level rate is null, which is still a field to show. Without the explicit null the
+    // section would disappear and the value could not be typed back in.
+    .filter(([key, value]) => key !== 'asAt' && (typeof value === 'number' || value === null || (value && typeof value === 'object')))
     .map(([key, value]) => {
       const fields: RateField[] = [];
       collectFields(value, [key], fields);
-      return { key, title: SECTION_TITLES[key] || key.toUpperCase(), note: SECTION_NOTES[key] || '', asAt: rates.asAt?.[key] || '', fields };
+      return {
+        key,
+        title: SECTION_TITLES[key] || key.toUpperCase(),
+        note: SECTION_NOTES[key] || '',
+        asAt: rates.asAt?.[key] || '',
+        fields,
+        errors: fields.filter((field) => field.issue?.tone === 'error').length,
+        warnings: fields.filter((field) => field.issue?.tone === 'warning').length,
+      };
     })
     .filter((section) => section.fields.length > 0);
 }
@@ -175,6 +192,11 @@ export default function WindowRatesSettings() {
 
   const sections = useMemo(() => buildSections(rates), [rates]);
   const hasChanges = useMemo(() => JSON.stringify(rates) !== JSON.stringify(savedRates), [rates, savedRates]);
+
+  const allIssues = useMemo(() => sections.flatMap((section) => section.fields.map((field) => field.issue).filter(Boolean) as RateIssue[]), [sections]);
+  const errorCount = allIssues.filter((issue) => issue.tone === 'error').length;
+  const warningCount = allIssues.length - errorCount;
+  const issueLabel = (field: RateField) => `${field.group ? `${humanise(field.group)} / ` : ''}${field.label}`;
 
   const query = search.trim().toLowerCase();
   const visibleSections = useMemo(() => {
@@ -250,6 +272,10 @@ export default function WindowRatesSettings() {
     if (!canEdit || !hasChanges) {
       return;
     }
+    if (errorCount > 0) {
+      setStatus({ tone: 'error', message: `Fix the ${errorCount} rate${errorCount === 1 ? '' : 's'} marked in red first. Saved as they are, every quote would come out too low without any warning.` });
+      return;
+    }
     try {
       await saveWindowRates(rates);
       const loaded = await loadWindowRates();
@@ -307,7 +333,7 @@ export default function WindowRatesSettings() {
           <Card title="ACTIONS">
             {canEdit ? (
               <>
-                <ActionButton onClick={hasChanges ? handleSave : undefined}>{hasChanges ? 'Save Changes' : 'No Changes to Save'}</ActionButton>
+                <ActionButton onClick={hasChanges ? handleSave : undefined}>{errorCount ? `Fix ${errorCount} Rate${errorCount === 1 ? '' : 's'} To Save` : hasChanges ? 'Save Changes' : 'No Changes to Save'}</ActionButton>
                 <br />
                 <ActionButton onClick={handleReset}>Reset to Defaults</ActionButton>
               </>
@@ -323,6 +349,55 @@ export default function WindowRatesSettings() {
               </>
             ) : null}
           </Card>
+
+          {allIssues.length ? (
+            <Card title={errorCount ? 'RATES TO FIX' : 'RATES NOT PRICED'}>
+              {errorCount ? (
+                <Text>
+                  <span className="status-error">
+                    {errorCount} rate{errorCount === 1 ? '' : 's'} would make every quote wrong. Saving is blocked until they are fixed.
+                  </span>
+                </Text>
+              ) : null}
+              {warningCount ? (
+                <Text>
+                  <span className="status-warning">
+                    {warningCount} rate{warningCount === 1 ? '' : 's'} not priced. Those lines are charged as nil.
+                  </span>
+                </Text>
+              ) : null}
+              <br />
+              <Table>
+                {allIssues
+                  .slice()
+                  .sort((a, b) => (a.tone === b.tone ? 0 : a.tone === 'error' ? -1 : 1))
+                  .slice(0, 12)
+                  .map((issue) => (
+                    <TableRow key={issue.path}>
+                      <TableColumn style={{ width: '32ch' }}>
+                        {issue.path}
+                        <br />
+                        <span className={issue.tone === 'error' ? 'status-error' : 'status-warning'}>{issue.badge.toUpperCase()}</span>
+                      </TableColumn>
+                      <TableColumn>
+                        <ActionButton
+                          onClick={() => {
+                            setSearch(issue.path.split('.').pop() || '');
+                            setHighlight(issue.path);
+                            if (typeof window !== 'undefined') {
+                              window.setTimeout(() => document.getElementById(`rate-${issue.path}`)?.scrollIntoView({ block: 'center' }), 60);
+                            }
+                          }}
+                        >
+                          Show
+                        </ActionButton>
+                      </TableColumn>
+                    </TableRow>
+                  ))}
+              </Table>
+              {allIssues.length > 12 ? <Text>and {allIssues.length - 12} more.</Text> : null}
+            </Card>
+          ) : null}
 
           <Card title="FIND A RATE">
             <Input label="SEARCH" name="rate_search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="stays, anodising, T5573" />
@@ -370,8 +445,16 @@ export default function WindowRatesSettings() {
         </Card>
       ) : null}
 
+      {query ? null : (
+        <CardDouble title="WHAT THESE TERMS MEAN">
+          <Text>The costing keeps the legacy sheet's words. These are what they mean.</Text>
+          <br />
+          <WindowCostingGlossary groups={['price']} openGroup="price" />
+        </CardDouble>
+      )}
+
       {visibleSections.map((section) => (
-        <CardDouble key={section.key} title={section.title}>
+        <CardDouble key={section.key} title={`${section.title}${section.errors ? ` — ${section.errors} TO FIX` : ''}${section.warnings ? ` — ${section.warnings} NOT PRICED` : ''}`}>
           {section.note ? (
             <>
               <Text>{section.note}</Text>
@@ -394,6 +477,7 @@ export default function WindowRatesSettings() {
             {section.fields.map((field, index) => {
               const showGroup = field.group && (index === 0 || section.fields[index - 1].group !== field.group);
               const isHighlighted = highlight === field.path;
+              const cellClass = field.issue ? (field.issue.tone === 'error' ? 'rate-cell-error' : 'rate-cell-warning') : undefined;
 
               return (
                 <Fragment key={field.path}>
@@ -407,11 +491,17 @@ export default function WindowRatesSettings() {
                     </TableRow>
                   ) : null}
                   <TableRow>
-                    <TableColumn id={`rate-${field.path}`}>
+                    <TableColumn id={`rate-${field.path}`} className={cellClass}>
                       {isHighlighted ? <span className="status-pill status-pill-warning">{field.label}</span> : field.label}
+                      {field.issue ? (
+                        <>
+                          {' '}
+                          <span className={`status-pill ${field.issue.tone === 'error' ? 'status-pill-error' : 'status-pill-warning'}`}>{field.issue.badge}</span>
+                        </>
+                      ) : null}
                     </TableColumn>
-                    <TableColumn>{field.unit}</TableColumn>
-                    <TableColumn>
+                    <TableColumn className={cellClass}>{field.unit}</TableColumn>
+                    <TableColumn className={cellClass}>
                       <Input
                         type="number"
                         name={field.path}
@@ -423,6 +513,13 @@ export default function WindowRatesSettings() {
                       />
                     </TableColumn>
                   </TableRow>
+                  {field.issue ? (
+                    <TableRow>
+                      <TableColumn className={cellClass} colSpan={3}>
+                        <span className={field.issue.tone === 'error' ? 'status-error' : 'status-warning'}>{field.issue.message}</span>
+                      </TableColumn>
+                    </TableRow>
+                  ) : null}
                 </Fragment>
               );
             })}

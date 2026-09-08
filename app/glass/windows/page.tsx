@@ -15,6 +15,7 @@ import Table from '@components/Table';
 import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
+import WindowCostingGlossary from '@components/WindowCostingGlossary';
 import WindowCostingSheet, { WindowCostingSheetWindow } from '@components/WindowCostingSheet';
 
 import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
@@ -448,7 +449,7 @@ export default function WindowCostingPage() {
                   <Text>{formatCurrency(result.subtotal)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
-                  <Text>MARGIN ({formatPercent(result.marginRate)})</Text>
+                  <Text>MARGIN ({formatPercent(result.marginRate)} OF COST)</Text>
                   <Text>{formatCurrency(result.margin)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
@@ -460,7 +461,7 @@ export default function WindowCostingPage() {
                   <Text>{formatCurrency(result.beforeUplift)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
-                  <Text>UPLIFT ({formatPercent(result.upliftRate)})</Text>
+                  <Text>UPLIFT ({formatPercent(result.upliftRate)} OF THE ABOVE)</Text>
                   <Text>{formatCurrency(result.uplift)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
@@ -938,6 +939,12 @@ export default function WindowCostingPage() {
         ) : (
           <Text>No saved costings. Save one to reuse it as a template for a repeat customer.</Text>
         )}
+      </CardDouble>
+
+      <CardDouble title="WHAT THESE TERMS MEAN">
+        <Text>The costing keeps the words the legacy sheet used. These are what they mean, and where each one is applied.</Text>
+        <br />
+        <WindowCostingGlossary openGroup="price" />
       </CardDouble>
 
       <WindowCostingSheet quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} windows={sheetWindows} />
