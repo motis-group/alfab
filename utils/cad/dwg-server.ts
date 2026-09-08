@@ -26,7 +26,7 @@ interface ConverterRun {
 }
 
 // Ubuntu does not package LibreDWG, so the server builds it from source via
-// scripts/install-libredwg.sh (see docs/cad-import.md). Override the binary with CAD_DWG2DXF_PATH.
+// scripts/install-libredwg.sh (see projects/costing/development/specs/cad-import.md). Override the binary with CAD_DWG2DXF_PATH.
 export function dwgConverterPath(): string {
   return (process.env.CAD_DWG2DXF_PATH || '').trim() || 'dwg2dxf';
 }

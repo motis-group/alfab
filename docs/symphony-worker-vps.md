@@ -38,24 +38,24 @@ Per-project instance assets:
 
 ## What the scripts do
 
-[bootstrap-symphony-worker-host.sh](/Users/marzella/Documents/projects/archive/alfab/scripts/bootstrap-symphony-worker-host.sh):
+[bootstrap-symphony-worker-host.sh](../scripts/bootstrap-symphony-worker-host.sh):
 
 - installs Node.js, Codex CLI, `gh`, `mise`, Erlang/Elixir, and Playwright Chromium
 - clones and builds Symphony once
 - logs `codex` and `gh` in for the shared `symphony` user
 - writes the shared instance launcher and `systemd` template
 
-[register-symphony-worker-project.sh](/Users/marzella/Documents/projects/archive/alfab/scripts/register-symphony-worker-project.sh):
+[register-symphony-worker-project.sh](../scripts/register-symphony-worker-project.sh):
 
 - clones or updates one workflow repo
 - writes `/etc/symphony-worker/<instance>.env`
 - enables and starts `symphony-worker@<instance>.service`
 
-[bootstrap-symphony-worker-vps.sh](/Users/marzella/Documents/projects/archive/alfab/scripts/bootstrap-symphony-worker-vps.sh):
+[bootstrap-symphony-worker-vps.sh](../scripts/bootstrap-symphony-worker-vps.sh):
 
 - compatibility wrapper that bootstraps the shared host and then registers one project instance
 
-[provision-do-symphony-worker.sh](/Users/marzella/Documents/projects/archive/alfab/scripts/provision-do-symphony-worker.sh):
+[provision-do-symphony-worker.sh](../scripts/provision-do-symphony-worker.sh):
 
 - creates the DigitalOcean Droplet
 - runs the compatibility bootstrap for the first project instance
