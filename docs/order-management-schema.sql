@@ -260,3 +260,18 @@ create trigger trg_purchase_orders_updated_at
 before update on purchase_orders
 for each row
 execute function set_updated_at();
+
+-- Window costing rates: one JSON document (row id 'default'), edited from /settings/windows and
+-- merged over the code defaults in utils/window-costing-rates.ts.
+create table if not exists window_costing_rates (
+  id text primary key default 'default',
+  rates jsonb not null,
+  updated_by uuid references users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists trg_window_costing_rates_updated_at on window_costing_rates;
+create trigger trg_window_costing_rates_updated_at
+before update on window_costing_rates
+for each row
+execute function set_updated_at();

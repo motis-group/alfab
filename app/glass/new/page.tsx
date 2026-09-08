@@ -39,6 +39,7 @@ import {
   todayISODate,
 } from '@utils/order-management';
 import { QuoteToOrderDraft, buildQuoteDraftLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
+import { WindowCostingInput } from '@utils/window-costing';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
@@ -91,6 +92,7 @@ interface LineDraft {
   pricingSource: PricingSource;
   customerProductId: string;
   adhocSpec: GlassSpecification;
+  windowSpec: WindowCostingInput | null;
   markupPercent: number;
 }
 
@@ -105,6 +107,7 @@ function createLineDraft(partial?: Partial<LineDraft>): LineDraft {
     pricingSource: partial?.pricingSource || 'existing_config',
     customerProductId: partial?.customerProductId || '',
     adhocSpec: partial?.adhocSpec || { ...defaultAdhocSpec },
+    windowSpec: partial?.windowSpec ?? null,
     markupPercent: partial?.markupPercent ?? 20,
   };
 }
@@ -257,6 +260,7 @@ export default function NewPurchaseOrderPage() {
         pricingSource: parsedNotes.pricingSource || 'existing_config',
         customerProductId: parsedNotes.customerProductId || '',
         adhocSpec: parsedNotes.adhocSpecification || { ...defaultAdhocSpec },
+        windowSpec: parsedNotes.windowSpecification || null,
         markupPercent: parsedNotes.markupPercent ?? 20,
       });
     });
@@ -390,12 +394,14 @@ export default function NewPurchaseOrderPage() {
       : [];
     const matchedCustomerId = matchedCustomers.length === 1 ? matchedCustomers[0].id : '';
 
+    const isWindow = quoteDraft.kind === 'window';
     const draftLine = createLineDraft({
-      pricingSource: 'adhoc_calculator',
+      pricingSource: isWindow ? 'window_calculator' : 'adhoc_calculator',
       quantityOrdered: quoteDraft.quantity,
       unitPriceAtOrder: quoteDraft.unitPrice,
       lineNote: buildQuoteDraftLineDescription(quoteDraft),
-      adhocSpec: { ...quoteDraft.spec },
+      adhocSpec: quoteDraft.spec ? { ...quoteDraft.spec } : { ...defaultAdhocSpec },
+      windowSpec: quoteDraft.windowSpec,
       markupPercent: quoteDraft.markupPercent,
     });
 
@@ -468,8 +474,8 @@ export default function NewPurchaseOrderPage() {
         return;
       }
 
-      if (line.pricingSource === 'adhoc_calculator' && !line.lineNote.trim()) {
-        setFormError('Each ad hoc line needs a description.');
+      if ((line.pricingSource === 'adhoc_calculator' || line.pricingSource === 'window_calculator') && !line.lineNote.trim()) {
+        setFormError('Each ad hoc or window costing line needs a description.');
         return;
       }
     }
@@ -521,10 +527,11 @@ export default function NewPurchaseOrderPage() {
         const selectedCustomerProduct = customerProducts.find((entry) => entry.id === line.customerProductId);
         const selectedLabel = selectedCustomerProduct?.name || selectedCustomerProduct?.customer_part_ref || 'Customer Product';
         const isAdhoc = line.pricingSource === 'adhoc_calculator';
+        const isWindow = line.pricingSource === 'window_calculator';
 
         return {
           purchase_order_id: orderId,
-          product_id: isAdhoc ? null : selectedCustomerProduct?.product_id || null,
+          product_id: isAdhoc || isWindow ? null : selectedCustomerProduct?.product_id || null,
           quantity_ordered: Math.max(1, Number(line.quantityOrdered) || 1),
           quantity_fulfilled: Math.max(0, Number(line.quantityFulfilled) || 0),
           unit_price_at_order: Number(line.unitPriceAtOrder) || 0,
@@ -533,8 +540,9 @@ export default function NewPurchaseOrderPage() {
             pricingSource: line.pricingSource,
             customerProductId: line.customerProductId || null,
             adhocSpecification: isAdhoc ? line.adhocSpec : null,
+            windowSpecification: isWindow ? line.windowSpec : null,
             markupPercent: isAdhoc ? line.markupPercent : null,
-            productLabel: isAdhoc ? (line.lineNote.trim() || 'Ad Hoc Item') : selectedLabel,
+            productLabel: isAdhoc ? line.lineNote.trim() || 'Ad Hoc Item' : isWindow ? line.lineNote.trim() || 'Window Costing Item' : selectedLabel,
           }),
         };
       });
@@ -592,12 +600,13 @@ export default function NewPurchaseOrderPage() {
   const lineSummaries = lineDrafts.map((line, index) => {
     const selectedCustomerProduct = customerProducts.find((entry) => entry.id === line.customerProductId);
     const isAdhoc = line.pricingSource === 'adhoc_calculator';
+    const isWindow = line.pricingSource === 'window_calculator';
 
     return {
       id: line.localId,
       index: index + 1,
-      type: isAdhoc ? 'Ad Hoc' : 'Customer Product',
-      item: isAdhoc ? line.lineNote || 'Ad hoc item' : selectedCustomerProduct?.name || selectedCustomerProduct?.customer_part_ref || 'Select product...',
+      type: isWindow ? 'Window Costing' : isAdhoc ? 'Ad Hoc' : 'Customer Product',
+      item: isWindow ? line.lineNote || 'Window costing item' : isAdhoc ? line.lineNote || 'Ad hoc item' : selectedCustomerProduct?.name || selectedCustomerProduct?.customer_part_ref || 'Select product...',
       qty: line.quantityOrdered,
       unitPrice: line.unitPriceAtOrder,
       total: line.quantityOrdered * line.unitPriceAtOrder,
@@ -804,12 +813,13 @@ export default function NewPurchaseOrderPage() {
                 updateLineDraft(activeLine.localId, (current) => ({
                   ...current,
                   pricingSource: nextSource,
-                  customerProductId: nextSource === 'adhoc_calculator' ? '' : current.customerProductId,
+                  customerProductId: nextSource === 'existing_config' ? current.customerProductId : '',
                 }));
               }}
             >
               <option value="existing_config">Customer Product</option>
               <option value="adhoc_calculator">Ad Hoc</option>
+              <option value="window_calculator">Window Costing</option>
             </select>
             <br />
 
@@ -1188,9 +1198,22 @@ export default function NewPurchaseOrderPage() {
               </>
             )}
 
+            {activeLine.pricingSource === 'window_calculator' && (
+              <>
+                <br />
+                <Text>WINDOW COSTING</Text>
+                <Text>
+                  {activeLine.windowSpec
+                    ? 'Priced on the Window Costing page; the unit price above is the costing price.'
+                    : 'No window costing attached. Price the window on the Window Costing page and create the order from there.'}
+                </Text>
+                <ActionButton onClick={() => router.push('/glass/windows')}>Open Window Costing</ActionButton>
+              </>
+            )}
+
             <br />
             <Input
-              label={activeLine.pricingSource === 'adhoc_calculator' ? 'AD HOC DESCRIPTION' : 'LINE NOTES'}
+              label={activeLine.pricingSource === 'adhoc_calculator' ? 'AD HOC DESCRIPTION' : activeLine.pricingSource === 'window_calculator' ? 'WINDOW DESCRIPTION' : 'LINE NOTES'}
               name={`line_notes_${activeLine.localId}`}
               value={activeLine.lineNote}
               onChange={(event) => updateLineDraft(activeLine.localId, (current) => ({ ...current, lineNote: event.target.value }))}

@@ -13,7 +13,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "rm -rf .next && tsc --noEmit",
-    "test": "tsx --test utils/cad/*.test.ts"
+    "test": "tsx --test utils/cad/*.test.ts utils/*.test.ts"
   },
   "dependencies": {
     "next": "^14.0.0",
