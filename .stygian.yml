@@ -1,0 +1,11 @@
+# Identity spine. Joined to the vault client note on client_id.
+# See system/docs/identity-spine.md.
+client_id: alfab
+role: delivery
+engagement: costing
+projects:
+  # One entry per directory under projects/. `shape: phased` means the
+  # discovery/development/delivery split, and resolves to the repository
+  # root — the app is the project.
+  - name: costing
+    shape: phased

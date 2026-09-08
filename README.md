@@ -1,6 +1,15 @@
 ALFAB web application repository.
 
-This repository is now a single Next.js app (not a monorepo).
+This repository is a single Next.js app, not a monorepo. `projects/` holds the
+paper trail, never a second copy of the code.
+
+| Path | Holds |
+| --- | --- |
+| `app/`, `components/`, `common/`, `utils/`, `modules/` | The application. Imports resolve through the aliases in `tsconfig.json` and `next.config.js`. |
+| `scripts/`, `.github/workflows/`, `Makefile` | Provisioning, deploy, and CI. All paths anchor on the repository root. |
+| `docs/` | Schema SQL the deploy applies, the legacy Lotus sheet the costing engine was ported from, and repository-level infrastructure notes. |
+| `projects/<name>/` | One directory per project: `discovery/` (the problem), `development/` (the build), `delivery/` (the client-facing record). Bootstrap by copying `projects/_template/`. |
+| `.stygian.yml` | Identity spine key. Joins this repository to everything else about the client. |
 
 ## Local development
 
@@ -28,16 +37,16 @@ or the GitHub Actions workflows in `.github/workflows`.
 
 For AWS RDS -> VPS migration and VPS cutover steps, see:
 
-- `docs/vps-postgres-cutover.md`
+- `projects/costing/development/ops/vps-postgres-cutover.md`
 
 For the calculator's CAD file import (DXF/DWG/SVG) and the optional DWG converter, see:
 
-- `docs/cad-import.md`
+- `projects/costing/development/specs/cad-import.md`
 
 For the window costing model (legacy Lotus sheet port) and its rates, see:
 
-- `docs/window-costing.md`
+- `projects/costing/development/specs/window-costing.md`
 
 For glass quoting, the minimum charge and where glass rates live, see:
 
-- `docs/glass-quoting.md`
+- `projects/costing/development/specs/glass-quoting.md`

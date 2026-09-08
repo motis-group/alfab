@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 const MAX_UPLOAD_BYTES = 40 * 1024 * 1024;
 
 // DWG is a closed binary format, so conversion is delegated to LibreDWG's dwg2dxf on the server.
-// See docs/cad-import.md for installation notes.
+// See projects/costing/development/specs/cad-import.md for installation notes.
 
 export async function GET() {
   const session = await getAppSession();
