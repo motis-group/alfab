@@ -98,11 +98,15 @@ costing behind them, and three need a check.
 
 | # | Question |
 | --- | --- |
-| 5a.1 | 035 hopper, 1000 series. The sheet never priced it. Its only hopper is the T section sash and frame, which offers a 500 or a 600 series. Is the 035 a third series of that same hopper, or a different window? Either way we need the glazing rubber, the infill, whether the 25 x 25 x 3 T section is still used, the fittings counts, and whether the labour minutes match the existing hopper. |
-| 5a.2 | 023 fixed horse float front, 500 series. The sheet never priced it, and the die is 0.28 kg per metre, the same weight as the weather trim, so it looks like a trim rather than a frame. What is the window made from: frames and metres, glazing rubber, infill, sealant, fittings, trim, and the labour minutes. |
+| 5a.1 | 035 hopper, 1000 series. Answered: no costing has ever existed, and quotes were estimated off another window. It also comes in more than one version, a basic hopper and one with gas struts and special glass. Nick is writing up the make-up of each and will send it. Until then the 035 stays on the menu and cannot be picked. |
+| 5a.2 | 023 fixed horse float front, 500 series. Answered: no costing has ever existed, and quotes were estimated off another window. Nick is writing up the extrusion cost, the materials and the labour. Until then the 023 stays on the menu and cannot be picked. |
 | 5a.3 | You wrote that 015 and 008 are the same. The dies differ: AFB015 Riviera slider is 1.162 kg per metre, AFB008 1000 slider is 1.258. The sheet never prices AFB015, so a Riviera is quoted off the 008 recipe and its frame comes out about 8 percent heavy. Is a Riviera the 008 section with a Riviera mullion, or the 015 die? |
 | 5a.4 | The 750 series appears nowhere in the sheet. The 003 slider is priced with 1000 series track, clip channel and wipe. Does a 750 window use different parts, or is 750 a newer name for the medium slider? |
 | 5a.5 | 5573 is the fixed window in both the 750 and the 500. Both price identically today. Do they differ in anything the sheet never recorded? |
+
+A window with more than one version needs more than one menu entry. The 035 is the first: a basic
+hopper and one with gas struts and special glass are different costings, not one costing with an
+option, unless the difference turns out to be a handful of fittings.
 
 Nick has taken the 8610, the 2482, the T section sash and frame and the 2303/2482 sash and frame off
 the menu: they are not made any more. The recipes and their checks stay, so a costing saved against

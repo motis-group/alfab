@@ -42,7 +42,7 @@ export const WINDOW_SERIES: WindowSeries[] = [
     products: [
       { id: '1000-008', code: '015/008', name: 'Slider', type: 'AFB008', variant: 0, note: 'Priced on the AFB008 section. Confirm the 015 Riviera slider costs the same, since its section is lighter.' },
       { id: '1000-6567', code: '6567', name: 'Fixed', type: 'U6567' },
-      { id: '1000-035', code: '035', name: 'Hopper', type: null, note: 'The legacy sheet priced no 035 hopper. The AFB035 extrusion has a price, but the cost lines and labour minutes for the window do not exist yet.' },
+      { id: '1000-035', code: '035', name: 'Hopper', type: null, note: 'No costing has ever existed for the 035: quotes were estimated off another window. It also comes in more than one version, a basic hopper and one with gas struts and special glass, which will not cost the same. Nick is writing up what goes into each.' },
     ],
   },
   {
@@ -65,7 +65,7 @@ export const WINDOW_SERIES: WindowSeries[] = [
       { id: '500-5573', code: '5573', name: 'Fixed', type: 'T5573' },
       { id: '500-5836', code: '5836', name: 'Slider', type: 'T5836' },
       { id: '500-4633', code: '4633', name: 'Slider, horse float', type: 'T4633', variant: 0 },
-      { id: '500-023', code: '023', name: 'Fixed, horse float front', type: null, note: 'The legacy sheet priced no 023 front. The AFB023 extrusion has a price, but the cost lines and labour minutes for the window do not exist yet.' },
+      { id: '500-023', code: '023', name: 'Fixed, horse float front', type: null, note: 'No costing has ever existed for the 023: quotes were estimated off another window. Nick is writing up the extrusion cost, the materials and the labour.' },
     ],
   },
   {
