@@ -104,6 +104,10 @@ costing behind them, and three need a check.
 | 5a.4 | The 750 series appears nowhere in the sheet. The 003 slider is priced with 1000 series track, clip channel and wipe. Does a 750 window use different parts, or is 750 a newer name for the medium slider? |
 | 5a.5 | 5573 is the fixed window in both the 750 and the 500. Both price identically today. Do they differ in anything the sheet never recorded? |
 
+Nick has taken the 8610, the 2482, the T section sash and frame and the 2303/2482 sash and frame off
+the menu: they are not made any more. The recipes and their checks stay, so a costing saved against
+one still opens. He may want the 2482 caravan back for standard sizes, which is one flag to clear.
+
 ## 6. Built without your input
 
 These are in the app now. None of them changes a price.

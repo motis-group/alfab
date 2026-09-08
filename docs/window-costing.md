@@ -33,14 +33,19 @@ orders a T4633; they order a 650 series slider.
 | 750 | 5573 fixed, 003 slider |
 | 650 | 037 slider |
 | 500 | 5573 fixed, 5836 slider, 4633 slider for horse floats, 023 fixed horse float front (no recipe) |
-| Other | 8610 flat sash, 2482 caravan, T section sash and frame, sash and frame |
+| Other, off the menu | 8610 flat sash, 2482 caravan, T section sash and frame, sash and frame |
 
 One recipe can serve several series: 5573 is the fixed window in both the 750 and the 500. A product
 carries the recipe and, where the recipe has two sections, which section to use, so the 650 slider is
 the AFB037 section of the T4633 recipe and the 500 horse float slider is the T4633 section of it.
 
 A product with no recipe is listed and disabled, so the menu shows the whole range and says which
-parts of it cannot be priced. The costing records the product it was priced as, so a saved costing
+parts of it cannot be priced.
+
+A retired series is off the menu but still priced. Those four windows are not made any more, so the
+picker hides them, while the recipes and their golden checks stay. A costing saved against one still
+opens, and its series reappears in the picker while it is open. Bringing one back means clearing one
+flag in `utils/window-catalogue.ts`. The costing records the product it was priced as, so a saved costing
 and a purchase order line read as a series and a window rather than an extrusion code.
 
 ## Inputs

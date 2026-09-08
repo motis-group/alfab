@@ -47,9 +47,9 @@ import {
   describeWindow,
   switchWindowType,
 } from '@utils/window-costing';
-import { WINDOW_SERIES, WindowProduct, findProduct, productFullName, productLabel, productForInput, seriesOfProduct } from '@utils/window-catalogue';
+import { WINDOW_SERIES, WindowProduct, findProduct, productFullName, productLabel, productForInput, seriesOfProduct, visibleSeries } from '@utils/window-catalogue';
 import { DEFAULT_WINDOW_RATES, GlazingId, WindowRates } from '@utils/window-costing-rates';
-import { loadWindowRates } from '@utils/window-costing-store';
+import { loadWindowRates, loadWindowRatesVersion } from '@utils/window-costing-store';
 import { SavedWindowCosting, deleteWindowCosting, listWindowCostings, saveWindowCosting } from '@utils/window-quote-store';
 
 const navigationItems = APP_NAVIGATION_ITEMS;
@@ -132,9 +132,11 @@ export default function WindowCostingPage() {
   const [quoteNotes, setQuoteNotes] = useState('');
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
   const [savedCostings, setSavedCostings] = useState<SavedWindowCosting[]>([]);
+  const [comparison, setComparison] = useState<{ id: string; quoted: number | null; today: number | null; onOriginal: number | null; stamp: string | null } | null>(null);
 
   const cfg = WINDOW_TYPES[input.type];
   const series = WINDOW_SERIES.find((entry) => entry.id === seriesId) || WINDOW_SERIES[0];
+  const seriesOptions = visibleSeries(series.id);
   const product = productForInput(input);
   const describe = useCallback((forInput: WindowCostingInput) => describeWindow(forInput, rates, productFullName(forInput.productId)), [rates]);
   const result = useMemo(() => costWindow(input, rates), [input, rates]);
@@ -365,6 +367,18 @@ export default function WindowCostingPage() {
     } catch (saveError: any) {
       setStatus({ tone: 'warning', message: saveError?.message || 'Unable to save the costing.' });
     }
+  }
+
+  /** What was quoted, what it costs today, and what it recomputes to on the rates that priced it. */
+  async function compareCosting(costing: SavedWindowCosting) {
+    const original = costing.ratesUpdatedAt ? await loadWindowRatesVersion(costing.ratesUpdatedAt).catch(() => null) : null;
+    setComparison({
+      id: costing.id,
+      quoted: costing.price,
+      today: costWindow(costing.input, rates).price,
+      onOriginal: original ? costWindow(costing.input, original).price : null,
+      stamp: costing.ratesUpdatedAt,
+    });
   }
 
   function loadSavedCosting(costing: SavedWindowCosting) {
@@ -693,7 +707,7 @@ export default function WindowCostingPage() {
       <CardDouble title="WINDOW">
         <Text>SERIES</Text>
         <select value={series.id} onChange={(event) => selectSeries(event.target.value)}>
-          {WINDOW_SERIES.map((entry) => (
+          {seriesOptions.map((entry) => (
             <option key={entry.id} value={entry.id}>
               {entry.name}
             </option>
@@ -978,6 +992,7 @@ export default function WindowCostingPage() {
                 <TableColumn>
                   <RowSpaceBetween>
                     <ActionButton onClick={() => loadSavedCosting(costing)}>Load</ActionButton>
+                    <ActionButton onClick={() => compareCosting(costing)}>Compare</ActionButton>
                     <ActionButton onClick={canSaveCostings ? () => removeSavedCosting(costing) : undefined}>Delete</ActionButton>
                   </RowSpaceBetween>
                 </TableColumn>
@@ -987,6 +1002,32 @@ export default function WindowCostingPage() {
         ) : (
           <Text>No saved costings. Save one to reuse it as a template for a repeat customer.</Text>
         )}
+
+        {comparison ? (
+          <>
+            <br />
+            <Text>
+              <strong>{savedCostings.find((costing) => costing.id === comparison.id)?.name}</strong>
+            </Text>
+            <RowSpaceBetween>
+              <Text>QUOTED</Text>
+              <Text>{formatCurrency(comparison.quoted)}</Text>
+            </RowSpaceBetween>
+            <RowSpaceBetween>
+              <Text>ON TODAY&apos;S RATES</Text>
+              <Text>{formatCurrency(comparison.today)}</Text>
+            </RowSpaceBetween>
+            <RowSpaceBetween>
+              <Text>ON THE RATES THAT PRICED IT</Text>
+              <Text>{comparison.onOriginal == null ? 'those rates are not kept' : formatCurrency(comparison.onOriginal)}</Text>
+            </RowSpaceBetween>
+            {comparison.onOriginal != null && comparison.quoted != null && Math.abs(comparison.onOriginal - comparison.quoted) > 0.01 ? (
+              <Text>
+                <span className="status-warning">The recalculation does not match what was quoted, so the costing itself changed, not just the rates.</span>
+              </Text>
+            ) : null}
+          </>
+        ) : null}
       </CardDouble>
 
       <CardDouble title="WHAT THESE TERMS MEAN">

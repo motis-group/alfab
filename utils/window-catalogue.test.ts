@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { ALL_PRODUCTS, WINDOW_SERIES, findProduct, productForInput, productFullName, seriesOfProduct } from './window-catalogue';
+import { ALL_PRODUCTS, WINDOW_SERIES, findProduct, productForInput, productFullName, seriesOfProduct, visibleSeries } from './window-catalogue';
 import { DEFAULT_WINDOW_RATES } from './window-costing-rates';
 import { WINDOW_TYPES, WINDOW_TYPE_ORDER, costWindow, createWindowInput } from './window-costing';
 
@@ -24,10 +24,34 @@ test('product and series ids are unique', () => {
   assert.equal(new Set(WINDOW_SERIES.map((s) => s.id)).size, WINDOW_SERIES.length);
 });
 
-test('every costable window type is reachable from the menu', () => {
-  const reachable = new Set(ALL_PRODUCTS.filter((p) => p.type).map((p) => p.type));
+test('every costable window type is named somewhere, on the menu or retired', () => {
+  const named = new Set(ALL_PRODUCTS.filter((p) => p.type).map((p) => p.type));
   for (const type of WINDOW_TYPE_ORDER) {
-    assert.ok(reachable.has(type), `${type} can be priced but is not on the menu`);
+    assert.ok(named.has(type), `${type} can be priced but no product names it`);
+  }
+});
+
+test('the picker offers only the series still in use', () => {
+  assert.deepEqual(
+    visibleSeries().map((series) => series.id),
+    ['1000', '750', '650', '500'],
+    'a retired series is off the menu'
+  );
+});
+
+test('a retired series comes back while a costing is using it', () => {
+  assert.ok(
+    visibleSeries('other').some((series) => series.id === 'other'),
+    'a costing saved against a retired window must still show its series'
+  );
+});
+
+test('a retired window still prices, so an old costing still opens', () => {
+  for (const productId of ['other-8610', 'other-2482', 'other-tsf', 'other-sf']) {
+    const product = findProduct(productId);
+    assert.ok(product?.type, `${productId} must keep its recipe`);
+    const input = createWindowInput(product!.type!, { glazingId: 'ap6_clear' });
+    assert.ok((costWindow(input, DEFAULT_WINDOW_RATES).price ?? 0) > 0, `${productId} must still price`);
   }
 });
 

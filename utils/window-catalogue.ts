@@ -28,6 +28,11 @@ export interface WindowSeries {
   id: string;
   name: string;
   products: WindowProduct[];
+  /**
+   * Off the menu, but still priced. The recipes stay in the engine so a costing saved against one
+   * still opens, and so bringing a window back is a one-line change here.
+   */
+  retired?: boolean;
 }
 
 export const WINDOW_SERIES: WindowSeries[] = [
@@ -64,8 +69,11 @@ export const WINDOW_SERIES: WindowSeries[] = [
     ],
   },
   {
+    // Nick: "we don't really use 8610, 2482, the T section sash and frame and the 2303/2482 sash and
+    // frame". Kept and priced, off the menu. The 2482 caravan may come back for standard sizes.
     id: 'other',
-    name: 'Other windows',
+    name: 'Other windows (off the menu)',
+    retired: true,
     products: [
       { id: 'other-8610', code: '8610', name: 'Flat sash', type: 'T8610' },
       { id: 'other-2482', code: '2482', name: 'Caravan', type: 'T2482' },
@@ -76,6 +84,11 @@ export const WINDOW_SERIES: WindowSeries[] = [
 ];
 
 export const ALL_PRODUCTS: WindowProduct[] = WINDOW_SERIES.flatMap((series) => series.products);
+
+/** The series the picker offers. A retired series appears only while a costing is using it. */
+export function visibleSeries(currentSeriesId?: string | null): WindowSeries[] {
+  return WINDOW_SERIES.filter((series) => !series.retired || series.id === currentSeriesId);
+}
 
 export function findSeries(seriesId: string): WindowSeries | null {
   return WINDOW_SERIES.find((series) => series.id === seriesId) || null;
