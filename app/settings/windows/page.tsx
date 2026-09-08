@@ -300,7 +300,7 @@ export default function WindowRatesSettings() {
       return;
     }
     try {
-      await saveWindowRates(rates);
+      await saveWindowRates(rates, updatedAt);
       const loaded = await loadWindowRates();
       setRates(loaded.rates);
       setSavedRates(loaded.rates);
@@ -315,6 +315,9 @@ export default function WindowRatesSettings() {
 
   async function handleReset() {
     if (!canEdit) {
+      return;
+    }
+    if (source === 'saved' && !window.confirm('Reset throws away the whole company price list and goes back to the numbers the legacy sheet shipped with. The list being dropped is kept as an archive row, but every price typed since then is gone from the editor. Reset?')) {
       return;
     }
     try {

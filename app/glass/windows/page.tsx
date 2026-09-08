@@ -128,11 +128,12 @@ export default function WindowCostingPage() {
   const [quoteName, setQuoteName] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [quoteDate, setQuoteDate] = useState(todayISODate());
-  const [quantity, setQuantity] = useState(1);
   const [quoteNotes, setQuoteNotes] = useState('');
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
   const [savedCostings, setSavedCostings] = useState<SavedWindowCosting[]>([]);
-  const [sheetAudience, setSheetAudience] = useState<'internal' | 'customer'>('internal');
+  // Customer by default, so a browser Cmd+P prints the safe document. The internal button raises it
+  // for one print and `afterprint` puts it back.
+  const [sheetAudience, setSheetAudience] = useState<'internal' | 'customer'>('customer');
   const [comparison, setComparison] = useState<{ id: string; quoted: number | null; today: number | null; onOriginal: number | null; stamp: string | null } | null>(null);
 
   const cfg = WINDOW_TYPES[input.type];
@@ -144,7 +145,9 @@ export default function WindowCostingPage() {
   const batches = useMemo(() => (result.errors.length ? [] : costWindowBatches(input, rates, BATCH_SIZES)), [input, rates, result.errors.length]);
   const glazingOption = input.glazingId ? rates.glass.options[input.glazingId] : null;
   const derivedGlazingQty = Boolean(cfg.glazingQty);
-  const orderQuantity = Math.max(1, quantity);
+  // How many windows the batch makes. The costing already divides setup minutes across it, so the
+  // order line and the price come from the same number.
+  const orderQuantity = Math.max(1, Math.floor(input.qtyToSize) + Math.floor(input.qtyShaped));
   const currentTotal = result.price == null ? null : result.price * orderQuantity;
   const extrasList = [result.extras.trims, result.extras.blackAnodising, result.extras.secondGlazing].filter(Boolean) as CostExtra[];
   const ratesLabel = ratesSource === 'saved' ? formatStamp(ratesUpdatedAt) : 'code defaults';
@@ -201,6 +204,13 @@ export default function WindowCostingPage() {
       .filter(Boolean)
       .join('\n');
   }, [currentTotal, customerName, extrasList, input, orderQuantity, quoteDate, quoteLines, quoteName, quoteNotes, quoteTotal, rates, ratesLabel, result]);
+
+  // Put the sheet back to the customer copy once a print finishes, so the next Cmd+P is safe.
+  useEffect(() => {
+    const restore = () => setSheetAudience('customer');
+    window.addEventListener('afterprint', restore);
+    return () => window.removeEventListener('afterprint', restore);
+  }, []);
 
   const refreshSavedCostings = useCallback(async () => {
     try {
@@ -284,7 +294,6 @@ export default function WindowCostingPage() {
     setQuoteName('');
     setCustomerName('');
     setQuoteDate(todayISODate());
-    setQuantity(1);
     setQuoteNotes('');
     setQuoteItems([]);
     setStatus(null);
@@ -319,7 +328,6 @@ export default function WindowCostingPage() {
     }
     setMetreDrafts({});
     setWindowName(item.name);
-    setQuantity(item.quantity);
     setQuoteItems((prev) => prev.filter((entry) => entry.localId !== localId));
     setStatus({ tone: 'success', message: 'Loaded back into the form. Add it to the quote when you are done.' });
   }
@@ -699,31 +707,11 @@ export default function WindowCostingPage() {
         </>
       }
       actionItems={[
-        {
-          hotkey: '⌘+R',
-          body: 'Reset',
-          onClick: resetCalculator,
-        },
-        {
-          hotkey: '⌘+D',
-          body: 'Add To Quote',
-          onClick: addToQuote,
-        },
-        {
-          hotkey: '⌘+P',
-          body: 'Print',
-          onClick: () => printSheet('customer'),
-        },
-        {
-          hotkey: '⌘+C',
-          body: 'Copy Prices',
-          onClick: copySummary,
-        },
-        {
-          hotkey: '⌘+N',
-          body: 'New PO',
-          onClick: handleCreatePurchaseOrder,
-        },
+        { body: 'Reset', onClick: resetCalculator },
+        { body: 'Add To Quote', onClick: addToQuote },
+        { body: 'Print For Customer', onClick: () => printSheet('customer') },
+        { body: 'Copy Prices', onClick: copySummary },
+        { body: 'New PO', onClick: handleCreatePurchaseOrder },
       ]}
     >
       {error && (
@@ -772,6 +760,9 @@ export default function WindowCostingPage() {
         <Input label="LENGTH (MM)" type="number" name="window_length" value={String(input.lengthMm)} onChange={(event) => updateNumber('lengthMm', event.target.value)} min="0" />
         <Input label="QTY MADE TO SIZE (SQUARE)" type="number" name="window_qty_to_size" value={String(input.qtyToSize)} onChange={(event) => updateNumber('qtyToSize', event.target.value)} min="0" />
         <Input label="QTY SHAPED (OFF SQUARE)" type="number" name="window_qty_shaped" value={String(input.qtyShaped)} onChange={(event) => updateNumber('qtyShaped', event.target.value)} min="0" />
+        <Text style={{ opacity: 0.7 }}>
+          These two are the order: {orderQuantity} window{orderQuantity === 1 ? '' : 's'}. Setup minutes divide across them, so the price for each falls as the run grows.
+        </Text>
 
         {cfg.pairsSupported ? (
           <label>
@@ -962,7 +953,6 @@ export default function WindowCostingPage() {
         <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} />
         <Input label="CUSTOMER" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />
         <Input label="QUOTE DATE" type="date" name="quote_date" value={quoteDate} onChange={(event) => setQuoteDate(event.target.value)} />
-        <Input label="ORDER QUANTITY" type="number" name="quote_quantity" value={String(quantity)} onChange={(event) => setQuantity(Math.max(1, numberOrFallback(event.target.value, 1)))} min="1" />
         <Input label="NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
       </CardDouble>
 

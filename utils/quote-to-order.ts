@@ -1,4 +1,4 @@
-import { GlassSpecification } from '@utils/calculations';
+import { GlassSpecification, describeGlassSpecification } from '@utils/calculations';
 import { WindowCostingInput } from '@utils/window-costing';
 
 const QUOTE_TO_ORDER_STORAGE_KEY = 'adhocQuoteToPurchaseOrderDraft';
@@ -157,10 +157,9 @@ export function buildQuoteDraftLineDescription(draft: Pick<QuoteToOrderDraft, 'q
     return title || 'Ad Hoc Calculator Item';
   }
 
-  const specSummary = `${draft.spec.width} x ${draft.spec.height} mm | ${draft.spec.thickness}mm ${draft.spec.glassType} | ${draft.spec.shape}`;
   const cadSummary = draft.spec.cadOutline ? `CAD: ${draft.spec.cadOutline.fileName}` : '';
 
-  return [title, specSummary, cadSummary].filter(Boolean).join(' | ') || 'Ad Hoc Calculator Item';
+  return [title, describeGlassSpecification(draft.spec), cadSummary].filter(Boolean).join(' | ') || 'Ad Hoc Calculator Item';
 }
 
 /** Line description for a window costing: the quote name, then the window's own summary. */

@@ -107,8 +107,16 @@ function toNumber(value: unknown): number | null {
   return null;
 }
 
+/** Today where the user is. `toISOString` would give the UTC day, which is yesterday all morning. */
 export function todayISODate(): string {
-  return new Date().toISOString().split('T')[0];
+  return localISODate(new Date());
+}
+
+/** A calendar date in the local timezone, as `YYYY-MM-DD`. */
+export function localISODate(date: Date): string {
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
 }
 
 export function formatCurrency(value: number | null | undefined): string {

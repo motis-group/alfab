@@ -128,7 +128,7 @@ export function PricingProvider({ children }: PricingProviderProps) {
   }, []);
 
   const updatePricingData = async (data: PricingData) => {
-    await saveGlassRates(data);
+    await saveGlassRates(data, updatedAt);
     const loaded = await loadGlassRates();
     setPricingData(loaded.rates);
     setSource(loaded.source);

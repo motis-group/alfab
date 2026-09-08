@@ -49,11 +49,19 @@ export async function loadWindowRatesVersion(updatedAt: string): Promise<WindowR
 }
 
 /** Save the rates, keeping the replaced document as an archive row. */
-export async function saveWindowRates(rates: WindowRates): Promise<void> {
+export async function saveWindowRates(rates: WindowRates, expectedUpdatedAt?: string | null): Promise<void> {
   const db = createClient();
   const { data: current, error: readError } = await db.from(TABLE).select('rates, updated_at').eq('id', CURRENT_ID).maybeSingle();
   if (readError) {
     throw new Error(readError.message);
+  }
+
+  // Somebody else saved while this page was open. Overwriting would drop their prices with nothing
+  // to show it happened.
+  // ponytail: read-then-compare, not a conditional update. The gateway takes only eq filters and a
+  // shop this size does not have two people in the rates editor at the same second.
+  if (expectedUpdatedAt !== undefined && (current?.updated_at || null) !== (expectedUpdatedAt || null)) {
+    throw new Error('These rates were saved by someone else while this page was open. Reload to see their changes, then make yours again.');
   }
 
   if (current?.updated_at && current.rates) {
@@ -78,9 +86,22 @@ export async function saveWindowRates(rates: WindowRates): Promise<void> {
   }
 }
 
-/** Drop the saved rates and go back to the code defaults. Archive rows stay. */
+/** Go back to the code defaults, keeping the document being dropped as an archive row. */
 export async function resetWindowRates(): Promise<void> {
   const db = createClient();
+  const { data: current, error: readError } = await db.from(TABLE).select('rates, updated_at').eq('id', CURRENT_ID).maybeSingle();
+  if (readError) {
+    throw new Error(readError.message);
+  }
+
+  if (current?.updated_at && current.rates) {
+    const { error: archiveError } = await db.from(TABLE).insert({ id: versionId(current.updated_at), rates: current.rates });
+    // A duplicate means this version is already archived, which is fine. Anything else is not.
+    if (archiveError && !archiveError.message.includes('duplicate key')) {
+      throw new Error(archiveError.message);
+    }
+  }
+
   const { error } = await db.from(TABLE).delete().eq('id', CURRENT_ID);
   if (error) {
     throw new Error(error.message);

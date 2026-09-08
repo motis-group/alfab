@@ -205,3 +205,18 @@ test('a rate entered for a source gap prices the line', () => {
   const asExtra = costWindow(createWindowInput('T5573', { finish: 'blackExtra' }), withBlack);
   assert.ok((asExtra.extras.blackAnodising?.total ?? 0) > 0, 'black as an extra is priced');
 });
+
+test('a batch shares its setup minutes, so ten cost less than ten singles', () => {
+  const single = costWindow(createWindowInput('T5573', { qtyToSize: 1 }), rates);
+  const batch = costWindow(createWindowInput('T5573', { qtyToSize: 10 }), rates);
+
+  assert.ok(single.price != null && batch.price != null, 'both price');
+  assert.ok((batch.price as number) < (single.price as number), 'the price for each falls as the run grows');
+
+  // The order line multiplies the batch price by the batch, never the single price. Getting this
+  // backwards quoted a run of ten at ten times the one-off price.
+  const runOfTen = (batch.price as number) * 10;
+  const tenSingles = (single.price as number) * 10;
+  assert.ok(runOfTen < tenSingles, 'a run of ten is dearer priced one at a time');
+  near(batch.minutes.window, 20 / 10 + 40 + 1.0 * 30, 'setup divided across the batch');
+});

@@ -55,6 +55,24 @@ export interface GlassSpecification {
   cadOutline?: CadOutline | null;
 }
 
+/**
+ * The piece in words: what the floor has to cut, and what a line on a quote or a works order says.
+ * Everything a fabricator acts on, nothing about price.
+ */
+export function describeGlassSpecification(spec: GlassSpecification): string {
+  const parts = [
+    `${spec.width} x ${spec.height} mm`,
+    `${spec.thickness} mm ${spec.glassType}`,
+    spec.shape === 'RECTANGLE' ? '' : spec.shape.toLowerCase(),
+    spec.edgework.toLowerCase(),
+    spec.radiusCorners ? 'radius corners' : '',
+    spec.ceramicBand ? 'ceramic band' : '',
+    spec.holes && spec.numHoles > 0 ? `${spec.numHoles} hole${spec.numHoles === 1 ? '' : 's'}` : '',
+    spec.cadOutline ? 'cut to the imported outline' : '',
+  ];
+  return parts.filter(Boolean).join(' | ');
+}
+
 // Glass colors/types mapped to their RGB values for UI
 export const glassTypeToRGB: Record<GlassType, string> = {
   Clear: 'rgba(200, 200, 255, 0.2)',

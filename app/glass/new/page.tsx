@@ -19,7 +19,7 @@ import Text from '@components/Text';
 
 import { usePricing } from '@components/PricingProvider';
 import JobSheet from '@components/JobSheet';
-import { CostBreakdown, GlassSpecification, calculateCost, getAvailableGlassTypes, getAvailableThicknesses } from '@utils/calculations';
+import { CostBreakdown, GlassSpecification, calculateCost, describeGlassSpecification, getAvailableGlassTypes, getAvailableThicknesses } from '@utils/calculations';
 import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import {
   Customer,
@@ -39,7 +39,10 @@ import {
   todayISODate,
 } from '@utils/order-management';
 import { QuoteToOrderDraft, buildQuoteDraftLineDescription, buildWindowLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
-import { WindowCostingInput } from '@utils/window-costing';
+import { WindowCostingInput, describeWindow } from '@utils/window-costing';
+import { productFullName } from '@utils/window-catalogue';
+import { WindowRates, mergeWindowRates } from '@utils/window-costing-rates';
+import { loadWindowRates } from '@utils/window-costing-store';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
@@ -134,6 +137,8 @@ export default function NewPurchaseOrderPage() {
   const [role, setRole] = useState<UserRole>('readonly');
 
   const [customers, setCustomers] = useState<Customer[]>([]);
+  // Only to spell a window line out on the job sheet. Prices on the line are the ones already saved.
+  const [windowRates, setWindowRates] = useState<WindowRates>(() => mergeWindowRates(null));
   const [customerProducts, setCustomerProducts] = useState<CustomerProduct[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -190,6 +195,7 @@ export default function NewPurchaseOrderPage() {
 
     setCustomers(loadedCustomers);
     setCustomerProducts(loadedCustomerProducts);
+    setWindowRates((await loadWindowRates()).rates);
 
     return {
       customers: loadedCustomers,
@@ -476,6 +482,12 @@ export default function NewPurchaseOrderPage() {
       }
     }
 
+    // A line at nothing gets made, delivered and invoiced short, and no screen ever says so.
+    const freeLines = lineDrafts.filter((line) => !(Number(line.unitPriceAtOrder) > 0));
+    if (freeLines.length && !window.confirm(`${freeLines.length} line${freeLines.length === 1 ? ' has' : 's have'} no price. Saved like this the order is short by whatever ${freeLines.length === 1 ? 'it is' : 'they are'} worth. Save anyway?`)) {
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -614,6 +626,11 @@ export default function NewPurchaseOrderPage() {
     }
   }
 
+  const customerProductSpec = (product?: CustomerProduct) => {
+    const spec = product ? parseCustomerProductNotes(product.notes).savedSpecification : null;
+    return spec ? describeGlassSpecification(spec) : '';
+  };
+
   const lineSummaries = lineDrafts.map((line, index) => {
     const selectedCustomerProduct = customerProducts.find((entry) => entry.id === line.customerProductId);
     const isAdhoc = line.pricingSource === 'adhoc_calculator';
@@ -627,6 +644,13 @@ export default function NewPurchaseOrderPage() {
       qty: line.quantityOrdered,
       unitPrice: line.unitPriceAtOrder,
       total: line.quantityOrdered * line.unitPriceAtOrder,
+      // What the floor has to make. Without it the job sheet says "Ad hoc item" and nothing else.
+      spec: isWindow && line.windowSpec
+        ? describeWindow(line.windowSpec, windowRates, productFullName(line.windowSpec.productId ?? null))
+        : isAdhoc && line.adhocSpec
+          ? describeGlassSpecification(line.adhocSpec)
+          : customerProductSpec(selectedCustomerProduct),
+      note: line.lineNote,
     };
   });
 
@@ -1265,7 +1289,8 @@ export default function NewPurchaseOrderPage() {
             index: summary.index,
             description: summary.item,
             quantity: summary.qty,
-            notes: '',
+            // A window line's description is already the specification; only add what it does not say.
+            notes: [summary.spec, summary.note].filter((part) => part && part !== summary.item).join(' — '),
           }))}
         />
       ) : null}

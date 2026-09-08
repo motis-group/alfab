@@ -1,6 +1,6 @@
 'use client';
 
-import { Customer, PurchaseOrder, parseLineNotes, statusLabel } from '@utils/order-management';
+import { Customer, PurchaseOrder, statusLabel } from '@utils/order-management';
 
 export interface JobSheetLine {
   id: string;
@@ -78,18 +78,4 @@ export default function JobSheet({ order, customer, lines }: JobSheetProps) {
       </article>
     </section>
   );
-}
-
-/** Turn stored order lines into what the floor needs to read. */
-export function toJobSheetLines(lines: Array<{ id?: string; quantity_ordered?: number | null; line_notes?: string | null }>): JobSheetLine[] {
-  return lines.map((line, index) => {
-    const parsed = parseLineNotes(line.line_notes);
-    return {
-      id: line.id || `line-${index}`,
-      index: index + 1,
-      description: parsed.productLabel || parsed.note || 'Item',
-      quantity: Number(line.quantity_ordered) || 1,
-      notes: parsed.productLabel && parsed.note && parsed.note !== parsed.productLabel ? parsed.note : '',
-    };
-  });
 }

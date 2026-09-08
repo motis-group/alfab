@@ -83,6 +83,9 @@ export default function PricingSettings() {
   };
 
   const handleReset = async () => {
+    if (source === 'saved' && !window.confirm('Reset throws away the whole company glass price list and goes back to the code defaults. The list being dropped is kept as an archive row, but every price typed since then is gone from the editor. Reset?')) {
+      return;
+    }
     try {
       await resetToDefaults();
       setHasChanges(false);
