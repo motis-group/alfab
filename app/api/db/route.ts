@@ -59,6 +59,7 @@ const TABLE_COLUMNS: Record<string, Set<string>> = {
   ]),
   billing_events: new Set(['id', 'stripe_event_id', 'event_type', 'account_key', 'payload', 'processed_at']),
   window_costing_rates: new Set(['id', 'rates', 'updated_by', 'updated_at']),
+  glass_costing_rates: new Set(['id', 'rates', 'updated_by', 'updated_at']),
 };
 
 const TABLE_PERMISSIONS: Record<string, { read: AppPermission; write: AppPermission }> = {
@@ -99,6 +100,10 @@ const TABLE_PERMISSIONS: Record<string, { read: AppPermission; write: AppPermiss
     write: 'billing:write',
   },
   window_costing_rates: {
+    read: 'pricing:read',
+    write: 'pricing:write',
+  },
+  glass_costing_rates: {
     read: 'pricing:read',
     write: 'pricing:write',
   },
@@ -177,8 +182,9 @@ function normalizeRows(input: Record<string, unknown> | Array<Record<string, unk
   return Array.isArray(input) ? input : [input];
 }
 
-function requireWritableColumns(table: string, row: Record<string, unknown>): string[] {
-  const keys = Object.keys(row).filter((key) => key !== 'id');
+function requireWritableColumns(table: string, row: Record<string, unknown>, action: Operation): string[] {
+  const keepId = action === 'insert' && NATURAL_KEY_TABLES.has(table);
+  const keys = Object.keys(row).filter((key) => key !== 'id' || keepId);
   if (!keys.length) {
     throw new Error(`No writable values supplied for table "${table}"`);
   }
@@ -204,9 +210,14 @@ function requiredPermission(table: string, action: Operation): AppPermission {
   return action === 'select' ? permissionSet.read : permissionSet.write;
 }
 
+// Tables keyed by a text id the client chooses, rather than a generated uuid. Inserts into these
+// may set "id"; everywhere else it stays server-generated.
+const NATURAL_KEY_TABLES = new Set(['window_costing_rates', 'glass_costing_rates']);
+
 const AUDITED_TABLES: Record<string, { createdBy: boolean }> = {
   purchase_orders: { createdBy: true },
   window_costing_rates: { createdBy: false },
+  glass_costing_rates: { createdBy: false },
 };
 
 function applyServerAuditColumns(table: string, action: Operation, rows: Array<Record<string, unknown>>, sessionUserId: string): void {
@@ -283,7 +294,7 @@ export async function POST(request: Request) {
 
       applyServerAuditColumns(table, action, rows, session.userId);
 
-      const columns = requireWritableColumns(table, rows[0]);
+      const columns = requireWritableColumns(table, rows[0], action);
       const columnSql = columns.map((column) => requireAllowedColumn(table, column)).join(', ');
       const valuesSql = rows
         .map((row) => {
@@ -313,7 +324,7 @@ export async function POST(request: Request) {
       applyServerAuditColumns(table, action, rows, session.userId);
 
       const values = rows[0];
-      const columns = requireWritableColumns(table, values);
+      const columns = requireWritableColumns(table, values, action);
       const setSql = columns
         .map((column) => {
           params.push(toDbValue(values[column]));

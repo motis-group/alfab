@@ -87,14 +87,24 @@ export interface GlassProcessing {
   loaded: boolean;
 }
 
+/** Rate keys the recipes may reference. A rename now fails the typecheck instead of unpricing a line. */
+export type ExtrusionCode = keyof typeof DEFAULT_EXTRUSIONS;
+export type PerMetreKey = keyof typeof DEFAULT_PER_METRE;
+export type EachKey = keyof typeof DEFAULT_EACH;
+export type AnodCode = keyof typeof DEFAULT_ANOD_FACTOR;
+export type TrimCode = keyof typeof DEFAULT_TRIM_ETCH;
+export type TrimBlackCode = keyof typeof DEFAULT_TRIM_BLACK;
+
 export interface WindowRates {
   state: 'VIC';
+  /** When each section of rates was last known good, keyed by the section it labels. */
+  asAt: Record<string, string>;
   labourPerHour: number;
   suppliers: {
     capral: { perKg: number; loading: number };
     james: { perKg: number; loading: number; hollowSurcharge: number };
   };
-  extrusions: Record<string, ExtrusionRate>;
+  extrusions: Record<ExtrusionCode, ExtrusionRate>;
   anodising: {
     /** Collins etch (20um) frames, $/sqm basis; per-metre rate = etchPerSqm * factor[code]. */
     etchPerSqm: number;
@@ -102,13 +112,13 @@ export interface WindowRates {
     etchMin: number;
     blackMin: number;
     powderPerM: number;
-    factor: Record<string, number>;
+    factor: Record<AnodCode, number>;
     /** $/m etch anodising already applied to trim / flat sections. */
-    trimEtch: Record<string, number>;
-    trimBlack: Record<string, number>;
+    trimEtch: Record<TrimCode, number>;
+    trimBlack: Record<TrimBlackCode, number>;
   };
-  perMetre: Record<string, number>;
-  each: Record<string, number | null>;
+  perMetre: Record<PerMetreKey, number>;
+  each: Record<EachKey, number | null>;
   glass: {
     loading: number;
     loadingMws: number;
@@ -120,14 +130,7 @@ export interface WindowRates {
   margins: Record<WindowTypeId, { margin: number; marginMws: number | null; uplift: number }>;
 }
 
-export const DEFAULT_WINDOW_RATES: WindowRates = {
-  state: 'VIC',
-  labourPerHour: 85,
-  suppliers: {
-    capral: { perKg: 12, loading: 0.2 },
-    james: { perKg: 8, loading: 0.333, hollowSurcharge: 1 },
-  },
-  extrusions: {
+const DEFAULT_EXTRUSIONS = {
     T5573: { kgPerM: 0.441, offcut: 0.2, supplier: 'capral' },
     T5836: { kgPerM: 0.548, offcut: 0.2, supplier: 'capral' },
     T4633: { kgPerM: 0.477, offcut: 0.2, supplier: 'capral' },
@@ -147,29 +150,9 @@ export const DEFAULT_WINDOW_RATES: WindowRates = {
     tSection25: { barPrice: 16.7, barLength: 6.5, offcut: 0.5 },
     bar40x10: { barPrice: 29.17, barLength: 4, offcut: 0.25 },
     bar25x12: { barPrice: 21.9, barLength: 4, offcut: 0.1 },
-  },
-  anodising: {
-    etchPerSqm: 40,
-    blackPerSqm: null,
-    etchMin: 10,
-    blackMin: 10.44,
-    powderPerM: 7,
-    factor: {
-      L25x3: 0.1,
-      T2303: 0.12,
-      T2482: 0.14,
-      T4633: 0.162,
-      T5573: 0.159,
-      T5836: 0.176,
-      T8610: 0.132,
-      U6567: 0.217,
-      AFB008: 0.367,
-      AFB003: 0.301,
-    },
-    trimEtch: { T5574: 1.8, U6566: 1.725, flat40x3: 1.8, flat80x3: 3.1125 },
-    trimBlack: { flat40x3: 3.0, flat80x3: 5.1875 },
-  },
-  perMetre: {
+  } satisfies Record<string, ExtrusionRate>;
+
+const DEFAULT_PER_METRE = {
     caravan1146: 5,
     rubber1206: 6,
     infill1249: 2.5,
@@ -192,8 +175,9 @@ export const DEFAULT_WINDOW_RATES: WindowRates = {
     wipeDouble: 26,
     wipe1000: 30,
     felt: 3,
-  },
-  each: {
+  };
+
+const DEFAULT_EACH = {
     sTapper: 0.088,
     mThread: 0.165,
     nyloc: 0.231,
@@ -210,7 +194,58 @@ export const DEFAULT_WINDOW_RATES: WindowRates = {
     keeperSaddle: null,
     mullionFit1000: 25,
     mullionFitRivi: 50,
+  };
+
+const DEFAULT_ANOD_FACTOR = {
+      L25x3: 0.1,
+      T2303: 0.12,
+      T2482: 0.14,
+      T4633: 0.162,
+      T5573: 0.159,
+      T5836: 0.176,
+      T8610: 0.132,
+      U6567: 0.217,
+      AFB008: 0.367,
+      AFB003: 0.301,
+    };
+
+const DEFAULT_TRIM_ETCH = { T5574: 1.8, U6566: 1.725, flat40x3: 1.8, flat80x3: 3.1125 };
+
+const DEFAULT_TRIM_BLACK = { flat40x3: 3.0, flat80x3: 5.1875 };
+
+export const DEFAULT_WINDOW_RATES: WindowRates = {
+  state: 'VIC',
+  // Dates the legacy sheet recorded against each price list. "unknown" means the sheet gave none.
+  asAt: {
+    labourPerHour: 'Oct 2021',
+    suppliers: '2021',
+    extrusions: '2021',
+    anodising: 'Apr 2010 (etch), Mar 2015 (powder coat)',
+    perMetre: 'Sept 2021 (rubber), July 2007 (plastic)',
+    each: 'July 2007',
+    glass: 'unknown',
+    packingPerSqm: 'unknown',
+    labour: 'Oct 2021',
+    margins: 'unknown',
   },
+  labourPerHour: 85,
+  suppliers: {
+    capral: { perKg: 12, loading: 0.2 },
+    james: { perKg: 8, loading: 0.333, hollowSurcharge: 1 },
+  },
+  extrusions: DEFAULT_EXTRUSIONS,
+  anodising: {
+    etchPerSqm: 40,
+    blackPerSqm: null,
+    etchMin: 10,
+    blackMin: 10.44,
+    powderPerM: 7,
+    factor: DEFAULT_ANOD_FACTOR,
+    trimEtch: DEFAULT_TRIM_ETCH,
+    trimBlack: DEFAULT_TRIM_BLACK,
+  },
+  perMetre: DEFAULT_PER_METRE,
+  each: DEFAULT_EACH,
   glass: {
     loading: 0.2,
     loadingMws: 0.15,
@@ -342,7 +377,16 @@ function mergeValue(base: unknown, saved: unknown): unknown {
     return merged;
   }
   if (typeof base === 'number' || base === null) {
-    return typeof saved === 'number' && Number.isFinite(saved) ? saved : saved === null ? null : base;
+    if (typeof saved === 'number' && Number.isFinite(saved)) {
+      return saved;
+    }
+    // A blank is only kept where the rate is blank by default, which is how the sheet's own gaps are
+    // recorded. Keeping a blank on a rate that had a number would read as zero in the arithmetic and
+    // quietly drop cost from every quote, so that falls back to the default instead.
+    return base;
+  }
+  if (typeof base === 'string') {
+    return typeof saved === 'string' ? saved : base;
   }
   return base;
 }
@@ -352,8 +396,9 @@ function cloneValue<T>(value: T): T {
 }
 
 /**
- * Overlay a saved rates document on the defaults. Only numeric leaves (and null = not priced) are
- * taken from the saved document; unknown keys are dropped, missing keys keep their default.
+ * Overlay a saved rates document on the defaults. Numeric leaves (null = not priced) and the
+ * as-at text are taken from the saved document. Unknown keys are dropped, missing keys keep
+ * their default, so a rates document saved before a new rate existed still loads.
  */
 export function mergeWindowRates(saved: unknown): WindowRates {
   return mergeValue(DEFAULT_WINDOW_RATES, saved) as WindowRates;

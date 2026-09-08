@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { DEFAULT_WINDOW_RATES, mergeWindowRates } from './window-costing-rates';
-import { GLAZING_ORDER, WINDOW_TYPE_ORDER, costWindow, createWindowInput, describeWindow, switchWindowType } from './window-costing';
+import { GLAZING_ORDER, WINDOW_TYPE_ORDER, WindowTypeId, costWindow, costWindowBatches, createWindowInput, describeWindow, switchWindowType } from './window-costing';
 
 const rates = DEFAULT_WINDOW_RATES;
 
@@ -53,6 +53,31 @@ test('T8610 golden case D: 600 x 400, 2 shaped, pairs, develop on, 5 mm clear', 
   near(result.price, 444.94, 'price');
 });
 
+// Same window for every type: 1000 x 1000 mm, one made to size, etch, no trims, no development
+// labour, 6 mm Clear A/P. Expected prices come from the sheet's formulas, worked by hand.
+const BASE_CASE = { heightMm: 1000, lengthMm: 1000, qtyToSize: 1, qtyShaped: 0, develop: false, glazingId: 'ap6_clear' as const, finish: 'etch' as const, trims: 'none' as const };
+
+const GOLDEN: Array<{ type: WindowTypeId; price: number; minutes: number; glazing: number; packing: number }> = [
+  { type: 'T5836', price: 666.3, minutes: 150, glazing: 102.62, packing: 2.5 },
+  { type: 'T4633', price: 502.25, minutes: 96.6, glazing: 118.34, packing: 2.6 },
+  { type: 'T2482', price: 432.37, minutes: 70, glazing: 84.56, packing: 2.5 },
+  { type: 'U6567', price: 552.64, minutes: 86, glazing: 84.56, packing: 2.5 },
+  { type: 'AFB008', price: 760.76, minutes: 160, glazing: 89.12, packing: 2 },
+  { type: 'TSF', price: 1298.72, minutes: 241.667, glazing: 84.56, packing: 2.5 },
+  { type: 'SF', price: 773.47, minutes: 140, glazing: 84.56, packing: 2.5 },
+];
+
+for (const golden of GOLDEN) {
+  test(`${golden.type} golden case: 1000 x 1000, 1 to size, etch, no trims, 6 mm clear`, () => {
+    const result = costWindow(createWindowInput(golden.type, BASE_CASE), rates);
+    assert.deepEqual(result.errors, [], `${golden.type} errors`);
+    near(result.minutes.total, golden.minutes, `${golden.type} minutes`);
+    near(result.glazingTotal, golden.glazing, `${golden.type} glazing`);
+    near(result.packing, golden.packing, `${golden.type} packing`);
+    near(result.price, golden.price, `${golden.type} price`);
+  });
+}
+
 test('every window type prices at its defaults', () => {
   for (const type of WINDOW_TYPE_ORDER) {
     const result = costWindow(createWindowInput(type, { glazingId: 'ap6_clear' }), rates);
@@ -64,11 +89,56 @@ test('every window type prices at its defaults', () => {
   assert.equal(GLAZING_ORDER.length, Object.keys(rates.glass.options).length, 'glazing order complete');
 });
 
-test('source gaps surface as not priced instead of failing', () => {
-  assert.ok(costWindow(createWindowInput('T5573', { finish: 'black' }), rates).unpriced.some((label) => label.includes('BLACK')), 'black anodising');
+test('source gaps surface as not priced, and each names its rate field', () => {
+  const black = costWindow(createWindowInput('T5573', { finish: 'black' }), rates);
+  assert.ok(black.unpriced.some((entry) => entry.label.includes('BLACK')), 'black anodising');
+  assert.equal(black.unpriced[0].path, 'anodising.blackPerSqm', 'black anodising rate field');
   assert.equal(costWindow(createWindowInput('T5573', { finish: 'blackExtra' }), rates).extras.blackAnodising?.total, null, 'black as extra');
-  assert.ok(costWindow(createWindowInput('SF'), rates).unpriced.some((label) => label.includes('KEEPERS')), 'S&F keepers');
-  assert.ok(costWindow(createWindowInput('TSF', { stayType: 'flat' }), rates).unpriced.some((label) => label.includes('STAYS')), 'flat stays');
+
+  const sf = costWindow(createWindowInput('SF'), rates);
+  assert.ok(sf.unpriced.some((entry) => entry.label.includes('KEEPERS') && entry.path === 'each.keeperSaddle'), 'S&F keepers');
+
+  const stays = costWindow(createWindowInput('TSF', { stayType: 'flat' }), rates);
+  assert.ok(stays.unpriced.some((entry) => entry.label.includes('STAYS') && entry.path === 'each.staysFlat'), 'flat stays');
+
+  const laminate = costWindow(createWindowInput('T5573', { glazingId: 'lam638_clear', cviewHoles: 2 }), rates);
+  assert.ok(laminate.unpriced.some((entry) => entry.path === 'glass.processing.laminate.cview'), 'laminate c/view holes');
+});
+
+test('every priced line names the rate field it used', () => {
+  for (const type of WINDOW_TYPE_ORDER) {
+    const result = costWindow(createWindowInput(type, { glazingId: 'ap6_clear' }), rates);
+    for (const line of result.lines) {
+      if (line.qty > 0 && line.key !== 'labour' && line.key !== 'glazing' && !line.label.startsWith('ANOD. N/A')) {
+        assert.ok(line.ratePath, `${type} ${line.label} has no rate field`);
+      }
+    }
+  }
+});
+
+test('batch pricing spreads the setup minutes across the batch', () => {
+  const input = createWindowInput('T5573', { ...BASE_CASE, glazingId: 'ap5_clear', lengthMm: 1200 });
+  const batches = costWindowBatches(input, rates, [1, 2, 5, 10]);
+
+  assert.deepEqual(batches.map((batch) => batch.batchSize), [1, 2, 5, 10]);
+  near(batches[0].pricePerUnit, 518.95, 'batch of 1 matches the single price');
+  near(batches[0].saving, 0, 'no saving at a batch of one');
+  for (let index = 1; index < batches.length; index += 1) {
+    assert.ok((batches[index].pricePerUnit ?? 0) < (batches[index - 1].pricePerUnit ?? 0), 'a larger batch costs less per window');
+    assert.ok((batches[index].saving ?? 0) > 0, 'a larger batch saves money');
+  }
+
+  // 20 setup minutes shared over 2 windows saves 10 minutes, which is $14.17 of labour.
+  const perMinute = rates.labourPerHour / 60;
+  const expected = (10 * perMinute * (1 + rates.margins.T5573.margin)) * (1 + rates.margins.T5573.uplift);
+  near(batches[1].saving, expected, 'saving at a batch of two');
+});
+
+test('a shaped-only window keeps its shape across batch sizes', () => {
+  const shaped = createWindowInput('T5573', { ...BASE_CASE, qtyToSize: 0, qtyShaped: 1 });
+  const batches = costWindowBatches(shaped, rates, [1, 4]);
+  const direct = costWindow({ ...shaped, qtyShaped: 4 }, rates);
+  near(batches[1].pricePerUnit, direct.price ?? 0, 'batch of four shaped windows');
 });
 
 test('validation and warnings', () => {
@@ -118,4 +188,35 @@ test('rates merge overlays numeric leaves only', () => {
   assert.equal((merged as { bogus?: unknown }).bogus, undefined);
   assert.deepEqual(merged.extrusions.T5573, rates.extrusions.T5573, 'invalid leaf keeps default');
   assert.deepEqual({ ...merged, labourPerHour: 85, anodising: { ...merged.anodising, blackPerSqm: null } }, rates, 'merge changes only given keys');
+});
+
+test('rates merge keeps the as-at dates and takes saved ones', () => {
+  assert.equal(mergeWindowRates({}).asAt.labourPerHour, rates.asAt.labourPerHour, 'default as-at date');
+  assert.equal(mergeWindowRates({ asAt: { labourPerHour: 'Mar 2026' } }).asAt.labourPerHour, 'Mar 2026', 'saved as-at date');
+  assert.equal(mergeWindowRates({ asAt: { labourPerHour: 7 } }).asAt.labourPerHour, rates.asAt.labourPerHour, 'a non-text as-at date is ignored');
+});
+
+test('a rate entered for a source gap prices the line', () => {
+  const withBlack = mergeWindowRates({ anodising: { blackPerSqm: 55 } });
+  const result = costWindow(createWindowInput('T5573', { finish: 'black' }), withBlack);
+  assert.deepEqual(result.unpriced, [], 'nothing unpriced once the rate exists');
+  near(result.lines.find((line) => line.key === 'anod')?.cost, 4 * 55 * 0.159, 'black anodising line');
+
+  const asExtra = costWindow(createWindowInput('T5573', { finish: 'blackExtra' }), withBlack);
+  assert.ok((asExtra.extras.blackAnodising?.total ?? 0) > 0, 'black as an extra is priced');
+});
+
+test('a batch shares its setup minutes, so ten cost less than ten singles', () => {
+  const single = costWindow(createWindowInput('T5573', { qtyToSize: 1 }), rates);
+  const batch = costWindow(createWindowInput('T5573', { qtyToSize: 10 }), rates);
+
+  assert.ok(single.price != null && batch.price != null, 'both price');
+  assert.ok((batch.price as number) < (single.price as number), 'the price for each falls as the run grows');
+
+  // The order line multiplies the batch price by the batch, never the single price. Getting this
+  // backwards quoted a run of ten at ten times the one-off price.
+  const runOfTen = (batch.price as number) * 10;
+  const tenSingles = (single.price as number) * 10;
+  assert.ok(runOfTen < tenSingles, 'a run of ten is dearer priced one at a time');
+  near(batch.minutes.window, 20 / 10 + 40 + 1.0 * 30, 'setup divided across the batch');
 });

@@ -27,6 +27,7 @@ import {
   formatCurrency,
   statusLabel,
   todayISODate,
+  localISODate,
 } from '@utils/order-management';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
@@ -59,7 +60,7 @@ function normalizeDateValue(value?: string | null): string {
     return normalized;
   }
 
-  return parsed.toISOString().slice(0, 10);
+  return localISODate(parsed);
 }
 
 function displayDate(value?: string | null): string {
@@ -180,11 +181,26 @@ export default function OrderDashboardPage() {
       }));
   }, [ordersInScope, customerMap]);
 
+  // Past its required date and not finished. Nothing showed these: dueInSevenDays starts at today,
+  // so an order went quiet on the dashboard the moment it became the one worth ringing about.
+  const overdue = useMemo(() => {
+    const today = todayISODate();
+    return ordersInScope.filter((order) => {
+      const requiredDate = normalizeDateValue(order.required_date);
+      if (!requiredDate || order.status === 'fulfilled' || order.status === 'cancelled') {
+        return false;
+      }
+      return requiredDate < today;
+    });
+  }, [ordersInScope]);
+
+  const overdueIds = useMemo(() => new Set(overdue.map((order) => order.id)), [overdue]);
+
   const dueInSevenDays = useMemo(() => {
     const today = todayISODate();
     const inSevenDays = new Date();
     inSevenDays.setDate(inSevenDays.getDate() + 7);
-    const maxDate = inSevenDays.toISOString().split('T')[0];
+    const maxDate = localISODate(inSevenDays);
 
     return ordersInScope.filter((order) => {
       const requiredDate = normalizeDateValue(order.required_date);
@@ -289,6 +305,12 @@ export default function OrderDashboardPage() {
               <Text>DUE WITHIN 7 DAYS</Text>
               <Text>
                 <span className="status-warning">{dueInSevenDays.length}</span>
+              </Text>
+            </RowSpaceBetween>
+            <RowSpaceBetween>
+              <Text>OVERDUE</Text>
+              <Text>
+                <span className={overdue.length ? 'status-error' : undefined}>{overdue.length}</span>
               </Text>
             </RowSpaceBetween>
 
@@ -430,13 +452,17 @@ export default function OrderDashboardPage() {
             {filteredOrders.map((order) => {
               const lines = linesByOrder[order.id] || [];
               const total = calculateOrderTotal(lines);
+              const isOverdue = overdueIds.has(order.id);
 
               return (
                 <TableRow key={order.id}>
                   <TableColumn>{order.po_number}</TableColumn>
                   <TableColumn>{customerMap[order.customer_id]?.name || 'Unknown Customer'}</TableColumn>
                   <TableColumn>{displayDate(order.received_date)}</TableColumn>
-                  <TableColumn>{displayDate(order.required_date)}</TableColumn>
+                  <TableColumn>
+                    <span className={isOverdue ? 'status-error' : undefined}>{displayDate(order.required_date)}</span>
+                    {isOverdue ? <span className="status-pill status-pill-error">LATE</span> : null}
+                  </TableColumn>
                   <TableColumn>
                     <>
                       <span className={orderStatusClassName(order.status)}>{statusLabel(order.status)}</span>

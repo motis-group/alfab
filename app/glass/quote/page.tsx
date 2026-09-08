@@ -18,7 +18,7 @@ import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 
-import { defaultPricingData } from '@components/PricingProvider';
+import { usePricing } from '@components/PricingProvider';
 import { GlassSpecification, calculateCost, getAvailableGlassTypes, getAvailableThicknesses, getEffectiveArea, getEffectivePerimeter, usesMeasuredGeometry } from '@utils/calculations';
 import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import { UserRole, formatCurrency, todayISODate } from '@utils/order-management';
@@ -42,47 +42,19 @@ const defaultQuoteSpec: GlassSpecification = {
   scanning: false,
 };
 
-interface PricingShape {
-  basePrices: typeof defaultPricingData.basePrices;
-  edgeworkPrices: typeof defaultPricingData.edgeworkPrices;
-  otherPrices: typeof defaultPricingData.otherPrices;
-}
-
 function numberOrFallback(value: string, fallback = 0): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function parsePricingDataFromStorage(): PricingShape {
-  if (typeof window === 'undefined') {
-    return defaultPricingData;
-  }
-
-  const raw = localStorage.getItem('glassPricingData');
-  if (!raw) {
-    return defaultPricingData;
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    return {
-      basePrices: parsed.basePrices || defaultPricingData.basePrices,
-      edgeworkPrices: parsed.edgeworkPrices || defaultPricingData.edgeworkPrices,
-      otherPrices: parsed.otherPrices || defaultPricingData.otherPrices,
-    };
-  } catch {
-    return defaultPricingData;
-  }
-}
-
 export default function AdhocQuotePage() {
   const router = useRouter();
+  const { pricingData } = usePricing();
 
   const [role, setRole] = useState<UserRole>('readonly');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [pricingData, setPricingData] = useState<PricingShape>(defaultPricingData);
   const [quoteName, setQuoteName] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [quoteDate, setQuoteDate] = useState(todayISODate());
@@ -142,7 +114,6 @@ export default function AdhocQuotePage() {
   }, [calculation.error, calculation.totalPrice, calculation.unitPrice, customerName, quantity, quoteDate, quoteName, quoteNotes, spec]);
 
   useEffect(() => {
-    setPricingData(parsePricingDataFromStorage());
 
     (async () => {
       setIsLoading(true);

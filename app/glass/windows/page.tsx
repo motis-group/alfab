@@ -2,7 +2,7 @@
 
 import '@root/global.scss';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import ActionButton from '@components/ActionButton';
@@ -15,11 +15,13 @@ import Table from '@components/Table';
 import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
+import WindowCostingGlossary from '@components/WindowCostingGlossary';
+import WindowCostingSheet, { WindowCostingSheetWindow } from '@components/WindowCostingSheet';
 
 import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import { UserRole, formatCurrency, todayISODate } from '@utils/order-management';
-import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
-import { fetchCurrentSessionUser } from '@utils/session-client';
+import { WindowQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
+import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 import {
   CostExtra,
   CostLine,
@@ -37,21 +39,24 @@ import {
   TRIM_LABELS,
   TrimMode,
   WINDOW_TYPES,
-  WINDOW_TYPE_ORDER,
   WindowCostingInput,
   WindowTypeId,
   costWindow,
+  costWindowBatches,
   createWindowInput,
   describeWindow,
   switchWindowType,
 } from '@utils/window-costing';
-import { DEFAULT_WINDOW_RATES, GlazingId, WindowRates } from '@utils/window-costing-rates';
-import { loadWindowRates } from '@utils/window-costing-store';
+import { WINDOW_SERIES, WindowProduct, findProduct, productFullName, productLabel, productForInput, seriesOfProduct, visibleSeries } from '@utils/window-catalogue';
+import { DEFAULT_WINDOW_RATES, GlazingId, WindowRates, mergeWindowRates } from '@utils/window-costing-rates';
+import { loadWindowRates, loadWindowRatesVersion } from '@utils/window-costing-store';
+import { SavedWindowCosting, deleteWindowCosting, listWindowCostings, saveWindowCosting } from '@utils/window-quote-store';
 
 const navigationItems = APP_NAVIGATION_ITEMS;
 const GLASS_GROUPS: GlassGroup[] = ['ap5-6', 'ap8-12', 'laminate', 'acrylic'];
 const FINISH_ORDER: Finish[] = ['mill', 'etch', 'blackExtra', 'black', 'powder'];
 const TRIM_ORDER: TrimMode[] = ['none', 'required', 'extra'];
+const BATCH_SIZES = [1, 2, 5, 10];
 const LABOUR_LABELS: Record<LabourPart, string> = {
   window: 'Window',
   trim: 'Trim',
@@ -64,6 +69,13 @@ const LABOUR_LABELS: Record<LabourPart, string> = {
   wipeBars: 'Wipe bars',
 };
 const LABOUR_ORDER: LabourPart[] = ['window', 'trim', 'welding', 'develop', 'sillFlat', 'fittings', 'wipeBars', 'mullion', 'sundry'];
+
+interface QuoteItem {
+  localId: string;
+  name: string;
+  quantity: number;
+  input: WindowCostingInput;
+}
 
 function numberOrFallback(value: string, fallback = 0): number {
   const parsed = Number(value);
@@ -87,54 +99,126 @@ function formatExtra(extra: CostExtra): string {
   return extra.total == null ? 'not priced' : formatCurrency(extra.total);
 }
 
+function formatStamp(stamp: string | null): string {
+  if (!stamp) {
+    return 'code defaults';
+  }
+  const parsed = new Date(stamp);
+  return Number.isNaN(parsed.getTime()) ? stamp : `saved ${parsed.toLocaleDateString()}`;
+}
+
 export default function WindowCostingPage() {
   const router = useRouter();
 
   const [role, setRole] = useState<UserRole>('readonly');
+  const [canSaveCostings, setCanSaveCostings] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<{ tone: 'success' | 'warning'; message: string } | null>(null);
 
   const [rates, setRates] = useState<WindowRates>(DEFAULT_WINDOW_RATES);
   const [ratesSource, setRatesSource] = useState<'saved' | 'default'>('default');
+  const [ratesUpdatedAt, setRatesUpdatedAt] = useState<string | null>(null);
   const [ratesError, setRatesError] = useState<string | null>(null);
 
-  const [input, setInput] = useState<WindowCostingInput>(() => createWindowInput('T5573'));
+  const [input, setInput] = useState<WindowCostingInput>(() => ({ ...createWindowInput('T5573'), productId: '500-5573' }));
+  const [seriesId, setSeriesId] = useState<string>('500');
+  const [metreDrafts, setMetreDrafts] = useState<{ flatSmoothM?: string; flatGroundM?: string }>({});
+  const [windowName, setWindowName] = useState('');
   const [quoteName, setQuoteName] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [quoteDate, setQuoteDate] = useState(todayISODate());
-  const [quantity, setQuantity] = useState(1);
   const [quoteNotes, setQuoteNotes] = useState('');
-  const [copyState, setCopyState] = useState('');
-  // Raw text for decimal fields while typing, so "0.5" is not reformatted under the cursor.
-  const [metreDrafts, setMetreDrafts] = useState<{ flatSmoothM?: string; flatGroundM?: string }>({});
+  const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
+  const [savedCostings, setSavedCostings] = useState<SavedWindowCosting[]>([]);
+  // Customer by default, so a browser Cmd+P prints the safe document. The internal button raises it
+  // for one print and `afterprint` puts it back.
+  const [sheetAudience, setSheetAudience] = useState<'internal' | 'customer'>('customer');
+  const [comparison, setComparison] = useState<{ id: string; quoted: number | null; today: number | null; onOriginal: number | null; stamp: string | null } | null>(null);
 
   const cfg = WINDOW_TYPES[input.type];
+  const series = WINDOW_SERIES.find((entry) => entry.id === seriesId) || WINDOW_SERIES[0];
+  const seriesOptions = visibleSeries(series.id);
+  const product = productForInput(input);
+  const describe = useCallback((forInput: WindowCostingInput) => describeWindow(forInput, rates, productFullName(forInput.productId)), [rates]);
   const result = useMemo(() => costWindow(input, rates), [input, rates]);
+  const batches = useMemo(() => (result.errors.length ? [] : costWindowBatches(input, rates, BATCH_SIZES)), [input, rates, result.errors.length]);
   const glazingOption = input.glazingId ? rates.glass.options[input.glazingId] : null;
   const derivedGlazingQty = Boolean(cfg.glazingQty);
-  const orderQuantity = Math.max(1, quantity);
-  const quoteTotal = result.price == null ? null : result.price * orderQuantity;
+  // How many windows the batch makes. The costing already divides setup minutes across it, so the
+  // order line and the price come from the same number.
+  const orderQuantity = Math.max(1, Math.floor(input.qtyToSize) + Math.floor(input.qtyShaped));
+  const currentTotal = result.price == null ? null : result.price * orderQuantity;
   const extrasList = [result.extras.trims, result.extras.blackAnodising, result.extras.secondGlazing].filter(Boolean) as CostExtra[];
+  const ratesLabel = ratesSource === 'saved' ? formatStamp(ratesUpdatedAt) : 'code defaults';
+
+  const quoteLines = useMemo(
+    () =>
+      quoteItems.map((item) => {
+        const itemResult = costWindow(item.input, rates);
+        return {
+          item,
+          result: itemResult,
+          total: itemResult.price == null ? null : itemResult.price * item.quantity,
+        };
+      }),
+    [quoteItems, rates]
+  );
+  const quoteTotal = quoteLines.reduce((sum, line) => sum + (line.total ?? 0), 0);
+
+  // The quote prints the windows it holds; a quote with none prints the window on screen.
+  const sheetWindows: WindowCostingSheetWindow[] = quoteLines.length
+    ? quoteLines.map((line) => ({ id: line.item.localId, name: line.item.name, quantity: line.item.quantity, input: line.item.input, result: line.result }))
+    : [{ id: 'current', name: windowName, quantity: orderQuantity, input, result }];
 
   const summary = useMemo(() => {
     if (result.price == null) {
       return '';
     }
-    return [
-      `Window costing: ${quoteName.trim() || 'Ad Hoc'}`,
+
+    const header = [
+      `${quoteName.trim() || 'Window quote'}`,
       `Customer: ${customerName.trim() || 'Walk-in / Phone'}`,
       `Date: ${quoteDate}`,
-      `Window: ${describeWindow(input, rates)}`,
-      `Subtotal: ${formatCurrency(result.subtotal)} | Margin ${formatPercent(result.marginRate)}: ${formatCurrency(result.margin)} | Packing: ${formatCurrency(result.packing)} | Uplift ${formatPercent(result.upliftRate)}: ${formatCurrency(result.uplift)}`,
+    ];
+
+    if (quoteLines.length) {
+      return [
+        ...header,
+        ...quoteLines.map((line, index) => `${index + 1}. ${line.item.name || describe(line.item.input)} | ${line.item.quantity} x ${formatCurrency(line.result.price)} = ${formatCurrency(line.total)}`),
+        `Quote total: ${formatCurrency(quoteTotal)}`,
+        quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+    }
+
+    return [
+      ...header,
+      `Window: ${describe(input)}`,
       `Price (${result.unitLabel.toLowerCase()}): ${formatCurrency(result.price)}`,
-      `Qty: ${orderQuantity} | Total: ${formatCurrency(quoteTotal)}`,
+      `Qty: ${orderQuantity} | Total: ${formatCurrency(currentTotal)}`,
       ...extrasList.map((extra) => `${extra.label}: ${formatExtra(extra)}`),
-      result.unpriced.length ? `Not priced (treated as $0): ${result.unpriced.join(', ')}` : '',
       quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : '',
     ]
       .filter(Boolean)
       .join('\n');
-  }, [customerName, extrasList, input, orderQuantity, quoteDate, quoteName, quoteNotes, quoteTotal, rates, result]);
+  }, [currentTotal, customerName, extrasList, input, orderQuantity, quoteDate, quoteLines, quoteName, quoteNotes, quoteTotal, rates, ratesLabel, result]);
+
+  // Put the sheet back to the customer copy once a print finishes, so the next Cmd+P is safe.
+  useEffect(() => {
+    const restore = () => setSheetAudience('customer');
+    window.addEventListener('afterprint', restore);
+    return () => window.removeEventListener('afterprint', restore);
+  }, []);
+
+  const refreshSavedCostings = useCallback(async () => {
+    try {
+      setSavedCostings(await listWindowCostings());
+    } catch (loadError: any) {
+      setStatus({ tone: 'warning', message: loadError?.message || 'Unable to load saved costings.' });
+    }
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -149,18 +233,45 @@ export default function WindowCostingPage() {
         }
 
         setRole(user.effectiveRole as UserRole);
+        setCanSaveCostings(userCan(user, 'quotes:write'));
 
         const loaded = await loadWindowRates();
         setRates(loaded.rates);
         setRatesSource(loaded.source);
+        setRatesUpdatedAt(loaded.updatedAt);
         setRatesError(loaded.error);
+
+        await refreshSavedCostings();
       } catch (loadError: any) {
         setError(loadError?.message || 'Unable to load window costing.');
       } finally {
         setIsLoading(false);
       }
     })();
-  }, [router]);
+  }, [refreshSavedCostings, router]);
+
+  function selectProduct(next: WindowProduct) {
+    if (!next.type) {
+      setStatus({ tone: 'warning', message: `${productLabel(next)} has no costing recipe yet. ${next.note || ''}`.trim() });
+      return;
+    }
+
+    setInput((prev) => {
+      const base = prev.type === next.type ? prev : switchWindowType(prev, next.type as WindowTypeId);
+      return { ...base, type: next.type as WindowTypeId, variant: next.variant ?? 0, productId: next.id };
+    });
+    setMetreDrafts({});
+    setStatus(null);
+  }
+
+  function selectSeries(nextSeriesId: string) {
+    setSeriesId(nextSeriesId);
+    const nextSeries = WINDOW_SERIES.find((entry) => entry.id === nextSeriesId);
+    const firstCostable = nextSeries?.products.find((entry) => entry.type);
+    if (firstCostable) {
+      selectProduct(firstCostable);
+    }
+  }
 
   function update(patch: Partial<WindowCostingInput>) {
     setInput((prev) => ({ ...prev, ...patch }));
@@ -176,14 +287,53 @@ export default function WindowCostingPage() {
   }
 
   function resetCalculator() {
-    setInput(createWindowInput('T5573'));
+    setInput({ ...createWindowInput('T5573'), productId: '500-5573' });
+    setSeriesId('500');
     setMetreDrafts({});
+    setWindowName('');
     setQuoteName('');
     setCustomerName('');
     setQuoteDate(todayISODate());
-    setQuantity(1);
     setQuoteNotes('');
-    setCopyState('');
+    setQuoteItems([]);
+    setStatus(null);
+  }
+
+  function addToQuote() {
+    if (result.price == null) {
+      return;
+    }
+
+    const item: QuoteItem = {
+      localId: `window-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: windowName.trim() || describe(input),
+      quantity: orderQuantity,
+      input: { ...input },
+    };
+
+    setQuoteItems((prev) => [...prev, item]);
+    setStatus({ tone: 'success', message: `Added to the quote. ${quoteItems.length + 1} window${quoteItems.length ? 's' : ''} on this quote.` });
+  }
+
+  function editQuoteItem(localId: string) {
+    const item = quoteItems.find((entry) => entry.localId === localId);
+    if (!item) {
+      return;
+    }
+
+    setInput({ ...item.input });
+    const itemSeries = seriesOfProduct(item.input.productId ?? null);
+    if (itemSeries) {
+      setSeriesId(itemSeries.id);
+    }
+    setMetreDrafts({});
+    setWindowName(item.name);
+    setQuoteItems((prev) => prev.filter((entry) => entry.localId !== localId));
+    setStatus({ tone: 'success', message: 'Loaded back into the form. Add it to the quote when you are done.' });
+  }
+
+  function removeQuoteItem(localId: string) {
+    setQuoteItems((prev) => prev.filter((entry) => entry.localId !== localId));
   }
 
   async function copySummary() {
@@ -193,32 +343,145 @@ export default function WindowCostingPage() {
 
     try {
       await navigator.clipboard.writeText(summary);
-      setCopyState('Copied costing summary.');
+      setStatus({ tone: 'success', message: 'Copied. Prices only, safe to send to a customer.' });
     } catch {
-      setCopyState('Clipboard copy failed.');
+      setStatus({ tone: 'warning', message: 'Clipboard copy failed.' });
+    }
+  }
+
+  /** The cost build-up, for Alfab only. Never paste this to a customer. */
+  async function copyCostBreakdown() {
+    if (result.price == null) {
+      return;
+    }
+
+    const text = [
+      `INTERNAL — ${quoteName.trim() || 'Window costing'} — do not send to a customer`,
+      `Window: ${describe(input)}`,
+      `Rates: ${ratesLabel}`,
+      `Subtotal: ${formatCurrency(result.subtotal)} | Margin ${formatPercent(result.marginRate)}: ${formatCurrency(result.margin)} | Packing: ${formatCurrency(result.packing)} | Uplift ${formatPercent(result.upliftRate)}: ${formatCurrency(result.uplift)}`,
+      `Price (${result.unitLabel.toLowerCase()}): ${formatCurrency(result.price)}`,
+      result.unpriced.length ? `Not priced (charged as nil): ${result.unpriced.map((entry) => entry.label).join(', ')}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus({ tone: 'warning', message: 'Copied the cost build-up. It shows your margin, so keep it internal.' });
+    } catch {
+      setStatus({ tone: 'warning', message: 'Clipboard copy failed.' });
+    }
+  }
+
+  function printSheet(audience: 'internal' | 'customer') {
+    setSheetAudience(audience);
+    if (typeof window !== 'undefined') {
+      // Let the sheet re-render for the chosen audience before the print dialog reads the page.
+      window.setTimeout(() => window.print(), 50);
+    }
+  }
+
+  async function handleSaveCosting() {
+    if (!canSaveCostings || result.price == null) {
+      return;
+    }
+
+    try {
+      await saveWindowCosting({
+        name: windowName.trim() || quoteName.trim() || describe(input),
+        customer: customerName,
+        input,
+        result,
+        ratesUpdatedAt,
+      });
+      await refreshSavedCostings();
+      setStatus({ tone: 'success', message: 'Costing saved. Load it again from Saved costings.' });
+    } catch (saveError: any) {
+      setStatus({ tone: 'warning', message: saveError?.message || 'Unable to save the costing.' });
+    }
+  }
+
+  /** What was quoted, what it costs today, and what it recomputes to on the rates that priced it. */
+  async function compareCosting(costing: SavedWindowCosting) {
+    // No stamp means it was priced on the code defaults, which are still reproducible.
+    const original = costing.ratesUpdatedAt ? await loadWindowRatesVersion(costing.ratesUpdatedAt).catch(() => null) : mergeWindowRates(null);
+    setComparison({
+      id: costing.id,
+      quoted: costing.price,
+      today: costWindow(costing.input, rates).price,
+      onOriginal: original ? costWindow(costing.input, original).price : null,
+      stamp: costing.ratesUpdatedAt,
+    });
+  }
+
+  function loadSavedCosting(costing: SavedWindowCosting) {
+    setInput({ ...costing.input });
+    const savedSeries = seriesOfProduct(costing.input.productId ?? null) || (productForInput(costing.input) ? seriesOfProduct(productForInput(costing.input)!.id) : null);
+    if (savedSeries) {
+      setSeriesId(savedSeries.id);
+    }
+    setMetreDrafts({});
+    setWindowName(costing.name);
+    if (costing.customer) {
+      setCustomerName(costing.customer);
+    }
+    setStatus({
+      tone: costing.ratesUpdatedAt === ratesUpdatedAt ? 'success' : 'warning',
+      message:
+        costing.ratesUpdatedAt === ratesUpdatedAt
+          ? `Loaded "${costing.name}".`
+          : `Loaded "${costing.name}". It was priced on older rates, so the price here may differ from ${formatCurrency(costing.price)}.`,
+    });
+  }
+
+  async function removeSavedCosting(costing: SavedWindowCosting) {
+    try {
+      await deleteWindowCosting(costing.id);
+      await refreshSavedCostings();
+    } catch (deleteError: any) {
+      setStatus({ tone: 'warning', message: deleteError?.message || 'Unable to delete the costing.' });
     }
   }
 
   function handleCreatePurchaseOrder() {
-    if (result.price != null) {
-      persistQuoteToOrderDraft({
-        kind: 'window',
-        quoteName,
-        customerName,
-        quoteDate,
-        quantity: orderQuantity,
-        unitPrice: result.price,
-        markupPercent: 0,
-        quoteNotes,
-        spec: null,
-        windowSpec: input,
-        description: describeWindow(input, rates),
-      });
-      router.push('/glass/new?fromQuote=1');
+    const lines: WindowQuoteLine[] = quoteLines.length
+      ? quoteLines
+          .filter((line) => line.result.price != null)
+          .map((line) => ({
+            description: line.item.name || describe(line.item.input),
+            quantity: line.item.quantity,
+            unitPrice: line.result.price as number,
+            windowSpec: line.item.input,
+            ratesUpdatedAt,
+          }))
+      : result.price == null
+        ? []
+        : [
+            {
+              description: windowName.trim() || describe(input),
+              quantity: orderQuantity,
+              unitPrice: result.price,
+              windowSpec: input,
+              ratesUpdatedAt,
+            },
+          ];
+
+    if (!lines.length) {
+      router.push('/glass/new');
       return;
     }
 
-    router.push('/glass/new');
+    persistQuoteToOrderDraft({
+      kind: 'window',
+      quoteName,
+      customerName,
+      quoteDate,
+      markupPercent: 0,
+      quoteNotes,
+      windowLines: lines,
+    });
+    router.push('/glass/new?fromQuote=1');
   }
 
   return (
@@ -235,16 +498,26 @@ export default function WindowCostingPage() {
       sidebar={
         <>
           <Card title="QUICK ACTIONS">
+            <ActionButton onClick={addToQuote}>Add Window To Quote</ActionButton>
+            <br />
             <ActionButton onClick={handleCreatePurchaseOrder}>Create Purchase Order</ActionButton>
             <br />
-            <ActionButton onClick={copySummary}>Copy Costing Summary</ActionButton>
+            <ActionButton onClick={() => printSheet('customer')}>Print Quote For Customer</ActionButton>
+            <br />
+            <ActionButton onClick={() => printSheet('internal')}>Print Costing Sheet (internal)</ActionButton>
+            <br />
+            <ActionButton onClick={copySummary}>Copy Prices For Customer</ActionButton>
+            <br />
+            <ActionButton onClick={copyCostBreakdown}>Copy Cost Build-up (internal)</ActionButton>
+            <br />
+            <ActionButton onClick={canSaveCostings ? handleSaveCosting : undefined}>{canSaveCostings ? 'Save Costing' : 'Saving Needs Access'}</ActionButton>
             <br />
             <ActionButton onClick={resetCalculator}>Reset</ActionButton>
-            {copyState ? (
+            {status ? (
               <>
                 <br />
                 <Text>
-                  <span className={copyState === 'Copied costing summary.' ? 'status-success' : 'status-warning'}>{copyState}</span>
+                  <span className={status.tone === 'success' ? 'status-success' : 'status-warning'}>{status.message}</span>
                 </Text>
               </>
             ) : null}
@@ -264,7 +537,7 @@ export default function WindowCostingPage() {
                   <Text>{formatCurrency(result.subtotal)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
-                  <Text>MARGIN ({formatPercent(result.marginRate)})</Text>
+                  <Text>MARGIN ({formatPercent(result.marginRate)} OF COST)</Text>
                   <Text>{formatCurrency(result.margin)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
@@ -276,7 +549,7 @@ export default function WindowCostingPage() {
                   <Text>{formatCurrency(result.beforeUplift)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
-                  <Text>UPLIFT ({formatPercent(result.upliftRate)})</Text>
+                  <Text>UPLIFT ({formatPercent(result.upliftRate)} OF THE ABOVE)</Text>
                   <Text>{formatCurrency(result.uplift)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
@@ -286,8 +559,8 @@ export default function WindowCostingPage() {
                   </Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
-                  <Text>QUOTE TOTAL ({orderQuantity} x)</Text>
-                  <Text>{formatCurrency(quoteTotal)}</Text>
+                  <Text>THIS WINDOW ({orderQuantity} x)</Text>
+                  <Text>{formatCurrency(currentTotal)}</Text>
                 </RowSpaceBetween>
               </>
             )}
@@ -297,12 +570,43 @@ export default function WindowCostingPage() {
                 <span className="status-warning">{message}</span>
               </Text>
             ))}
-            {result.unpriced.length ? (
-              <Text>
-                <span className="status-warning">Not priced (treated as $0): {result.unpriced.join(', ')}. Enter the rates under Window Rates.</span>
-              </Text>
-            ) : null}
           </Card>
+
+          {result.unpriced.length ? (
+            <Card title="NOT PRICED">
+              <Text>
+                <span className="status-warning">These lines have no rate and are charged as nil.</span>
+              </Text>
+              <Table>
+                {result.unpriced.map((entry) => (
+                  <TableRow key={entry.label}>
+                    <TableColumn style={{ width: '28ch' }}>{entry.label}</TableColumn>
+                    <TableColumn>{entry.path ? <ActionButton onClick={() => router.push(`/settings/windows#rate-${entry.path}`)}>Set Rate</ActionButton> : null}</TableColumn>
+                  </TableRow>
+                ))}
+              </Table>
+            </Card>
+          ) : null}
+
+          {batches.length ? (
+            <Card title="BATCH PRICE">
+              <Text>Setup labour is shared across a batch, so a larger run costs less each.</Text>
+              <Table>
+                <TableRow>
+                  <TableColumn style={{ width: '12ch' }}>BATCH</TableColumn>
+                  <TableColumn style={{ width: '16ch' }}>{result.unitLabel.toUpperCase()}</TableColumn>
+                  <TableColumn>SAVING</TableColumn>
+                </TableRow>
+                {batches.map((batch) => (
+                  <TableRow key={batch.batchSize}>
+                    <TableColumn>{batch.batchSize}</TableColumn>
+                    <TableColumn>{formatCurrency(batch.pricePerUnit)}</TableColumn>
+                    <TableColumn>{batch.batchSize === 1 ? '—' : formatCurrency(batch.saving)}</TableColumn>
+                  </TableRow>
+                ))}
+              </Table>
+            </Card>
+          ) : null}
 
           {extrasList.length ? (
             <Card title="ADD FOR">
@@ -391,7 +695,7 @@ export default function WindowCostingPage() {
           ) : null}
 
           <Card title="RATES">
-            <Text>{ratesSource === 'saved' ? 'Using saved window rates.' : 'Using default window rates.'}</Text>
+            <Text>{ratesSource === 'saved' ? `Using window rates ${ratesLabel}.` : 'Using the default window rates.'}</Text>
             {ratesError ? (
               <Text>
                 <span className="status-warning">{ratesError}</span>
@@ -403,21 +707,11 @@ export default function WindowCostingPage() {
         </>
       }
       actionItems={[
-        {
-          hotkey: '⌘+R',
-          body: 'Reset',
-          onClick: resetCalculator,
-        },
-        {
-          hotkey: '⌘+C',
-          body: 'Copy Summary',
-          onClick: copySummary,
-        },
-        {
-          hotkey: '⌘+N',
-          body: 'New PO',
-          onClick: handleCreatePurchaseOrder,
-        },
+        { body: 'Reset', onClick: resetCalculator },
+        { body: 'Add To Quote', onClick: addToQuote },
+        { body: 'Print For Customer', onClick: () => printSheet('customer') },
+        { body: 'Copy Prices', onClick: copySummary },
+        { body: 'New PO', onClick: handleCreatePurchaseOrder },
       ]}
     >
       {error && (
@@ -429,31 +723,46 @@ export default function WindowCostingPage() {
       )}
 
       <CardDouble title="WINDOW">
-        <Text>WINDOW TYPE</Text>
-        <select value={input.type} onChange={(event) => setInput((prev) => switchWindowType(prev, event.target.value as WindowTypeId))}>
-          {WINDOW_TYPE_ORDER.map((type) => (
-            <option key={type} value={type}>
-              {WINDOW_TYPES[type].label}
+        <Text>SERIES</Text>
+        <select value={series.id} onChange={(event) => selectSeries(event.target.value)}>
+          {seriesOptions.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.name}
             </option>
           ))}
         </select>
         <br />
 
-        {cfg.variantLabels && cfg.fields.includes('variant') ? (
-          <>
-            <Text>SECTION</Text>
-            <select value={String(input.variant)} onChange={(event) => update({ variant: event.target.value === '1' ? 1 : 0 })}>
-              <option value="0">{cfg.variantLabels[0]}</option>
-              <option value="1">{cfg.variantLabels[1]}</option>
-            </select>
-            <br />
-          </>
-        ) : null}
+        <Text>WINDOW</Text>
+        <select
+          value={product && series.products.some((entry) => entry.id === product.id) ? product.id : ''}
+          onChange={(event) => {
+            const next = findProduct(event.target.value);
+            if (next) {
+              selectProduct(next);
+            }
+          }}
+        >
+          {series.products.map((entry) => (
+            <option key={entry.id} value={entry.id} disabled={!entry.type}>
+              {productLabel(entry)}
+              {entry.type ? '' : ' (no costing yet)'}
+            </option>
+          ))}
+        </select>
+        <Text>
+          Priced on the {cfg.variantLabels ? cfg.variantLabels[input.variant] : cfg.label} costing.
+          {product?.note ? ` ${product.note}` : ''}
+        </Text>
+        <br />
 
         <Input label="HEIGHT (MM)" type="number" name="window_height" value={String(input.heightMm)} onChange={(event) => updateNumber('heightMm', event.target.value)} min="0" />
         <Input label="LENGTH (MM)" type="number" name="window_length" value={String(input.lengthMm)} onChange={(event) => updateNumber('lengthMm', event.target.value)} min="0" />
         <Input label="QTY MADE TO SIZE (SQUARE)" type="number" name="window_qty_to_size" value={String(input.qtyToSize)} onChange={(event) => updateNumber('qtyToSize', event.target.value)} min="0" />
         <Input label="QTY SHAPED (OFF SQUARE)" type="number" name="window_qty_shaped" value={String(input.qtyShaped)} onChange={(event) => updateNumber('qtyShaped', event.target.value)} min="0" />
+        <Text style={{ opacity: 0.7 }}>
+          These two are the order: {orderQuantity} window{orderQuantity === 1 ? '' : 's'}. Setup minutes divide across them, so the price for each falls as the run grows.
+        </Text>
 
         {cfg.pairsSupported ? (
           <label>
@@ -640,12 +949,114 @@ export default function WindowCostingPage() {
       </CardDouble>
 
       <CardDouble title="QUOTE DETAILS">
+        <Input label="WINDOW NAME" name="window_name" value={windowName} onChange={(event) => setWindowName(event.target.value)} placeholder="Kitchen hopper" />
         <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} />
         <Input label="CUSTOMER" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />
         <Input label="QUOTE DATE" type="date" name="quote_date" value={quoteDate} onChange={(event) => setQuoteDate(event.target.value)} />
-        <Input label="ORDER QUANTITY" type="number" name="quote_quantity" value={String(quantity)} onChange={(event) => setQuantity(Math.max(1, numberOrFallback(event.target.value, 1)))} min="1" />
         <Input label="NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
       </CardDouble>
+
+      <CardDouble title={`QUOTE (${quoteLines.length} WINDOW${quoteLines.length === 1 ? '' : 'S'})`}>
+        {quoteLines.length ? (
+          <>
+            <Table>
+              <TableRow>
+                <TableColumn style={{ width: '34ch' }}>WINDOW</TableColumn>
+                <TableColumn style={{ width: '8ch' }}>QTY</TableColumn>
+                <TableColumn style={{ width: '14ch' }}>UNIT</TableColumn>
+                <TableColumn style={{ width: '14ch' }}>TOTAL</TableColumn>
+                <TableColumn>ACTIONS</TableColumn>
+              </TableRow>
+              {quoteLines.map((line) => (
+                <TableRow key={line.item.localId}>
+                  <TableColumn>{line.item.name}</TableColumn>
+                  <TableColumn>{line.item.quantity}</TableColumn>
+                  <TableColumn>{formatCurrency(line.result.price)}</TableColumn>
+                  <TableColumn>{formatCurrency(line.total)}</TableColumn>
+                  <TableColumn>
+                    <RowSpaceBetween>
+                      <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton>
+                      <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
+                    </RowSpaceBetween>
+                  </TableColumn>
+                </TableRow>
+              ))}
+            </Table>
+            <br />
+            <RowSpaceBetween>
+              <Text>QUOTE TOTAL</Text>
+              <Text>
+                <span className="status-pill status-pill-success">{formatCurrency(quoteTotal)}</span>
+              </Text>
+            </RowSpaceBetween>
+          </>
+        ) : (
+          <Text>No windows on this quote yet. Add the window above to build a quote with several windows; one purchase order line is created for each.</Text>
+        )}
+      </CardDouble>
+
+      <CardDouble title="SAVED COSTINGS">
+        {savedCostings.length ? (
+          <Table>
+            <TableRow>
+              <TableColumn style={{ width: '30ch' }}>NAME</TableColumn>
+              <TableColumn style={{ width: '20ch' }}>CUSTOMER</TableColumn>
+              <TableColumn style={{ width: '14ch' }}>PRICE</TableColumn>
+              <TableColumn>ACTIONS</TableColumn>
+            </TableRow>
+            {savedCostings.map((costing) => (
+              <TableRow key={costing.id}>
+                <TableColumn>{costing.name}</TableColumn>
+                <TableColumn>{costing.customer || '—'}</TableColumn>
+                <TableColumn>{formatCurrency(costing.price)}</TableColumn>
+                <TableColumn>
+                  <RowSpaceBetween>
+                    <ActionButton onClick={() => loadSavedCosting(costing)}>Load</ActionButton>
+                    <ActionButton onClick={() => compareCosting(costing)}>Compare</ActionButton>
+                    <ActionButton onClick={canSaveCostings ? () => removeSavedCosting(costing) : undefined}>Delete</ActionButton>
+                  </RowSpaceBetween>
+                </TableColumn>
+              </TableRow>
+            ))}
+          </Table>
+        ) : (
+          <Text>No saved costings. Save one to reuse it as a template for a repeat customer.</Text>
+        )}
+
+        {comparison ? (
+          <>
+            <br />
+            <Text>
+              <strong>{savedCostings.find((costing) => costing.id === comparison.id)?.name}</strong>
+            </Text>
+            <RowSpaceBetween>
+              <Text>QUOTED</Text>
+              <Text>{formatCurrency(comparison.quoted)}</Text>
+            </RowSpaceBetween>
+            <RowSpaceBetween>
+              <Text>ON TODAY&apos;S RATES</Text>
+              <Text>{formatCurrency(comparison.today)}</Text>
+            </RowSpaceBetween>
+            <RowSpaceBetween>
+              <Text>ON THE RATES THAT PRICED IT</Text>
+              <Text>{comparison.onOriginal == null ? 'those rates are not kept' : formatCurrency(comparison.onOriginal)}</Text>
+            </RowSpaceBetween>
+            {comparison.onOriginal != null && comparison.quoted != null && Math.abs(comparison.onOriginal - comparison.quoted) > 0.01 ? (
+              <Text>
+                <span className="status-warning">The recalculation does not match what was quoted, so the costing itself changed, not just the rates.</span>
+              </Text>
+            ) : null}
+          </>
+        ) : null}
+      </CardDouble>
+
+      <CardDouble title="WHAT THESE TERMS MEAN">
+        <Text>The costing keeps the words the legacy sheet used. These are what they mean, and where each one is applied.</Text>
+        <br />
+        <WindowCostingGlossary openGroup="price" />
+      </CardDouble>
+
+      <WindowCostingSheet audience={sheetAudience} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} windows={sheetWindows} />
     </AppFrame>
   );
 }

@@ -4,7 +4,7 @@
  * this file under plain node). See docs/window-costing.md for the model.
  */
 
-import type { GlassGroup, GlazingId, LabourTable, WindowRates, WindowTypeId } from './window-costing-rates';
+import type { AnodCode, EachKey, ExtrusionCode, GlassGroup, GlazingId, LabourTable, PerMetreKey, TrimBlackCode, TrimCode, WindowRates, WindowTypeId } from './window-costing-rates';
 
 export type { GlassGroup, GlazingId, WindowRates, WindowTypeId } from './window-costing-rates';
 
@@ -36,6 +36,8 @@ export type LineUnit = 'm' | 'ea' | 'pr' | 'set' | 'min' | 'sqm';
 
 export interface WindowCostingInput {
   type: WindowTypeId;
+  /** The catalogue product picked, when the costing came from the menu. Does not affect the price. */
+  productId: string | null;
   state: 'VIC';
   heightMm: number;
   lengthMm: number;
@@ -73,13 +75,25 @@ export interface WindowCostingInput {
   caravanStays: number;
 }
 
+/** A rate plus where it lives in the rates document, so an unpriced line can link to its field. */
+export interface RateRef {
+  value: number | null;
+  path: string | null;
+}
+
 export interface CostLine {
   key: string;
   label: string;
   qty: number;
   unit: LineUnit;
   rate: number | null;
+  ratePath: string | null;
   cost: number;
+}
+
+export interface UnpricedRate {
+  label: string;
+  path: string | null;
 }
 
 export interface CostExtra {
@@ -120,7 +134,7 @@ export interface WindowCostResult {
   uplift: number;
   price: number | null;
   extras: { trims?: CostExtra; blackAnodising?: CostExtra; secondGlazing?: CostExtra };
-  unpriced: string[];
+  unpriced: UnpricedRate[];
   warnings: string[];
   errors: string[];
 }
@@ -140,6 +154,10 @@ interface AnodRef {
   minMultiplier: number;
 }
 
+function rateRef(value: number | null | undefined, path: string | null): RateRef {
+  return { value: value === undefined || value === null || !Number.isFinite(value) ? null : value, path };
+}
+
 interface Ctx {
   input: WindowCostingInput;
   rates: WindowRates;
@@ -154,16 +172,16 @@ interface Ctx {
   square: boolean;
   trimM: number;
   perMin: number;
-  unpriced: string[];
+  unpriced: UnpricedRate[];
   anodLines: AnodRef[];
-  line(key: string, label: string, qty: number, unit: LineUnit, rate: number | null, cost?: number): CostLine;
-  ext(code: string): number | null;
-  pm(key: string): number | null;
-  ea(key: string): number | null;
-  trimEtch(code: string): number | null;
-  trimBlack(code: string): number | null;
-  trimRate(code: string): number | null;
-  anod(key: string, code: string, metres: number, opts?: { minMultiplier?: number; noMin?: boolean }): CostLine;
+  line(key: string, label: string, qty: number, unit: LineUnit, rate: RateRef | number | null, cost?: number): CostLine;
+  ext(code: ExtrusionCode): RateRef;
+  pm(key: PerMetreKey): RateRef;
+  ea(key: EachKey): RateRef;
+  trimEtch(code: TrimCode): RateRef;
+  trimBlack(code: TrimBlackCode): RateRef;
+  trimRate(code: TrimCode & ExtrusionCode): RateRef;
+  anod(key: string, code: AnodCode, metres: number, opts?: { minMultiplier?: number; noMin?: boolean }): CostLine;
   glassSelected(nonAcrylicOnly: boolean): boolean;
 }
 
@@ -244,8 +262,11 @@ export const GLAZING_ORDER: GlazingId[] = [
 const round1 = (value: number) => Math.round(value * 10) / 10;
 const round2 = (value: number) => Math.round(value * 100) / 100;
 const sumLines = (lines: CostLine[]) => lines.reduce((acc, line) => acc + line.cost, 0);
-const addRates = (a: number | null, b: number | null) => (a == null || b == null ? null : a + b);
-const scaleRate = (a: number | null, k: number) => (a == null ? null : a * k);
+const addRates = (a: RateRef, b: RateRef): RateRef => ({
+  value: a.value == null || b.value == null ? null : a.value + b.value,
+  path: a.value == null ? a.path : b.value == null ? b.path : a.path,
+});
+const scaleRate = (a: RateRef, k: number): RateRef => ({ value: a.value == null ? null : a.value * k, path: a.path });
 const count = (value: number) => Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
 const nonNegative = (value: number) => Math.max(0, Number.isFinite(value) ? value : 0);
 
@@ -262,7 +283,7 @@ export function extrusionRate(rates: WindowRates, code: string): number | null {
   return entry.kgPerM * perKg * (1 + supplier.loading) * (1 + entry.offcut);
 }
 
-function trimLine(c: Ctx, code: string, label = `M. ${code} TRIM`): CostLine[] {
+function trimLine(c: Ctx, code: TrimCode & ExtrusionCode, label = `M. ${code} TRIM`): CostLine[] {
   return c.trimM > 0 ? [c.line('trim', label, c.trimM, 'm', c.trimRate(code))] : [];
 }
 
@@ -278,7 +299,7 @@ function reinforcementMinutes(c: Ctx): number {
   return table.each + (c.input.qtyShaped > 0 ? table.offSquareExtra : 0);
 }
 
-function hopperReinforcement(c: Ctx, m: LabourMinutes, opts: { bar: string; barLabel: string; frame: string; rubber: string }) {
+function hopperReinforcement(c: Ctx, m: LabourMinutes, opts: { bar: ExtrusionCode; barLabel: string; frame: ExtrusionCode & AnodCode; rubber: PerMetreKey }) {
   const kind = c.input.reinforcement;
   const bars = count(c.input.reinforcementCount);
   if (kind === 'none' || bars === 0) {
@@ -307,7 +328,7 @@ function weldingMinutes(table: NonNullable<LabourTable['weld']>, welds: number, 
 
 const T5573: WindowTypeConfig = {
   id: 'T5573',
-  label: 'T5573 hopper',
+  label: 'T5573 fixed frame',
   fields: ['pairs', 'welds', 'reinforcement'],
   pairsSupported: true,
   trimsSupported: true,
@@ -332,7 +353,9 @@ const T5573: WindowTypeConfig = {
 
 const T5836: WindowTypeConfig = {
   id: 'T5836',
-  label: 'T5836 slider (600 series)',
+  // Every part on this type is 500 series (1249 infill, MP-024 500/650 track). The only "600" is
+  // the lock option, which the 1000 series slider uses too, so it names a lock and not a frame.
+  label: 'T5836 slider',
   fields: ['pairs', 'sillFlat', 'lockType', 'locks', 'welds', 'mullions'],
   lockTypes: ['600', 'plunger'],
   pairsSupported: true,
@@ -344,7 +367,7 @@ const T5836: WindowTypeConfig = {
   lines: (c) => {
     const i = c.input;
     const sillM = i.sillFlat ? c.L / 1000 : 0;
-    const anodFlat = i.finish === 'black' ? c.trimBlack('flat40x3') : i.finish === 'powder' ? c.rates.anodising.powderPerM : c.trimEtch('flat40x3');
+    const anodFlat = i.finish === 'black' ? c.trimBlack('flat40x3') : i.finish === 'powder' ? rateRef(c.rates.anodising.powderPerM, 'anodising.powderPerM') : c.trimEtch('flat40x3');
     return [
       c.line('frame', 'M. T5836', c.per, 'm', c.ext('T5836')),
       c.anod('anod', 'T5836', c.per),
@@ -501,7 +524,7 @@ const T2482: WindowTypeConfig = {
 
 const U6567: WindowTypeConfig = {
   id: 'U6567',
-  label: 'U6567 (1000 series)',
+  label: 'U6567 fixed frame (1000 series)',
   fields: ['pairs', 'welds', 'reinforcement'],
   pairsSupported: true,
   trimsSupported: true,
@@ -693,6 +716,7 @@ export const WINDOW_TYPE_ORDER: WindowTypeId[] = ['T5573', 'T5836', 'U6567', 'AF
 
 const BASE_INPUT: WindowCostingInput = {
   type: 'T5573',
+  productId: null,
   state: 'VIC',
   heightMm: 1000,
   lengthMm: 1000,
@@ -764,7 +788,7 @@ export function switchWindowType(current: WindowCostingInput, type: WindowTypeId
 }
 
 function createCtx(input: WindowCostingInput, rates: WindowRates, cfg: WindowTypeConfig, dims: Pick<Ctx, 'H' | 'L' | 'per' | 'area' | 'glassArea' | 'qty' | 'square' | 'trimM' | 'perMin'>): Ctx {
-  const unpriced: string[] = [];
+  const unpriced: UnpricedRate[] = [];
   const anodLines: AnodRef[] = [];
   const c: Ctx = {
     input,
@@ -775,19 +799,20 @@ function createCtx(input: WindowCostingInput, rates: WindowRates, cfg: WindowTyp
     unpriced,
     anodLines,
     line: (key, label, qty, unit, rate, cost) => {
+      const ref: RateRef = typeof rate === 'number' || rate === null ? { value: rate, path: null } : rate;
       const resolvedQty = Number.isFinite(qty) ? qty : 0;
-      const resolvedCost = cost !== undefined ? cost : resolvedQty * (rate ?? 0);
-      if (rate == null && resolvedQty > 0 && !unpriced.includes(label)) {
-        unpriced.push(label);
+      const resolvedCost = cost !== undefined ? cost : resolvedQty * (ref.value ?? 0);
+      if (ref.value == null && resolvedQty > 0 && !unpriced.some((entry) => entry.label === label)) {
+        unpriced.push({ label, path: ref.path });
       }
-      return { key, label, qty: resolvedQty, unit, rate, cost: resolvedCost };
+      return { key, label, qty: resolvedQty, unit, rate: ref.value, ratePath: ref.path, cost: resolvedCost };
     },
-    ext: (code) => extrusionRate(rates, code),
-    pm: (key) => (typeof rates.perMetre[key] === 'number' ? rates.perMetre[key] : null),
-    ea: (key) => (rates.each[key] === undefined ? null : rates.each[key]),
-    trimEtch: (code) => (typeof rates.anodising.trimEtch[code] === 'number' ? rates.anodising.trimEtch[code] : null),
-    trimBlack: (code) => (typeof rates.anodising.trimBlack[code] === 'number' ? rates.anodising.trimBlack[code] : null),
-    trimRate: (code) => addRates(extrusionRate(rates, code), c.trimEtch(code)),
+    ext: (code) => rateRef(extrusionRate(rates, code), `extrusions.${code}`),
+    pm: (key) => rateRef(rates.perMetre[key], `perMetre.${key}`),
+    ea: (key) => rateRef(rates.each[key], `each.${key}`),
+    trimEtch: (code) => rateRef(rates.anodising.trimEtch[code], `anodising.trimEtch.${code}`),
+    trimBlack: (code) => rateRef(rates.anodising.trimBlack[code], `anodising.trimBlack.${code}`),
+    trimRate: (code) => addRates(c.ext(code), c.trimEtch(code)),
     anod: (key, code, metres, opts) => {
       const a = rates.anodising;
       const factor = typeof a.factor[code] === 'number' ? a.factor[code] : null;
@@ -795,24 +820,24 @@ function createCtx(input: WindowCostingInput, rates: WindowRates, cfg: WindowTyp
       const finish = input.finish;
       const m = finish === 'mill' ? 0 : metres;
       let label: string;
-      let rate: number | null;
+      let rate: RateRef;
       let cost: number;
       if (finish === 'mill') {
         label = `ANOD. N/A (${code})`;
-        rate = 0;
+        rate = rateRef(0, null);
         cost = 0;
       } else if (finish === 'powder') {
         label = `POWDER COATED (${code})`;
-        rate = a.powderPerM;
-        cost = m * rate;
+        rate = rateRef(a.powderPerM, 'anodising.powderPerM');
+        cost = m * (rate.value ?? 0);
       } else if (finish === 'black') {
         label = `M. BLACK ANOD (${code})`;
-        rate = a.blackPerSqm == null || factor == null ? null : a.blackPerSqm * factor;
-        cost = rate == null ? 0 : opts?.noMin ? m * rate : Math.max(a.blackMin * minMultiplier, m * rate);
+        rate = rateRef(a.blackPerSqm == null || factor == null ? null : a.blackPerSqm * factor, a.blackPerSqm == null ? 'anodising.blackPerSqm' : `anodising.factor.${code}`);
+        cost = rate.value == null ? 0 : opts?.noMin ? m * rate.value : Math.max(a.blackMin * minMultiplier, m * rate.value);
       } else {
         label = `M. ETCH ANOD (${code})`;
-        rate = factor == null ? null : a.etchPerSqm * factor;
-        cost = rate == null ? 0 : opts?.noMin ? m * rate : Math.max(a.etchMin * minMultiplier, m * rate);
+        rate = rateRef(factor == null ? null : a.etchPerSqm * factor, `anodising.factor.${code}`);
+        cost = rate.value == null ? 0 : opts?.noMin ? m * rate.value : Math.max(a.etchMin * minMultiplier, m * rate.value);
       }
       const line = c.line(key, label, m, 'm', rate, cost);
       anodLines.push({ line, code, metres: m, minMultiplier: opts?.noMin ? 0 : minMultiplier });
@@ -849,22 +874,23 @@ function glazingBlock(c: Ctx, glazingId: GlazingId, q: GlazingQuantities): CostL
   const option = c.rates.glass.options[glazingId];
   const proc = c.rates.glass.processing[option.group];
   const loading = c.input.mws ? c.rates.glass.loadingMws : c.rates.glass.loading;
-  const load = (value: number | null, loaded: boolean) => (value == null ? null : loaded ? value * (1 + loading) : value);
-  const lines = [c.line('glass', option.label, c.glassArea, 'sqm', load(option.list, option.loaded))];
+  const load = (value: number | null, loaded: boolean, path: string): RateRef => rateRef(value == null ? null : loaded ? value * (1 + loading) : value, path);
+  const procPath = `glass.processing.${option.group}`;
+  const lines = [c.line('glass', option.label, c.glassArea, 'sqm', load(option.list, option.loaded, `glass.options.${glazingId}.list`))];
   if (q.holes > 0) {
-    lines.push(c.line('holes', 'HOLES', q.holes, 'ea', load(proc.holes, proc.loaded)));
+    lines.push(c.line('holes', 'HOLES', q.holes, 'ea', load(proc.holes, proc.loaded, `${procPath}.holes`)));
   }
   if (q.cviewHoles > 0) {
-    lines.push(c.line('cviewHoles', 'C/VIEW HOLES', q.cviewHoles, 'ea', load(proc.cview, proc.loaded)));
+    lines.push(c.line('cviewHoles', 'C/VIEW HOLES', q.cviewHoles, 'ea', load(proc.cview, proc.loaded, `${procPath}.cview`)));
   }
   if (q.shapes > 0) {
-    lines.push(c.line('shapes', 'SHAPE CUTTING', q.shapes, 'ea', load(proc.shape, proc.loaded)));
+    lines.push(c.line('shapes', 'SHAPE CUTTING', q.shapes, 'ea', load(proc.shape, proc.loaded, `${procPath}.shape`)));
   }
   if (q.flatSmoothM > 0) {
-    lines.push(c.line('flatSmooth', option.group === 'laminate' ? 'METRES ROUGH ARRIS' : 'METRES FLAT SMOOTH', q.flatSmoothM, 'm', load(proc.flatSmooth, proc.loaded)));
+    lines.push(c.line('flatSmooth', option.group === 'laminate' ? 'METRES ROUGH ARRIS' : 'METRES FLAT SMOOTH', q.flatSmoothM, 'm', load(proc.flatSmooth, proc.loaded, `${procPath}.flatSmooth`)));
   }
   if (q.flatGroundM > 0 && option.group === 'laminate') {
-    lines.push(c.line('flatGround', 'METRES FLAT GROUND', q.flatGroundM, 'm', load(proc.flatGround, proc.loaded)));
+    lines.push(c.line('flatGround', 'METRES FLAT GROUND', q.flatGroundM, 'm', load(proc.flatGround, proc.loaded, `${procPath}.flatGround`)));
   }
   return lines;
 }
@@ -975,9 +1001,10 @@ export function costWindow(input: WindowCostingInput, rates: WindowRates): Windo
     let base = 0;
     for (const ref of c.anodLines) {
       const factor = typeof a.factor[ref.code] === 'number' ? a.factor[ref.code] : null;
-      const blackRate = a.blackPerSqm == null || factor == null ? null : a.blackPerSqm * factor;
-      const blackCost = blackRate == null ? 0 : ref.minMultiplier > 0 ? Math.max(a.blackMin * ref.minMultiplier, ref.metres * blackRate) : ref.metres * blackRate;
-      if (blackRate == null) {
+      const blackValue = a.blackPerSqm == null || factor == null ? null : a.blackPerSqm * factor;
+      const blackRate = rateRef(blackValue, a.blackPerSqm == null ? 'anodising.blackPerSqm' : `anodising.factor.${ref.code}`);
+      const blackCost = blackValue == null ? 0 : ref.minMultiplier > 0 ? Math.max(a.blackMin * ref.minMultiplier, ref.metres * blackValue) : ref.metres * blackValue;
+      if (blackValue == null) {
         priced = false;
       }
       blackLines.push(c.line(`black-${ref.line.key}`, `M. BLACK ANOD (${ref.code})`, ref.metres, 'm', blackRate, blackCost));
@@ -1018,15 +1045,45 @@ export function costWindow(input: WindowCostingInput, rates: WindowRates): Windo
   };
 }
 
-/** One-line description for purchase-order lines and the clipboard summary. */
-export function describeWindow(input: WindowCostingInput, rates: WindowRates): string {
+export interface BatchPrice {
+  batchSize: number;
+  pricePerUnit: number | null;
+  saving: number | null;
+}
+
+/**
+ * Price per each (or per pair) at several batch sizes. Setup minutes divide across the batch, so a
+ * larger batch costs less per window. The batch keeps the shape of the costed window: an all-shaped
+ * window stays shaped, anything else is costed as made to size.
+ */
+export function costWindowBatches(input: WindowCostingInput, rates: WindowRates, batchSizes: number[] = [1, 2, 5, 10]): BatchPrice[] {
+  const shapedOnly = count(input.qtyToSize) === 0 && count(input.qtyShaped) > 0;
+  const single = costWindow({ ...input, qtyToSize: shapedOnly ? 0 : 1, qtyShaped: shapedOnly ? 1 : 0 }, rates).price;
+
+  return batchSizes.map((batchSize) => {
+    const size = Math.max(1, Math.floor(batchSize));
+    const result = costWindow({ ...input, qtyToSize: shapedOnly ? 0 : size, qtyShaped: shapedOnly ? size : 0 }, rates);
+    return {
+      batchSize: size,
+      pricePerUnit: result.price,
+      saving: single == null || result.price == null ? null : single - result.price,
+    };
+  });
+}
+
+/**
+ * One-line description for purchase-order lines and the clipboard summary. Pass the catalogue name
+ * when the costing came from the menu, so it reads as the workshop names the window rather than by
+ * extrusion code. The engine does not import the catalogue, to keep it free of that dependency.
+ */
+export function describeWindow(input: WindowCostingInput, rates: WindowRates, nameOverride?: string | null): string {
   const cfg = WINDOW_TYPES[input.type];
   const glazing = input.glazingId ? rates.glass.options[input.glazingId]?.label : undefined;
   const qtyToSize = count(input.qtyToSize);
   const qtyShaped = count(input.qtyShaped);
   const quantity = [qtyToSize > 0 ? `${qtyToSize} to size` : '', qtyShaped > 0 ? `${qtyShaped} shaped` : ''].filter(Boolean).join(', ');
   return [
-    cfg.variantLabels ? cfg.variantLabels[input.variant] : cfg.label,
+    nameOverride || (cfg.variantLabels ? cfg.variantLabels[input.variant] : cfg.label),
     `${nonNegative(input.heightMm)} x ${nonNegative(input.lengthMm)} mm`,
     quantity,
     FINISH_LABELS[input.finish],

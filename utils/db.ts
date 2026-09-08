@@ -1,4 +1,10 @@
-import { Pool, QueryResult, QueryResultRow } from 'pg';
+import { Pool, QueryResult, QueryResultRow, types } from 'pg';
+
+// A `date` column is a calendar day, not an instant. Left alone, pg hands back a Date at local
+// midnight, which serialises to the UTC instant and reads back as the day before anywhere east of
+// Greenwich: an order taken on a Melbourne morning files as yesterday. Keep the string Postgres sent.
+const DATE_OID = 1082;
+types.setTypeParser(DATE_OID, (value) => value);
 
 declare global {
   // eslint-disable-next-line no-var

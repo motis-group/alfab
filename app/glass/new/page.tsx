@@ -17,8 +17,9 @@ import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 
-import { defaultPricingData } from '@components/PricingProvider';
-import { CostBreakdown, GlassSpecification, calculateCost, getAvailableGlassTypes, getAvailableThicknesses } from '@utils/calculations';
+import { usePricing } from '@components/PricingProvider';
+import JobSheet from '@components/JobSheet';
+import { CostBreakdown, GlassSpecification, calculateCost, describeGlassSpecification, getAvailableGlassTypes, getAvailableThicknesses } from '@utils/calculations';
 import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import {
   Customer,
@@ -37,8 +38,11 @@ import {
   statusLabel,
   todayISODate,
 } from '@utils/order-management';
-import { QuoteToOrderDraft, buildQuoteDraftLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
-import { WindowCostingInput } from '@utils/window-costing';
+import { QuoteToOrderDraft, buildQuoteDraftLineDescription, buildWindowLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
+import { WindowCostingInput, describeWindow } from '@utils/window-costing';
+import { productFullName } from '@utils/window-catalogue';
+import { WindowRates, mergeWindowRates } from '@utils/window-costing-rates';
+import { loadWindowRates } from '@utils/window-costing-store';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
@@ -65,12 +69,6 @@ const defaultAdhocSpec: GlassSpecification = {
   scanning: false,
 };
 
-interface PricingShape {
-  basePrices: typeof defaultPricingData.basePrices;
-  edgeworkPrices: typeof defaultPricingData.edgeworkPrices;
-  otherPrices: typeof defaultPricingData.otherPrices;
-}
-
 interface OrderFormState {
   id: string | null;
   customerId: string;
@@ -92,6 +90,7 @@ interface LineDraft {
   customerProductId: string;
   adhocSpec: GlassSpecification;
   windowSpec: WindowCostingInput | null;
+  windowRatesUpdatedAt: string | null;
   markupPercent: number;
 }
 
@@ -107,6 +106,7 @@ function createLineDraft(partial?: Partial<LineDraft>): LineDraft {
     customerProductId: partial?.customerProductId || '',
     adhocSpec: partial?.adhocSpec || { ...defaultAdhocSpec },
     windowSpec: partial?.windowSpec ?? null,
+    windowRatesUpdatedAt: partial?.windowRatesUpdatedAt ?? null,
     markupPercent: partial?.markupPercent ?? 20,
   };
 }
@@ -114,28 +114,6 @@ function createLineDraft(partial?: Partial<LineDraft>): LineDraft {
 function numberOrFallback(value: string, fallback = 0): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function parsePricingDataFromStorage(): PricingShape {
-  if (typeof window === 'undefined') {
-    return defaultPricingData;
-  }
-
-  const raw = localStorage.getItem('glassPricingData');
-  if (!raw) {
-    return defaultPricingData;
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    return {
-      basePrices: parsed.basePrices || defaultPricingData.basePrices,
-      edgeworkPrices: parsed.edgeworkPrices || defaultPricingData.edgeworkPrices,
-      otherPrices: parsed.otherPrices || defaultPricingData.otherPrices,
-    };
-  } catch {
-    return defaultPricingData;
-  }
 }
 
 function normalizeLineNote(parsed: ParsedLineNotes, fallbackRaw?: string | null): string {
@@ -154,12 +132,14 @@ function normalizeCustomerLookupName(value: string): string {
 
 export default function NewPurchaseOrderPage() {
   const router = useRouter();
+  const { pricingData } = usePricing();
 
   const [role, setRole] = useState<UserRole>('readonly');
 
   const [customers, setCustomers] = useState<Customer[]>([]);
+  // Only to spell a window line out on the job sheet. Prices on the line are the ones already saved.
+  const [windowRates, setWindowRates] = useState<WindowRates>(() => mergeWindowRates(null));
   const [customerProducts, setCustomerProducts] = useState<CustomerProduct[]>([]);
-  const [pricingData, setPricingData] = useState<PricingShape>(defaultPricingData);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -179,6 +159,9 @@ export default function NewPurchaseOrderPage() {
   });
 
   const [lineDrafts, setLineDrafts] = useState<LineDraft[]>([createLineDraft()]);
+  // Line ids loaded from the database. A save updates these in place rather than replacing them,
+  // so anything that points at a line (a job sheet, a delivery) keeps pointing at it.
+  const [loadedLineIds, setLoadedLineIds] = useState<string[]>([]);
   const [activeLineId, setActiveLineId] = useState<string>(lineDrafts[0].localId);
 
   const canEditOrders = role !== 'readonly';
@@ -212,6 +195,7 @@ export default function NewPurchaseOrderPage() {
 
     setCustomers(loadedCustomers);
     setCustomerProducts(loadedCustomerProducts);
+    setWindowRates((await loadWindowRates()).rates);
 
     return {
       customers: loadedCustomers,
@@ -260,9 +244,12 @@ export default function NewPurchaseOrderPage() {
         customerProductId: parsedNotes.customerProductId || '',
         adhocSpec: parsedNotes.adhocSpecification || { ...defaultAdhocSpec },
         windowSpec: parsedNotes.windowSpecification || null,
+        windowRatesUpdatedAt: parsedNotes.windowRatesUpdatedAt || null,
         markupPercent: parsedNotes.markupPercent ?? 20,
       });
     });
+
+    setLoadedLineIds(lines.map((line) => line.id).filter(Boolean) as string[]);
 
     if (mappedLines.length) {
       setLineDrafts(mappedLines);
@@ -277,7 +264,6 @@ export default function NewPurchaseOrderPage() {
   }
 
   useEffect(() => {
-    setPricingData(parsePricingDataFromStorage());
 
     (async () => {
       setIsLoading(true);
@@ -393,16 +379,33 @@ export default function NewPurchaseOrderPage() {
       : [];
     const matchedCustomerId = matchedCustomers.length === 1 ? matchedCustomers[0].id : '';
 
-    const isWindow = quoteDraft.kind === 'window';
-    const draftLine = createLineDraft({
-      pricingSource: isWindow ? 'window_calculator' : 'adhoc_calculator',
-      quantityOrdered: quoteDraft.quantity,
-      unitPriceAtOrder: quoteDraft.unitPrice,
-      lineNote: buildQuoteDraftLineDescription(quoteDraft),
-      adhocSpec: quoteDraft.spec ? { ...quoteDraft.spec } : { ...defaultAdhocSpec },
-      windowSpec: quoteDraft.windowSpec,
-      markupPercent: quoteDraft.markupPercent,
-    });
+    // A window quote carries one line per costed window; a glass quote carries a single line.
+    const draftLines =
+      quoteDraft.kind === 'window'
+        ? quoteDraft.windowLines.map((line) =>
+            createLineDraft({
+              pricingSource: 'window_calculator',
+              quantityOrdered: line.quantity,
+              unitPriceAtOrder: line.unitPrice,
+              lineNote: buildWindowLineDescription(quoteDraft.quoteName, line),
+              windowSpec: line.windowSpec,
+              windowRatesUpdatedAt: line.ratesUpdatedAt,
+            })
+          )
+        : [
+            createLineDraft({
+              pricingSource: 'adhoc_calculator',
+              quantityOrdered: quoteDraft.quantity,
+              unitPriceAtOrder: quoteDraft.unitPrice,
+              lineNote: buildQuoteDraftLineDescription(quoteDraft),
+              adhocSpec: quoteDraft.spec ? { ...quoteDraft.spec } : { ...defaultAdhocSpec },
+              markupPercent: quoteDraft.markupPercent,
+            }),
+          ];
+
+    if (!draftLines.length) {
+      return;
+    }
 
     const draftNotes = [
       quoteDraft.quoteNotes.trim(),
@@ -417,8 +420,8 @@ export default function NewPurchaseOrderPage() {
       receivedDate: quoteDraft.quoteDate || prev.receivedDate,
       notes: draftNotes,
     }));
-    setLineDrafts([draftLine]);
-    setActiveLineId(draftLine.localId);
+    setLineDrafts(draftLines);
+    setActiveLineId(draftLines[0].localId);
   }
 
   function applyCustomerConfig(lineId: string, customerProductId: string) {
@@ -479,6 +482,12 @@ export default function NewPurchaseOrderPage() {
       }
     }
 
+    // A line at nothing gets made, delivered and invoiced short, and no screen ever says so.
+    const freeLines = lineDrafts.filter((line) => !(Number(line.unitPriceAtOrder) > 0));
+    if (freeLines.length && !window.confirm(`${freeLines.length} line${freeLines.length === 1 ? ' has' : 's have'} no price. Saved like this the order is short by whatever ${freeLines.length === 1 ? 'it is' : 'they are'} worth. Save anyway?`)) {
+      return;
+    }
+
     setIsSaving(true);
 
     try {
@@ -500,8 +509,12 @@ export default function NewPurchaseOrderPage() {
         const { error } = await db.from(TABLE_PURCHASE_ORDERS).update(orderPayload).eq('id', orderForm.id);
         if (error) throw error;
 
-        const { error: deleteLinesError } = await db.from(TABLE_PURCHASE_ORDER_LINES).delete().eq('purchase_order_id', orderForm.id);
-        if (deleteLinesError) throw deleteLinesError;
+        // Only the lines the user actually removed are deleted. The rest keep their ids.
+        const keptIds = new Set(lineDrafts.map((line) => line.id).filter(Boolean) as string[]);
+        for (const removedId of loadedLineIds.filter((id) => !keptIds.has(id))) {
+          const { error: deleteLineError } = await db.from(TABLE_PURCHASE_ORDER_LINES).delete().eq('id', removedId);
+          if (deleteLineError) throw deleteLineError;
+        }
       } else {
         const { data, error } = await db
           .from(TABLE_PURCHASE_ORDERS)
@@ -522,7 +535,7 @@ export default function NewPurchaseOrderPage() {
         throw new Error('Purchase order ID was not returned after save.');
       }
 
-      const linePayload = lineDrafts.map((line) => {
+      const buildLinePayload = (line: LineDraft) => {
         const selectedCustomerProduct = customerProducts.find((entry) => entry.id === line.customerProductId);
         const selectedLabel = selectedCustomerProduct?.name || selectedCustomerProduct?.customer_part_ref || 'Customer Product';
         const isAdhoc = line.pricingSource === 'adhoc_calculator';
@@ -540,14 +553,25 @@ export default function NewPurchaseOrderPage() {
             customerProductId: line.customerProductId || null,
             adhocSpecification: isAdhoc ? line.adhocSpec : null,
             windowSpecification: isWindow ? line.windowSpec : null,
+            windowRatesUpdatedAt: isWindow ? line.windowRatesUpdatedAt : null,
             markupPercent: isAdhoc ? line.markupPercent : null,
             productLabel: isAdhoc ? line.lineNote.trim() || 'Ad Hoc Item' : isWindow ? line.lineNote.trim() || 'Window Costing Item' : selectedLabel,
           }),
         };
-      });
+      };
 
-      const { error: insertLineError } = await db.from(TABLE_PURCHASE_ORDER_LINES).insert(linePayload);
-      if (insertLineError) throw insertLineError;
+      const existingLines = lineDrafts.filter((line) => line.id && loadedLineIds.includes(line.id));
+      const newLines = lineDrafts.filter((line) => !line.id || !loadedLineIds.includes(line.id));
+
+      for (const line of existingLines) {
+        const { error: updateLineError } = await db.from(TABLE_PURCHASE_ORDER_LINES).update(buildLinePayload(line)).eq('id', line.id as string);
+        if (updateLineError) throw updateLineError;
+      }
+
+      if (newLines.length) {
+        const { error: insertLineError } = await db.from(TABLE_PURCHASE_ORDER_LINES).insert(newLines.map(buildLinePayload));
+        if (insertLineError) throw insertLineError;
+      }
 
       router.push(`/glass?orderId=${orderId}`);
       router.refresh();
@@ -596,6 +620,17 @@ export default function NewPurchaseOrderPage() {
     }
   }
 
+  function printJobSheet() {
+    if (typeof window !== 'undefined') {
+      window.print();
+    }
+  }
+
+  const customerProductSpec = (product?: CustomerProduct) => {
+    const spec = product ? parseCustomerProductNotes(product.notes).savedSpecification : null;
+    return spec ? describeGlassSpecification(spec) : '';
+  };
+
   const lineSummaries = lineDrafts.map((line, index) => {
     const selectedCustomerProduct = customerProducts.find((entry) => entry.id === line.customerProductId);
     const isAdhoc = line.pricingSource === 'adhoc_calculator';
@@ -609,6 +644,13 @@ export default function NewPurchaseOrderPage() {
       qty: line.quantityOrdered,
       unitPrice: line.unitPriceAtOrder,
       total: line.quantityOrdered * line.unitPriceAtOrder,
+      // What the floor has to make. Without it the job sheet says "Ad hoc item" and nothing else.
+      spec: isWindow && line.windowSpec
+        ? describeWindow(line.windowSpec, windowRates, productFullName(line.windowSpec.productId ?? null))
+        : isAdhoc && line.adhocSpec
+          ? describeGlassSpecification(line.adhocSpec)
+          : customerProductSpec(selectedCustomerProduct),
+      note: line.lineNote,
     };
   });
 
@@ -653,6 +695,13 @@ export default function NewPurchaseOrderPage() {
             <ActionButton onClick={handleSaveOrder}>{isSaving ? 'Saving...' : isEditingOrder ? 'Update Purchase Order' : 'Save Purchase Order'}</ActionButton>
             <ActionButton onClick={() => router.push('/glass')}>Cancel</ActionButton>
           </RowSpaceBetween>
+          {isEditingOrder ? (
+            <>
+              <br />
+              <ActionButton onClick={printJobSheet}>Print Job Sheet</ActionButton>
+              <Text>What to make, for the floor. No prices on it.</Text>
+            </>
+          ) : null}
         </Card>
       }
       actionItems={[
@@ -1203,6 +1252,7 @@ export default function NewPurchaseOrderPage() {
                     ? 'Priced on the Window Costing page; the unit price above is the costing price.'
                     : 'No window costing attached. Price the window on the Window Costing page and create the order from there.'}
                 </Text>
+                {activeLine.windowRatesUpdatedAt ? <Text>Priced on the window rates saved {new Date(activeLine.windowRatesUpdatedAt).toLocaleString()}.</Text> : null}
                 <ActionButton onClick={() => router.push('/glass/windows')}>Open Window Costing</ActionButton>
               </>
             )}
@@ -1224,6 +1274,26 @@ export default function NewPurchaseOrderPage() {
           </>
         )}
       </CardDouble>
+      {isEditingOrder ? (
+        <JobSheet
+          order={{
+            po_number: orderForm.poNumber,
+            received_date: orderForm.receivedDate,
+            required_date: orderForm.requiredDate,
+            status: orderForm.status,
+            notes: orderForm.notes,
+          }}
+          customer={customers.find((entry) => entry.id === orderForm.customerId) || null}
+          lines={lineSummaries.map((summary) => ({
+            id: summary.id,
+            index: summary.index,
+            description: summary.item,
+            quantity: summary.qty,
+            // A window line's description is already the specification; only add what it does not say.
+            notes: [summary.spec, summary.note].filter((part) => part && part !== summary.item).join(' — '),
+          }))}
+        />
+      ) : null}
     </AppFrame>
   );
 }

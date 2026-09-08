@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getAppSession } from '@utils/auth-session';
+import { clearSessionCookie, getAppSession } from '@utils/auth-session';
 import { getRolePermissions } from '@utils/authz';
 import { applyThemePreferencesCookie, saveUserThemePreferences } from '@utils/theme-preferences-server';
 import { normalizeThemePreferences } from '@utils/theme-preferences';
@@ -11,7 +11,11 @@ export async function GET() {
   const session = await getAppSession();
 
   if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Clear the cookie as well. A cookie whose session has expired keeps the middleware sending the
+    // user to the app and the app sending them back to the login page.
+    const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    clearSessionCookie(response);
+    return response;
   }
 
   return NextResponse.json({
@@ -40,7 +44,11 @@ export async function PATCH(request: Request) {
   const session = await getAppSession();
 
   if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Clear the cookie as well. A cookie whose session has expired keeps the middleware sending the
+    // user to the app and the app sending them back to the login page.
+    const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    clearSessionCookie(response);
+    return response;
   }
 
   const body = ((await request.json().catch(() => ({}))) || {}) as MeUpdateBody;
