@@ -37,3 +37,7 @@ For the calculator's CAD file import (DXF/DWG/SVG) and the optional DWG converte
 For the window costing model (legacy Lotus sheet port) and its rates, see:
 
 - `docs/window-costing.md`
+
+For glass quoting, the minimum charge and where glass rates live, see:
+
+- `docs/glass-quoting.md`

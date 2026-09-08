@@ -38,7 +38,7 @@ import {
   statusLabel,
   todayISODate,
 } from '@utils/order-management';
-import { QuoteToOrderDraft, buildQuoteDraftLineDescription, buildWindowLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
+import { QuoteToOrderDraft, buildGlassLineDescription, buildWindowLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
 import { WindowCostingInput, describeWindow } from '@utils/window-costing';
 import { productFullName } from '@utils/window-catalogue';
 import { WindowRates, mergeWindowRates } from '@utils/window-costing-rates';
@@ -377,9 +377,17 @@ export default function NewPurchaseOrderPage() {
     const matchedCustomers = normalizedQuoteCustomer
       ? availableCustomers.filter((customer) => customer.is_active !== false && normalizeCustomerLookupName(customer.name) === normalizedQuoteCustomer)
       : [];
-    const matchedCustomerId = matchedCustomers.length === 1 ? matchedCustomers[0].id : '';
+    // The quote already knows which customer it was written against; the name match is the fallback
+    // for a walk-in typed by hand.
+    const matchedCustomerId = quoteDraft.customerId || (matchedCustomers.length === 1 ? matchedCustomers[0].id : '');
 
-    // A window quote carries one line per costed window; a glass quote carries a single line.
+    // Both kinds of quote carry one line per priced item.
+    const glassLines = quoteDraft.glassLines.length
+      ? quoteDraft.glassLines
+      : quoteDraft.spec
+        ? [{ description: '', quantity: quoteDraft.quantity, unitPrice: quoteDraft.unitPrice, markupPercent: quoteDraft.markupPercent, spec: quoteDraft.spec }]
+        : [];
+
     const draftLines =
       quoteDraft.kind === 'window'
         ? quoteDraft.windowLines.map((line) =>
@@ -392,16 +400,16 @@ export default function NewPurchaseOrderPage() {
               windowRatesUpdatedAt: line.ratesUpdatedAt,
             })
           )
-        : [
+        : glassLines.map((line) =>
             createLineDraft({
               pricingSource: 'adhoc_calculator',
-              quantityOrdered: quoteDraft.quantity,
-              unitPriceAtOrder: quoteDraft.unitPrice,
-              lineNote: buildQuoteDraftLineDescription(quoteDraft),
-              adhocSpec: quoteDraft.spec ? { ...quoteDraft.spec } : { ...defaultAdhocSpec },
-              markupPercent: quoteDraft.markupPercent,
-            }),
-          ];
+              quantityOrdered: line.quantity,
+              unitPriceAtOrder: line.unitPrice,
+              lineNote: buildGlassLineDescription(quoteDraft.quoteName, line),
+              adhocSpec: { ...line.spec },
+              markupPercent: line.markupPercent,
+            })
+          );
 
     if (!draftLines.length) {
       return;
@@ -626,6 +634,8 @@ export default function NewPurchaseOrderPage() {
     }
   }
 
+  const selectedCustomer = customers.find((entry) => entry.id === orderForm.customerId) || null;
+
   const customerProductSpec = (product?: CustomerProduct) => {
     const spec = product ? parseCustomerProductNotes(product.notes).savedSpecification : null;
     return spec ? describeGlassSpecification(spec) : '';
@@ -777,6 +787,11 @@ export default function NewPurchaseOrderPage() {
             </option>
           ))}
         </select>
+        {selectedCustomer ? (
+          <Text style={{ opacity: 0.7 }}>
+            {[selectedCustomer.contact_name, selectedCustomer.phone, selectedCustomer.delivery_address].filter(Boolean).join(' · ') || 'No phone or delivery address on this customer yet.'}
+          </Text>
+        ) : null}
         <br />
 
         <Input label="PO NUMBER" name="po_number" value={orderForm.poNumber} onChange={(event) => setOrderForm((prev) => ({ ...prev, poNumber: event.target.value }))} disabled={!canEditOrders || isLoading} />
@@ -1283,14 +1298,14 @@ export default function NewPurchaseOrderPage() {
             status: orderForm.status,
             notes: orderForm.notes,
           }}
-          customer={customers.find((entry) => entry.id === orderForm.customerId) || null}
+          customer={selectedCustomer}
           lines={lineSummaries.map((summary) => ({
             id: summary.id,
             index: summary.index,
             description: summary.item,
             quantity: summary.qty,
-            // A window line's description is already the specification; only add what it does not say.
-            notes: [summary.spec, summary.note].filter((part) => part && part !== summary.item).join(' — '),
+            // The description often already carries the specification. Only add what it does not say.
+            notes: [summary.spec, summary.note].filter((part) => part && !summary.item.includes(part)).join(' — '),
           }))}
         />
       ) : null}

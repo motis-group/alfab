@@ -16,6 +16,10 @@ export interface PricingData {
     shapeComplex8to12: number;
     ceramicBanding: number;
     scanning: number;
+    /** The least a piece is charged, however small. 0 until Nick says what it is. */
+    minCharge: number;
+    /** The smallest area a piece is charged at, in square metres. 0 charges the exact area. */
+    minAreaSqm: number;
   };
 }
 
@@ -69,6 +73,9 @@ export const defaultPricingData: PricingData = {
     shapeComplex8to12: 25.27,
     ceramicBanding: 63.68,
     scanning: 90,
+    // Nothing until the shop says otherwise, which is exactly what the calculator did before.
+    minCharge: 0,
+    minAreaSqm: 0,
   },
 };
 

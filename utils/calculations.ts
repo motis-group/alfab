@@ -10,6 +10,8 @@ export interface CostBreakdown {
   shape: number;
   ceramic: number;
   scanning: number;
+  /** What the minimum charge added, when the piece costs less than the shop will cut for. */
+  minimumTopUp: number;
   total: number;
 }
 
@@ -198,6 +200,14 @@ export interface CustomPricingData {
     shapeComplex8to12?: number;
     ceramicBanding?: number;
     scanning?: number;
+    /**
+     * The least a piece is charged, however small it is. A 200 x 200 offcut costs the same handling,
+     * cutting and paperwork as a big one, and area alone prices it at a few dollars. Zero means no
+     * minimum, which is what the calculator did before the field existed.
+     */
+    minCharge?: number;
+    /** The smallest area a piece is charged at, in square metres. Zero means charge exact area. */
+    minAreaSqm?: number;
   };
 }
 
@@ -218,6 +228,7 @@ export function calculateCost(spec: GlassSpecification, customPricing?: CustomPr
     shape: 0,
     ceramic: 0,
     scanning: 0,
+    minimumTopUp: 0,
     total: 0,
   };
 
@@ -226,7 +237,9 @@ export function calculateCost(spec: GlassSpecification, customPricing?: CustomPr
   if (!basePrice) {
     throw new Error(`Invalid combination of glass type (${spec.glassType}) and thickness (${spec.thickness}mm)`);
   }
-  costs.baseGlass = basePrice * area;
+  // A small piece is charged as if it were the minimum size, because cutting it costs the same.
+  const minAreaSqm = Math.max(0, otherPrices.minAreaSqm ?? 0);
+  costs.baseGlass = basePrice * Math.max(area, minAreaSqm);
 
   // Calculate edgework cost
   const thicknessRange = spec.thickness <= 6 ? '4-6' : '8-12';
@@ -263,8 +276,14 @@ export function calculateCost(spec: GlassSpecification, customPricing?: CustomPr
     costs.scanning = scanning;
   }
 
-  // Calculate total
   costs.total = Object.values(costs).reduce((sum, cost) => sum + cost, 0) - costs.total;
+
+  // The floor of what the shop will cut for. Held separately so the breakdown says it was applied.
+  const minCharge = Math.max(0, otherPrices.minCharge ?? 0);
+  if (costs.total < minCharge) {
+    costs.minimumTopUp = minCharge - costs.total;
+    costs.total = minCharge;
+  }
 
   return costs;
 }

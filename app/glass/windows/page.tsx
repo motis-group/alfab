@@ -19,7 +19,8 @@ import WindowCostingGlossary from '@components/WindowCostingGlossary';
 import WindowCostingSheet, { WindowCostingSheetWindow } from '@components/WindowCostingSheet';
 
 import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
-import { UserRole, formatCurrency, todayISODate } from '@utils/order-management';
+import { Customer, UserRole, formatCurrency, todayISODate } from '@utils/order-management';
+import { createClient } from '@utils/db-client';
 import { WindowQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 import {
@@ -127,6 +128,8 @@ export default function WindowCostingPage() {
   const [windowName, setWindowName] = useState('');
   const [quoteName, setQuoteName] = useState('');
   const [customerName, setCustomerName] = useState('');
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerId, setCustomerId] = useState('');
   const [quoteDate, setQuoteDate] = useState(todayISODate());
   const [quoteNotes, setQuoteNotes] = useState('');
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
@@ -212,6 +215,8 @@ export default function WindowCostingPage() {
     return () => window.removeEventListener('afterprint', restore);
   }, []);
 
+  const selectedCustomer = customers.find((entry) => entry.id === customerId) || null;
+
   const refreshSavedCostings = useCallback(async () => {
     try {
       setSavedCostings(await listWindowCostings());
@@ -234,6 +239,9 @@ export default function WindowCostingPage() {
 
         setRole(user.effectiveRole as UserRole);
         setCanSaveCostings(userCan(user, 'quotes:write'));
+
+        const { data: customerData } = await createClient().from('customers').select('*').order('name', { ascending: true });
+        setCustomers((customerData as Customer[]) || []);
 
         const loaded = await loadWindowRates();
         setRates(loaded.rates);
@@ -475,9 +483,9 @@ export default function WindowCostingPage() {
     persistQuoteToOrderDraft({
       kind: 'window',
       quoteName,
-      customerName,
+      customerName: selectedCustomer?.name || customerName,
+      customerId: customerId || null,
       quoteDate,
-      markupPercent: 0,
       quoteNotes,
       windowLines: lines,
     });
@@ -951,7 +959,33 @@ export default function WindowCostingPage() {
       <CardDouble title="QUOTE DETAILS">
         <Input label="WINDOW NAME" name="window_name" value={windowName} onChange={(event) => setWindowName(event.target.value)} placeholder="Kitchen hopper" />
         <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} />
-        <Input label="CUSTOMER" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />
+        <Text>CUSTOMER</Text>
+        <select
+          value={customerId}
+          onChange={(event) => {
+            const nextId = event.target.value;
+            setCustomerId(nextId);
+            const picked = customers.find((entry) => entry.id === nextId);
+            if (picked) {
+              setCustomerName(picked.name);
+            }
+          }}
+        >
+          <option value="">Walk-in / not on file</option>
+          {customers
+            .filter((customer) => customer.is_active !== false)
+            .map((customer) => (
+              <option key={customer.id} value={customer.id}>
+                {customer.name}
+              </option>
+            ))}
+        </select>
+        {selectedCustomer ? (
+          <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text>
+        ) : (
+          <Input label="CUSTOMER NAME" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />
+        )}
+        <br />
         <Input label="QUOTE DATE" type="date" name="quote_date" value={quoteDate} onChange={(event) => setQuoteDate(event.target.value)} />
         <Input label="NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
       </CardDouble>

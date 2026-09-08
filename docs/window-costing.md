@@ -118,6 +118,8 @@ the glass loading to 15% for every type.
   packing and uplift. The app hides itself for the printer; only the sheet prints.
 - **Copying.** "Copy Prices For Customer" is the same split in text. "Copy Cost Build-up
   (internal)" carries the build-up and is marked as not for a customer.
+- **Customer.** Picked from the customer list, so the purchase order does not have to match one by
+  name. A walk-in is still typed by hand and matched on the way through.
 - **Saved costings.** A saved costing keeps the window, the customer and the price. Load it to
   price the same window again, which makes it the template for a repeat customer. Saved costings
   are rows in `quotes` marked `kind: window`.

@@ -32,6 +32,8 @@ interface CustomerFormState {
   name: string;
   contactName: string;
   contactEmail: string;
+  phone: string;
+  deliveryAddress: string;
   isActive: boolean;
 }
 
@@ -57,6 +59,8 @@ function createDefaultCustomerForm(): CustomerFormState {
     name: '',
     contactName: '',
     contactEmail: '',
+    phone: '',
+    deliveryAddress: '',
     isActive: true,
   };
 }
@@ -155,6 +159,8 @@ export default function CustomersPage() {
       name: customer.name,
       contactName: customer.contact_name || '',
       contactEmail: customer.contact_email || '',
+      phone: customer.phone || '',
+      deliveryAddress: customer.delivery_address || '',
       isActive: customer.is_active !== false,
     });
   }
@@ -192,6 +198,8 @@ export default function CustomersPage() {
         name: customerForm.name.trim(),
         contact_name: customerForm.contactName.trim() || null,
         contact_email: customerForm.contactEmail.trim() || null,
+        phone: customerForm.phone.trim() || null,
+        delivery_address: customerForm.deliveryAddress.trim() || null,
         is_active: customerForm.isActive,
       };
 
@@ -318,6 +326,8 @@ export default function CustomersPage() {
             <Input label="CUSTOMER NAME" name="customer_name" value={customerForm.name} onChange={(event) => setCustomerForm((prev) => ({ ...prev, name: event.target.value }))} disabled={!canEdit} />
             <Input label="CONTACT NAME" name="contact_name" value={customerForm.contactName} onChange={(event) => setCustomerForm((prev) => ({ ...prev, contactName: event.target.value }))} disabled={!canEdit} />
             <Input label="CONTACT EMAIL" name="contact_email" value={customerForm.contactEmail} onChange={(event) => setCustomerForm((prev) => ({ ...prev, contactEmail: event.target.value }))} disabled={!canEdit} />
+            <Input label="PHONE" name="phone" value={customerForm.phone} onChange={(event) => setCustomerForm((prev) => ({ ...prev, phone: event.target.value }))} placeholder="How the office rings them back" disabled={!canEdit} />
+            <Input label="DELIVERY ADDRESS" name="delivery_address" value={customerForm.deliveryAddress} onChange={(event) => setCustomerForm((prev) => ({ ...prev, deliveryAddress: event.target.value }))} placeholder="Where the goods go" disabled={!canEdit} />
 
             <Text>STATUS</Text>
             <select value={customerForm.isActive ? 'active' : 'inactive'} onChange={(event) => setCustomerForm((prev) => ({ ...prev, isActive: event.target.value === 'active' }))} disabled={!canEdit}>
@@ -433,6 +443,7 @@ export default function CustomersPage() {
               <TableColumn style={{ width: '24ch' }}>CUSTOMER</TableColumn>
               <TableColumn style={{ width: '20ch' }}>CONTACT</TableColumn>
               <TableColumn style={{ width: '26ch' }}>EMAIL</TableColumn>
+              <TableColumn style={{ width: '16ch' }}>PHONE</TableColumn>
               <TableColumn style={{ width: '12ch' }}>STATUS</TableColumn>
               <TableColumn>ACTIONS</TableColumn>
             </TableRow>
@@ -442,6 +453,7 @@ export default function CustomersPage() {
                 <TableColumn>{customer.name}</TableColumn>
                 <TableColumn>{customer.contact_name || '—'}</TableColumn>
                 <TableColumn>{customer.contact_email || '—'}</TableColumn>
+                <TableColumn>{customer.phone || '—'}</TableColumn>
                 <TableColumn>
                   <span className={activeStatusClassName(customer.is_active)}>{customer.is_active === false ? 'INACTIVE' : 'ACTIVE'}</span>
                 </TableColumn>
