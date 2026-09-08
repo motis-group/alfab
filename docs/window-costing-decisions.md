@@ -50,7 +50,7 @@ The app does what the sheet did. Say "fix" or "keep" for each.
 | # | What the sheet does | Our suggestion |
 | --- | --- | --- |
 | 3.1 | Drops the packing charge when a window has a reo bar, mullion or transom. The bar cost takes its place. | Fix: charge both. |
-| 3.2 | Prices AFB037 with the T4633 extrusion and anodising rates. AFB037 has its own weight in the price list. | Fix: use the AFB037 rates. |
+| 3.2 | Prices AFB037 with the T4633 extrusion and anodising rates. AFB037 has its own die at 0.564 kg per metre from G. James, $6.92 per metre, against T4633 at $8.24 per metre from Capral. The 650 slider is dearer by about $1.30 for every metre of perimeter. | Fix: use the AFB037 rates. |
 | 3.3 | U6567 welding labour equals the number of welds, in minutes. The U6567 welding table is not used. | Fix: use the table like the other types. |
 | 3.4 | T8610 trim labour has no size term. Sash & frame development labour has no size term. | Fix: add the size terms from the tables. |
 | 3.5 | AFB008 sill flat (80 x 3) is anodised at the black rate for every finish except etch, including mill and powder coat. | Fix: follow the finish. |
@@ -90,6 +90,19 @@ Say "keep" or tell us the rule.
 | 5.7 | A quote holds several windows and creates one order line per window. Do you also need a single quote sheet for the customer, with the quote total? |
 | 5.8 | May a user change the margin on one quote? Who? |
 | 5.9 | T4633 in the sheet shows a trade price and a retail price. Do you need both? |
+
+## 5a. The window menu
+
+The picker now lists a series, then the window in it, from your handwritten list. Two entries have no
+costing behind them, and three need a check.
+
+| # | Question |
+| --- | --- |
+| 5a.1 | 035 hopper, 1000 series. The sheet never priced it. Its only hopper is the T section sash and frame, which offers a 500 or a 600 series. Is the 035 a third series of that same hopper, or a different window? Either way we need the glazing rubber, the infill, whether the 25 x 25 x 3 T section is still used, the fittings counts, and whether the labour minutes match the existing hopper. |
+| 5a.2 | 023 fixed horse float front, 500 series. The sheet never priced it, and the die is 0.28 kg per metre, the same weight as the weather trim, so it looks like a trim rather than a frame. What is the window made from: frames and metres, glazing rubber, infill, sealant, fittings, trim, and the labour minutes. |
+| 5a.3 | You wrote that 015 and 008 are the same. The dies differ: AFB015 Riviera slider is 1.162 kg per metre, AFB008 1000 slider is 1.258. The sheet never prices AFB015, so a Riviera is quoted off the 008 recipe and its frame comes out about 8 percent heavy. Is a Riviera the 008 section with a Riviera mullion, or the 015 die? |
+| 5a.4 | The 750 series appears nowhere in the sheet. The 003 slider is priced with 1000 series track, clip channel and wipe. Does a 750 window use different parts, or is 750 a newer name for the medium slider? |
+| 5a.5 | 5573 is the fixed window in both the 750 and the 500. Both price identically today. Do they differ in anything the sheet never recorded? |
 
 ## 6. Built without your input
 

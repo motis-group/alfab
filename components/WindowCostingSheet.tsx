@@ -1,6 +1,7 @@
 'use client';
 
 import { formatCurrency } from '@utils/order-management';
+import { productFullName } from '@utils/window-catalogue';
 import { CostLine, WindowCostResult, WindowCostingInput, describeWindow } from '@utils/window-costing';
 import { WindowRates } from '@utils/window-costing-rates';
 
@@ -52,7 +53,7 @@ export default function WindowCostingSheet({ quoteName, customerName, quoteDate,
               <span>Rates: {ratesLabel}</span>
             </div>
 
-            <p className="window-costing-sheet__spec">{describeWindow(window.input, rates)}</p>
+            <p className="window-costing-sheet__spec">{describeWindow(window.input, rates, productFullName(window.input.productId))}</p>
 
             <table className="window-costing-sheet__table">
               <thead>

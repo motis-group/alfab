@@ -36,6 +36,8 @@ export type LineUnit = 'm' | 'ea' | 'pr' | 'set' | 'min' | 'sqm';
 
 export interface WindowCostingInput {
   type: WindowTypeId;
+  /** The catalogue product picked, when the costing came from the menu. Does not affect the price. */
+  productId: string | null;
   state: 'VIC';
   heightMm: number;
   lengthMm: number;
@@ -326,7 +328,7 @@ function weldingMinutes(table: NonNullable<LabourTable['weld']>, welds: number, 
 
 const T5573: WindowTypeConfig = {
   id: 'T5573',
-  label: 'T5573 hopper',
+  label: 'T5573 fixed frame',
   fields: ['pairs', 'welds', 'reinforcement'],
   pairsSupported: true,
   trimsSupported: true,
@@ -351,7 +353,9 @@ const T5573: WindowTypeConfig = {
 
 const T5836: WindowTypeConfig = {
   id: 'T5836',
-  label: 'T5836 slider (600 series)',
+  // Every part on this type is 500 series (1249 infill, MP-024 500/650 track). The only "600" is
+  // the lock option, which the 1000 series slider uses too, so it names a lock and not a frame.
+  label: 'T5836 slider',
   fields: ['pairs', 'sillFlat', 'lockType', 'locks', 'welds', 'mullions'],
   lockTypes: ['600', 'plunger'],
   pairsSupported: true,
@@ -520,7 +524,7 @@ const T2482: WindowTypeConfig = {
 
 const U6567: WindowTypeConfig = {
   id: 'U6567',
-  label: 'U6567 (1000 series)',
+  label: 'U6567 fixed frame (1000 series)',
   fields: ['pairs', 'welds', 'reinforcement'],
   pairsSupported: true,
   trimsSupported: true,
@@ -712,6 +716,7 @@ export const WINDOW_TYPE_ORDER: WindowTypeId[] = ['T5573', 'T5836', 'U6567', 'AF
 
 const BASE_INPUT: WindowCostingInput = {
   type: 'T5573',
+  productId: null,
   state: 'VIC',
   heightMm: 1000,
   lengthMm: 1000,
@@ -1066,15 +1071,19 @@ export function costWindowBatches(input: WindowCostingInput, rates: WindowRates,
   });
 }
 
-/** One-line description for purchase-order lines and the clipboard summary. */
-export function describeWindow(input: WindowCostingInput, rates: WindowRates): string {
+/**
+ * One-line description for purchase-order lines and the clipboard summary. Pass the catalogue name
+ * when the costing came from the menu, so it reads as the workshop names the window rather than by
+ * extrusion code. The engine does not import the catalogue, to keep it free of that dependency.
+ */
+export function describeWindow(input: WindowCostingInput, rates: WindowRates, nameOverride?: string | null): string {
   const cfg = WINDOW_TYPES[input.type];
   const glazing = input.glazingId ? rates.glass.options[input.glazingId]?.label : undefined;
   const qtyToSize = count(input.qtyToSize);
   const qtyShaped = count(input.qtyShaped);
   const quantity = [qtyToSize > 0 ? `${qtyToSize} to size` : '', qtyShaped > 0 ? `${qtyShaped} shaped` : ''].filter(Boolean).join(', ');
   return [
-    cfg.variantLabels ? cfg.variantLabels[input.variant] : cfg.label,
+    nameOverride || (cfg.variantLabels ? cfg.variantLabels[input.variant] : cfg.label),
     `${nonNegative(input.heightMm)} x ${nonNegative(input.lengthMm)} mm`,
     quantity,
     FINISH_LABELS[input.finish],

@@ -39,7 +39,6 @@ import {
   TRIM_LABELS,
   TrimMode,
   WINDOW_TYPES,
-  WINDOW_TYPE_ORDER,
   WindowCostingInput,
   WindowTypeId,
   costWindow,
@@ -48,6 +47,7 @@ import {
   describeWindow,
   switchWindowType,
 } from '@utils/window-costing';
+import { WINDOW_SERIES, WindowProduct, findProduct, productFullName, productLabel, productForInput, seriesOfProduct } from '@utils/window-catalogue';
 import { DEFAULT_WINDOW_RATES, GlazingId, WindowRates } from '@utils/window-costing-rates';
 import { loadWindowRates } from '@utils/window-costing-store';
 import { SavedWindowCosting, deleteWindowCosting, listWindowCostings, saveWindowCosting } from '@utils/window-quote-store';
@@ -121,7 +121,8 @@ export default function WindowCostingPage() {
   const [ratesUpdatedAt, setRatesUpdatedAt] = useState<string | null>(null);
   const [ratesError, setRatesError] = useState<string | null>(null);
 
-  const [input, setInput] = useState<WindowCostingInput>(() => createWindowInput('T5573'));
+  const [input, setInput] = useState<WindowCostingInput>(() => ({ ...createWindowInput('T5573'), productId: '500-5573' }));
+  const [seriesId, setSeriesId] = useState<string>('500');
   const [metreDrafts, setMetreDrafts] = useState<{ flatSmoothM?: string; flatGroundM?: string }>({});
   const [windowName, setWindowName] = useState('');
   const [quoteName, setQuoteName] = useState('');
@@ -133,6 +134,9 @@ export default function WindowCostingPage() {
   const [savedCostings, setSavedCostings] = useState<SavedWindowCosting[]>([]);
 
   const cfg = WINDOW_TYPES[input.type];
+  const series = WINDOW_SERIES.find((entry) => entry.id === seriesId) || WINDOW_SERIES[0];
+  const product = productForInput(input);
+  const describe = useCallback((forInput: WindowCostingInput) => describeWindow(forInput, rates, productFullName(forInput.productId)), [rates]);
   const result = useMemo(() => costWindow(input, rates), [input, rates]);
   const batches = useMemo(() => (result.errors.length ? [] : costWindowBatches(input, rates, BATCH_SIZES)), [input, rates, result.errors.length]);
   const glazingOption = input.glazingId ? rates.glass.options[input.glazingId] : null;
@@ -176,7 +180,7 @@ export default function WindowCostingPage() {
     if (quoteLines.length) {
       return [
         ...header,
-        ...quoteLines.map((line, index) => `${index + 1}. ${line.item.name || describeWindow(line.item.input, rates)} | ${line.item.quantity} x ${formatCurrency(line.result.price)} = ${formatCurrency(line.total)}`),
+        ...quoteLines.map((line, index) => `${index + 1}. ${line.item.name || describe(line.item.input)} | ${line.item.quantity} x ${formatCurrency(line.result.price)} = ${formatCurrency(line.total)}`),
         `Quote total: ${formatCurrency(quoteTotal)}`,
         quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : '',
       ]
@@ -186,7 +190,7 @@ export default function WindowCostingPage() {
 
     return [
       ...header,
-      `Window: ${describeWindow(input, rates)}`,
+      `Window: ${describe(input)}`,
       `Subtotal: ${formatCurrency(result.subtotal)} | Margin ${formatPercent(result.marginRate)}: ${formatCurrency(result.margin)} | Packing: ${formatCurrency(result.packing)} | Uplift ${formatPercent(result.upliftRate)}: ${formatCurrency(result.uplift)}`,
       `Price (${result.unitLabel.toLowerCase()}): ${formatCurrency(result.price)}`,
       `Qty: ${orderQuantity} | Total: ${formatCurrency(currentTotal)}`,
@@ -236,6 +240,29 @@ export default function WindowCostingPage() {
     })();
   }, [refreshSavedCostings, router]);
 
+  function selectProduct(next: WindowProduct) {
+    if (!next.type) {
+      setStatus({ tone: 'warning', message: `${productLabel(next)} has no costing recipe yet. ${next.note || ''}`.trim() });
+      return;
+    }
+
+    setInput((prev) => {
+      const base = prev.type === next.type ? prev : switchWindowType(prev, next.type as WindowTypeId);
+      return { ...base, type: next.type as WindowTypeId, variant: next.variant ?? 0, productId: next.id };
+    });
+    setMetreDrafts({});
+    setStatus(null);
+  }
+
+  function selectSeries(nextSeriesId: string) {
+    setSeriesId(nextSeriesId);
+    const nextSeries = WINDOW_SERIES.find((entry) => entry.id === nextSeriesId);
+    const firstCostable = nextSeries?.products.find((entry) => entry.type);
+    if (firstCostable) {
+      selectProduct(firstCostable);
+    }
+  }
+
   function update(patch: Partial<WindowCostingInput>) {
     setInput((prev) => ({ ...prev, ...patch }));
   }
@@ -250,7 +277,8 @@ export default function WindowCostingPage() {
   }
 
   function resetCalculator() {
-    setInput(createWindowInput('T5573'));
+    setInput({ ...createWindowInput('T5573'), productId: '500-5573' });
+    setSeriesId('500');
     setMetreDrafts({});
     setWindowName('');
     setQuoteName('');
@@ -269,7 +297,7 @@ export default function WindowCostingPage() {
 
     const item: QuoteItem = {
       localId: `window-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: windowName.trim() || describeWindow(input, rates),
+      name: windowName.trim() || describe(input),
       quantity: orderQuantity,
       input: { ...input },
     };
@@ -285,6 +313,10 @@ export default function WindowCostingPage() {
     }
 
     setInput({ ...item.input });
+    const itemSeries = seriesOfProduct(item.input.productId ?? null);
+    if (itemSeries) {
+      setSeriesId(itemSeries.id);
+    }
     setMetreDrafts({});
     setWindowName(item.name);
     setQuantity(item.quantity);
@@ -322,7 +354,7 @@ export default function WindowCostingPage() {
 
     try {
       await saveWindowCosting({
-        name: windowName.trim() || quoteName.trim() || describeWindow(input, rates),
+        name: windowName.trim() || quoteName.trim() || describe(input),
         customer: customerName,
         input,
         result,
@@ -337,6 +369,10 @@ export default function WindowCostingPage() {
 
   function loadSavedCosting(costing: SavedWindowCosting) {
     setInput({ ...costing.input });
+    const savedSeries = seriesOfProduct(costing.input.productId ?? null) || (productForInput(costing.input) ? seriesOfProduct(productForInput(costing.input)!.id) : null);
+    if (savedSeries) {
+      setSeriesId(savedSeries.id);
+    }
     setMetreDrafts({});
     setWindowName(costing.name);
     if (costing.customer) {
@@ -365,7 +401,7 @@ export default function WindowCostingPage() {
       ? quoteLines
           .filter((line) => line.result.price != null)
           .map((line) => ({
-            description: line.item.name || describeWindow(line.item.input, rates),
+            description: line.item.name || describe(line.item.input),
             quantity: line.item.quantity,
             unitPrice: line.result.price as number,
             windowSpec: line.item.input,
@@ -375,7 +411,7 @@ export default function WindowCostingPage() {
         ? []
         : [
             {
-              description: windowName.trim() || describeWindow(input, rates),
+              description: windowName.trim() || describe(input),
               quantity: orderQuantity,
               unitPrice: result.price,
               windowSpec: input,
@@ -655,26 +691,38 @@ export default function WindowCostingPage() {
       )}
 
       <CardDouble title="WINDOW">
-        <Text>WINDOW TYPE</Text>
-        <select value={input.type} onChange={(event) => setInput((prev) => switchWindowType(prev, event.target.value as WindowTypeId))}>
-          {WINDOW_TYPE_ORDER.map((type) => (
-            <option key={type} value={type}>
-              {WINDOW_TYPES[type].label}
+        <Text>SERIES</Text>
+        <select value={series.id} onChange={(event) => selectSeries(event.target.value)}>
+          {WINDOW_SERIES.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.name}
             </option>
           ))}
         </select>
         <br />
 
-        {cfg.variantLabels && cfg.fields.includes('variant') ? (
-          <>
-            <Text>SECTION</Text>
-            <select value={String(input.variant)} onChange={(event) => update({ variant: event.target.value === '1' ? 1 : 0 })}>
-              <option value="0">{cfg.variantLabels[0]}</option>
-              <option value="1">{cfg.variantLabels[1]}</option>
-            </select>
-            <br />
-          </>
-        ) : null}
+        <Text>WINDOW</Text>
+        <select
+          value={product && series.products.some((entry) => entry.id === product.id) ? product.id : ''}
+          onChange={(event) => {
+            const next = findProduct(event.target.value);
+            if (next) {
+              selectProduct(next);
+            }
+          }}
+        >
+          {series.products.map((entry) => (
+            <option key={entry.id} value={entry.id} disabled={!entry.type}>
+              {productLabel(entry)}
+              {entry.type ? '' : ' (no costing yet)'}
+            </option>
+          ))}
+        </select>
+        <Text>
+          Priced on the {cfg.variantLabels ? cfg.variantLabels[input.variant] : cfg.label} costing.
+          {product?.note ? ` ${product.note}` : ''}
+        </Text>
+        <br />
 
         <Input label="HEIGHT (MM)" type="number" name="window_height" value={String(input.heightMm)} onChange={(event) => updateNumber('heightMm', event.target.value)} min="0" />
         <Input label="LENGTH (MM)" type="number" name="window_length" value={String(input.lengthMm)} onChange={(event) => updateNumber('lengthMm', event.target.value)} min="0" />
