@@ -48,8 +48,8 @@ export const ROLE_PERMISSIONS: Record<AppRole, AppPermission[]> = {
     'billing:write',
     'users:invite',
   ],
-  standard: ['quotes:read', 'quotes:write', 'orders:read', 'orders:write', 'master_data:read'],
-  readonly: ['quotes:read', 'orders:read', 'master_data:read'],
+  standard: ['quotes:read', 'quotes:write', 'orders:read', 'orders:write', 'master_data:read', 'pricing:read'],
+  readonly: ['quotes:read', 'orders:read', 'master_data:read', 'pricing:read'],
 };
 
 export function isAppRole(value: unknown): value is AppRole {

@@ -58,6 +58,7 @@ const TABLE_COLUMNS: Record<string, Set<string>> = {
     'updated_at',
   ]),
   billing_events: new Set(['id', 'stripe_event_id', 'event_type', 'account_key', 'payload', 'processed_at']),
+  window_costing_rates: new Set(['id', 'rates', 'updated_by', 'updated_at']),
 };
 
 const TABLE_PERMISSIONS: Record<string, { read: AppPermission; write: AppPermission }> = {
@@ -96,6 +97,10 @@ const TABLE_PERMISSIONS: Record<string, { read: AppPermission; write: AppPermiss
   billing_events: {
     read: 'billing:read',
     write: 'billing:write',
+  },
+  window_costing_rates: {
+    read: 'pricing:read',
+    write: 'pricing:write',
   },
 };
 
@@ -199,14 +204,20 @@ function requiredPermission(table: string, action: Operation): AppPermission {
   return action === 'select' ? permissionSet.read : permissionSet.write;
 }
 
+const AUDITED_TABLES: Record<string, { createdBy: boolean }> = {
+  purchase_orders: { createdBy: true },
+  window_costing_rates: { createdBy: false },
+};
+
 function applyServerAuditColumns(table: string, action: Operation, rows: Array<Record<string, unknown>>, sessionUserId: string): void {
-  if (!rows.length || table !== 'purchase_orders') {
+  const audit = AUDITED_TABLES[table];
+  if (!rows.length || !audit) {
     return;
   }
 
   if (action === 'insert') {
     rows.forEach((row) => {
-      if (!row.created_by) {
+      if (audit.createdBy && !row.created_by) {
         row.created_by = sessionUserId;
       }
       row.updated_by = sessionUserId;
