@@ -13,6 +13,33 @@ export interface CostBreakdown {
   total: number;
 }
 
+// Drawable outline shape kept with the specification so the glass can be redrawn without the source file.
+// Points are millimetres, origin at the top-left of the outline's bounding box, y increasing downward (SVG convention).
+export interface CadOutlineGeometry {
+  points: Array<[number, number]>;
+  holes?: Array<{ x: number; y: number; d: number }>;
+  cutouts?: Array<Array<[number, number]>>;
+  boundingWidthMm: number;
+  boundingHeightMm: number;
+}
+
+// Geometry measured from an uploaded CAD file (DXF/DWG/SVG). Optional: specs entered by hand have none.
+export interface CadOutline {
+  fileName: string;
+  format: 'dxf' | 'dwg' | 'svg';
+  widthMm: number;
+  heightMm: number;
+  areaSqM: number;
+  perimeterM: number;
+  shapeLabel: string;
+  cornerRadiiMm?: number[];
+  holeCount?: number;
+  geometry?: CadOutlineGeometry | null;
+  // When true the measured area/perimeter drive pricing instead of the width x height formulas.
+  priceOnMeasured: boolean;
+  importedAt: string;
+}
+
 export interface GlassSpecification {
   width: number;
   height: number;
@@ -25,6 +52,7 @@ export interface GlassSpecification {
   numHoles: number;
   radiusCorners: boolean;
   scanning: boolean;
+  cadOutline?: CadOutline | null;
 }
 
 // Glass colors/types mapped to their RGB values for UI
@@ -119,6 +147,27 @@ export function calculatePerimeter(width: number, height: number, shape: ShapeTy
   return perimeterInMm / 1_000; // Convert to meters
 }
 
+export function usesMeasuredGeometry(spec: Pick<GlassSpecification, 'cadOutline'>): boolean {
+  const outline = spec.cadOutline;
+  return !!outline && outline.priceOnMeasured !== false && Number.isFinite(outline.areaSqM) && outline.areaSqM > 0 && Number.isFinite(outline.perimeterM) && outline.perimeterM > 0;
+}
+
+// Area in m² used for pricing: the CAD-measured outline when one is attached, otherwise the shape formula.
+export function getEffectiveArea(spec: Pick<GlassSpecification, 'width' | 'height' | 'shape' | 'cadOutline'>): number {
+  if (usesMeasuredGeometry(spec)) {
+    return (spec.cadOutline as CadOutline).areaSqM;
+  }
+  return calculateArea(spec.width, spec.height, spec.shape);
+}
+
+// Perimeter in metres used for edgework pricing.
+export function getEffectivePerimeter(spec: Pick<GlassSpecification, 'width' | 'height' | 'shape' | 'cadOutline'>): number {
+  if (usesMeasuredGeometry(spec)) {
+    return (spec.cadOutline as CadOutline).perimeterM;
+  }
+  return calculatePerimeter(spec.width, spec.height, spec.shape);
+}
+
 export interface CustomPricingData {
   basePrices?: Record<GlassType, Partial<Record<GlassThickness, number>>>;
   edgeworkPrices?: Record<EdgeworkType, Record<'4-6' | '8-12', number>>;
@@ -135,8 +184,8 @@ export interface CustomPricingData {
 }
 
 export function calculateCost(spec: GlassSpecification, customPricing?: CustomPricingData): CostBreakdown {
-  const area = calculateArea(spec.width, spec.height, spec.shape);
-  const perimeter = calculatePerimeter(spec.width, spec.height, spec.shape);
+  const area = getEffectiveArea(spec);
+  const perimeter = getEffectivePerimeter(spec);
 
   // Use custom pricing or defaults
   const basePrices = customPricing?.basePrices || defaultBasePrices;

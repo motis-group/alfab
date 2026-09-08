@@ -7,12 +7,12 @@ import { APP_WORK_SECTION_ITEMS, AppSectionItem } from '@utils/app-navigation';
 import { usePathname, useRouter } from 'next/navigation';
 
 function isSelectedPath(pathname: string, item: AppSectionItem): boolean {
-  if (item.href === '/doors') {
-    return pathname === '/doors';
+  if (item.href === '/glass') {
+    return pathname === '/glass';
   }
 
-  if (item.href === '/doors/new') {
-    return pathname === '/doors/new';
+  if (item.href === '/glass/new') {
+    return pathname === '/glass/new';
   }
 
   if (item.href === '/account') {
