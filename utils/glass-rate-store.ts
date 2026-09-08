@@ -68,6 +68,7 @@ export async function saveGlassRates(rates: PricingData): Promise<void> {
 
   if (current?.updated_at && current.rates) {
     const { error: archiveError } = await db.from(TABLE).insert({ id: versionId(current.updated_at), rates: current.rates });
+    // A duplicate means this version is already archived, which is fine. Anything else is not.
     if (archiveError && !archiveError.message.includes('duplicate key')) {
       throw new Error(archiveError.message);
     }
