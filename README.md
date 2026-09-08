@@ -33,3 +33,7 @@ For AWS RDS -> VPS migration and VPS cutover steps, see:
 For the calculator's CAD file import (DXF/DWG/SVG) and the optional DWG converter, see:
 
 - `docs/cad-import.md`
+
+For the window costing model (legacy Lotus sheet port) and its rates, see:
+
+- `docs/window-costing.md`

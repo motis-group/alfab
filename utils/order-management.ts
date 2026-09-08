@@ -1,8 +1,9 @@
 import { GlassSpecification } from '@utils/calculations';
+import { WindowCostingInput } from '@utils/window-costing';
 
 export type UserRole = 'superadmin' | 'admin' | 'standard' | 'readonly';
 export type OrderStatus = 'open' | 'in_production' | 'fulfilled' | 'cancelled';
-export type PricingSource = 'existing_config' | 'adhoc_calculator';
+export type PricingSource = 'existing_config' | 'adhoc_calculator' | 'window_calculator';
 
 export interface Customer {
   id: string;
@@ -79,6 +80,7 @@ export interface LineNotesPayload {
   pricingSource?: PricingSource;
   customerProductId?: string | null;
   adhocSpecification?: GlassSpecification | null;
+  windowSpecification?: WindowCostingInput | null;
   markupPercent?: number | null;
   productLabel?: string | null;
 }
@@ -181,13 +183,14 @@ export function parseLineNotes(rawValue: string | null | undefined): ParsedLineN
   }
 
   const pricingSource = (parsed as any).pricingSource;
-  const validPricingSource: PricingSource | undefined = pricingSource === 'existing_config' || pricingSource === 'adhoc_calculator' ? pricingSource : undefined;
+  const validPricingSource: PricingSource | undefined = pricingSource === 'existing_config' || pricingSource === 'adhoc_calculator' || pricingSource === 'window_calculator' ? pricingSource : undefined;
 
   return {
     note: typeof parsed.note === 'string' ? parsed.note : '',
     pricingSource: validPricingSource,
     customerProductId: typeof (parsed as any).customerProductId === 'string' ? (parsed as any).customerProductId : null,
     adhocSpecification: typeof (parsed as any).adhocSpecification === 'object' ? ((parsed as any).adhocSpecification as GlassSpecification) : null,
+    windowSpecification: (parsed as any).windowSpecification && typeof (parsed as any).windowSpecification === 'object' ? ((parsed as any).windowSpecification as WindowCostingInput) : null,
     markupPercent: toNumber((parsed as any).markupPercent),
     productLabel: typeof (parsed as any).productLabel === 'string' ? (parsed as any).productLabel : null,
     isJson: true,
@@ -200,6 +203,7 @@ export function serializeLineNotes(input: LineNotesPayload): string {
     pricingSource: input.pricingSource || null,
     customerProductId: input.customerProductId || null,
     adhocSpecification: input.adhocSpecification ?? null,
+    windowSpecification: input.windowSpecification ?? null,
     markupPercent: toNumber(input.markupPercent),
     productLabel: input.productLabel || null,
   });
