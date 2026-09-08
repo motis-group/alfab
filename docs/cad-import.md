@@ -72,11 +72,19 @@ Ubuntu does not ship LibreDWG in its archive (the `libredwg-tools` package is De
 built from the pinned upstream release by `scripts/install-libredwg.sh`. The script is idempotent: it
 exits early when a working `dwg2dxf` is already present, and takes `--force` to rebuild.
 
-Run it on the production droplet with the **Install LibreDWG on Production** GitHub Action
+Run it on production with the **Install LibreDWG on Production** GitHub Action
 (`.github/workflows/install-libredwg.yml`, run manually from the Actions tab). It uses the same
-deploy secrets as the release workflow, builds on the droplet, verifies the binary, and restarts the
-app. It is deliberately kept out of the deploy path: the build takes several minutes and a failure
-must never be able to break a release. Run it once, and again when the pinned version changes.
+deploy secrets as the release workflow. Run it once, and again when the pinned version changes.
+
+The workflow builds on the CI runner, not on the droplet, and copies the finished binary across. The
+first attempt built on the droplet and the SSH session dropped after four minutes on that 1 vCPU /
+1 GB box. Because `--disable-shared` links libredwg into `dwg2dxf`, the binary needs only libc and
+libm, so it moves between hosts of the same distribution: about 18 MB stripped. The workflow compares
+the runner's and the droplet's glibc first and stops with a clear message if the droplet's is older,
+in which case build on the droplet by hand instead.
+
+It is deliberately kept out of the deploy path: it only needs running once, and a failure must never
+be able to break a release.
 
 To install by hand on any Debian or Ubuntu host:
 
@@ -85,6 +93,11 @@ sudo bash scripts/install-libredwg.sh
 ```
 
 `scripts/bootstrap-vps-1gb.sh` calls the same script, so a freshly provisioned server has it already.
+Bootstrap runs on the console rather than over SSH, and configures swap before it gets there, so the
+on-host build is fine in that context.
+
+`BUILD_ONLY=1 PREFIX=<dir>` builds and stages the binary without touching the system, which is how
+the workflow produces the artifact it ships.
 
 If the binary lives somewhere other than `PATH`, point the app at it:
 
