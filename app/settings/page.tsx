@@ -263,6 +263,22 @@ export default function PricingSettings() {
             <Input label="Ceramic Banding ($)" type="number" name="ceramic" value={otherPrices.ceramicBanding.toString()} onChange={(event) => updateOtherPrice('ceramicBanding', event.target.value)} step="0.01" />
             <Input label="Scanning Service ($)" type="number" name="scanning" value={otherPrices.scanning.toString()} onChange={(event) => updateOtherPrice('scanning', event.target.value)} step="0.01" />
           </div>
+
+          <div style={{ flex: 1 }}>
+            <Text>
+              <strong>MINIMUM CHARGE</strong>
+            </Text>
+            <Text style={{ opacity: 0.7 }}>
+              A small piece costs the same to handle, cut and invoice as a big one, but area alone prices it at a few dollars. These two set the floor. Leave them at 0 to charge exact area, which is what the calculator did before.
+            </Text>
+            <Input label="Minimum Charge Per Piece ($)" type="number" name="min_charge" value={otherPrices.minCharge.toString()} onChange={(event) => updateOtherPrice('minCharge', event.target.value)} step="0.01" min="0" />
+            <Input label="Minimum Area Charged (m²)" type="number" name="min_area" value={otherPrices.minAreaSqm.toString()} onChange={(event) => updateOtherPrice('minAreaSqm', event.target.value)} step="0.01" min="0" />
+            {!otherPrices.minCharge && !otherPrices.minAreaSqm ? (
+              <Text>
+                <span className="status-warning">No minimum set. A 200 x 200 piece of 6 mm clear quotes at about $4.</span>
+              </Text>
+            ) : null}
+          </div>
         </div>
 
         <br />

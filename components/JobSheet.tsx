@@ -12,7 +12,7 @@ export interface JobSheetLine {
 
 interface JobSheetProps {
   order: Pick<PurchaseOrder, 'po_number' | 'received_date' | 'required_date' | 'status' | 'notes'>;
-  customer: Pick<Customer, 'name' | 'contact_name'> | null;
+  customer: Pick<Customer, 'name' | 'contact_name' | 'phone' | 'delivery_address'> | null;
   lines: JobSheetLine[];
 }
 
@@ -42,7 +42,10 @@ export default function JobSheet({ order, customer, lines }: JobSheetProps) {
           <span>Received: {dateOnly(order.received_date)}</span>
           <span>Status: {statusLabel(order.status)}</span>
           <span>Lines: {lines.length}</span>
+          <span>Phone: {customer?.phone || '—'}</span>
         </div>
+
+        {customer?.delivery_address ? <p className="window-costing-sheet__note">Deliver to: {customer.delivery_address}</p> : null}
 
         <table className="window-costing-sheet__table">
           <thead>

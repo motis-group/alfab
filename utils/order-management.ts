@@ -10,6 +10,8 @@ export interface Customer {
   name: string;
   contact_name?: string | null;
   contact_email?: string | null;
+  phone?: string | null;
+  delivery_address?: string | null;
   is_active?: boolean | null;
   created_at?: string | null;
 }

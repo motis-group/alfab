@@ -15,10 +15,21 @@ export interface WindowQuoteLine {
   ratesUpdatedAt: string | null;
 }
 
+/** One glass piece on its way to a purchase order line. A quote can carry several. */
+export interface GlassQuoteLine {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  markupPercent: number;
+  spec: GlassSpecification;
+}
+
 export interface QuoteToOrderDraft {
   kind: QuoteToOrderDraftKind;
   quoteName: string;
   customerName: string;
+  /** The customer the quote was written against, so the order does not have to match on name. */
+  customerId: string | null;
   quoteDate: string;
   quantity: number;
   unitPrice: number;
@@ -26,13 +37,19 @@ export interface QuoteToOrderDraft {
   quoteNotes: string;
   /** Glass calculator specification. Null for window costings. */
   spec: GlassSpecification | null;
+  /** Glass pieces, one per purchase order line. Empty for window quotes. */
+  glassLines: GlassQuoteLine[];
   /** Window costings, one per purchase order line. Empty for glass quotes. */
   windowLines: WindowQuoteLine[];
 }
 
-export type QuoteToOrderDraftInput = Omit<QuoteToOrderDraft, 'kind' | 'spec' | 'windowLines' | 'quantity' | 'unitPrice'> & {
+export type QuoteToOrderDraftInput = Omit<QuoteToOrderDraft, 'kind' | 'spec' | 'glassLines' | 'windowLines' | 'quantity' | 'unitPrice' | 'customerId' | 'markupPercent'> & {
   kind?: QuoteToOrderDraftKind;
+  customerId?: string | null;
+  /** Legacy single-piece markup. Each line carries its own. */
+  markupPercent?: number;
   spec?: GlassSpecification | null;
+  glassLines?: GlassQuoteLine[];
   windowLines?: WindowQuoteLine[];
   quantity?: number;
   unitPrice?: number;
@@ -86,6 +103,25 @@ function normalizeWindowLines(value: unknown): WindowQuoteLine[] {
     });
 }
 
+function normalizeGlassLines(value: unknown): GlassQuoteLine[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((line) => line && typeof line === 'object' && isGlassSpecification((line as Record<string, unknown>).spec))
+    .map((line) => {
+      const entry = line as Record<string, unknown>;
+      return {
+        description: typeof entry.description === 'string' ? entry.description.trim() : '',
+        quantity: Math.max(1, normalizeNumber(entry.quantity, 1)),
+        unitPrice: Math.max(0, normalizeNumber(entry.unitPrice, 0)),
+        markupPercent: Math.max(0, normalizeNumber(entry.markupPercent, 0)),
+        spec: { ...(entry.spec as GlassSpecification) },
+      };
+    });
+}
+
 function isQuoteToOrderDraft(value: unknown): value is QuoteToOrderDraft {
   if (!value || typeof value !== 'object') {
     return false;
@@ -97,23 +133,27 @@ function isQuoteToOrderDraft(value: unknown): value is QuoteToOrderDraft {
     return false;
   }
 
-  return draft.kind === 'window' ? normalizeWindowLines(draft.windowLines).length > 0 : isGlassSpecification(draft.spec);
+  return draft.kind === 'window' ? normalizeWindowLines(draft.windowLines).length > 0 : normalizeGlassLines(draft.glassLines).length > 0 || isGlassSpecification(draft.spec);
 }
 
 function normalizeDraft(draft: QuoteToOrderDraftInput | QuoteToOrderDraft): QuoteToOrderDraft {
   const kind: QuoteToOrderDraftKind = draft.kind === 'window' ? 'window' : 'glass';
   const windowLines = kind === 'window' ? normalizeWindowLines(draft.windowLines) : [];
+  const glassLines = kind === 'glass' ? normalizeGlassLines(draft.glassLines) : [];
+  const firstLine = windowLines[0] || glassLines[0];
 
   return {
     kind,
     quoteName: draft.quoteName.trim(),
     customerName: draft.customerName.trim(),
+    customerId: typeof draft.customerId === 'string' && draft.customerId ? draft.customerId : null,
     quoteDate: draft.quoteDate,
-    quantity: Math.max(1, normalizeNumber(draft.quantity, windowLines[0]?.quantity ?? 1)),
-    unitPrice: Math.max(0, normalizeNumber(draft.unitPrice, windowLines[0]?.unitPrice ?? 0)),
+    quantity: Math.max(1, normalizeNumber(draft.quantity, firstLine?.quantity ?? 1)),
+    unitPrice: Math.max(0, normalizeNumber(draft.unitPrice, firstLine?.unitPrice ?? 0)),
     markupPercent: Math.max(0, normalizeNumber(draft.markupPercent, 0)),
     quoteNotes: draft.quoteNotes.trim(),
     spec: kind === 'glass' && draft.spec ? { ...draft.spec } : null,
+    glassLines,
     windowLines,
   };
 }
@@ -150,16 +190,12 @@ export function consumeQuoteToOrderDraft(): QuoteToOrderDraft | null {
   }
 }
 
-export function buildQuoteDraftLineDescription(draft: Pick<QuoteToOrderDraft, 'quoteName' | 'spec'>): string {
-  const title = draft.quoteName.trim();
 
-  if (!draft.spec) {
-    return title || 'Ad Hoc Calculator Item';
-  }
-
-  const cadSummary = draft.spec.cadOutline ? `CAD: ${draft.spec.cadOutline.fileName}` : '';
-
-  return [title, describeGlassSpecification(draft.spec), cadSummary].filter(Boolean).join(' | ') || 'Ad Hoc Calculator Item';
+/** Line description for one glass piece: the quote name or the piece's own name, then the spec. */
+export function buildGlassLineDescription(quoteName: string, line: GlassQuoteLine): string {
+  const title = line.description.trim() || quoteName.trim();
+  const cadSummary = line.spec.cadOutline ? `CAD: ${line.spec.cadOutline.fileName}` : '';
+  return [title, describeGlassSpecification(line.spec), cadSummary].filter(Boolean).join(' | ') || 'Ad Hoc Calculator Item';
 }
 
 /** Line description for a window costing: the quote name, then the window's own summary. */

@@ -19,13 +19,27 @@ import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 
 import { usePricing } from '@components/PricingProvider';
-import { GlassSpecification, calculateCost, getAvailableGlassTypes, getAvailableThicknesses, getEffectiveArea, getEffectivePerimeter, usesMeasuredGeometry } from '@utils/calculations';
+import { GlassSpecification, calculateCost, describeGlassSpecification, getAvailableGlassTypes, getAvailableThicknesses, getEffectiveArea, getEffectivePerimeter, usesMeasuredGeometry } from '@utils/calculations';
 import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
-import { UserRole, formatCurrency, todayISODate } from '@utils/order-management';
-import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
+import { Customer, UserRole, formatCurrency, todayISODate } from '@utils/order-management';
+import { GlassQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
+import { SavedGlassQuote, deleteGlassQuote, listGlassQuotes, saveGlassQuote } from '@utils/glass-quote-store';
+import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
 const navigationItems = APP_NAVIGATION_ITEMS;
+const TABLE_CUSTOMERS = 'customers';
+
+/** One piece on the quote. A job is usually several sizes, not one. */
+interface QuoteItem {
+  localId: string;
+  name: string;
+  spec: GlassSpecification;
+  quantity: number;
+  markupPercent: number;
+  useRecommendedPrice: boolean;
+  manualUnitPrice: number;
+}
 const EDGEWORK_OPTIONS: GlassSpecification['edgework'][] = ['ROUGH ARRIS', 'FLAT GRIND - STRAIGHT', 'FLAT GRIND - CURVED', 'FLAT POLISH - STRAIGHT', 'FLAT POLISH - CURVED'];
 
 const defaultQuoteSpec: GlassSpecification = {
@@ -49,7 +63,7 @@ function numberOrFallback(value: string, fallback = 0): number {
 
 export default function AdhocQuotePage() {
   const router = useRouter();
-  const { pricingData } = usePricing();
+  const { pricingData, updatedAt } = usePricing();
 
   const [role, setRole] = useState<UserRole>('readonly');
   const [isLoading, setIsLoading] = useState(true);
@@ -66,6 +80,13 @@ export default function AdhocQuotePage() {
   const [spec, setSpec] = useState<GlassSpecification>({ ...defaultQuoteSpec });
   const [copyState, setCopyState] = useState('');
   const [cadPanelKey, setCadPanelKey] = useState(0);
+
+  const [itemName, setItemName] = useState('');
+  const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerId, setCustomerId] = useState('');
+  const [savedQuotes, setSavedQuotes] = useState<SavedGlassQuote[]>([]);
+  const [status, setStatus] = useState<{ tone: 'success' | 'warning' | 'error'; message: string } | null>(null);
 
   const calculation = useMemo(() => {
     try {
@@ -92,18 +113,46 @@ export default function AdhocQuotePage() {
     }
   }, [manualUnitPrice, markupPercent, pricingData, quantity, spec, useRecommendedPrice]);
 
+  const selectedCustomer = customers.find((entry) => entry.id === customerId) || null;
+
+  // Every piece on the quote, priced on today's rates. One line each on the order.
+  const quoteLines = useMemo(() => {
+    return quoteItems.map((item) => {
+      try {
+        const breakdown = calculateCost(item.spec, pricingData);
+        const recommended = breakdown.total * (1 + item.markupPercent / 100);
+        const unitPrice = item.useRecommendedPrice ? recommended : Math.max(0, item.manualUnitPrice);
+        return { item, breakdown, unitPrice, total: unitPrice * Math.max(1, item.quantity), error: null as string | null };
+      } catch (costError: any) {
+        return { item, breakdown: null, unitPrice: 0, total: 0, error: costError?.message || 'Unable to price this piece.' };
+      }
+    });
+  }, [pricingData, quoteItems]);
+
+  const quoteTotal = quoteLines.reduce((sum, line) => sum + line.total, 0);
+
   const quoteSummary = useMemo(() => {
     if (calculation.error) {
       return '';
     }
 
+    const header = [`Quote: ${quoteName.trim() || 'Ad Hoc Quote'}`, `Customer: ${customerName.trim() || 'Walk-in / Phone'}`, `Date: ${quoteDate}`];
+
+    if (quoteLines.length) {
+      return [
+        ...header,
+        ...quoteLines.map((line, index) => `${index + 1}. ${line.item.name || describeGlassSpecification(line.item.spec)} | ${line.item.quantity} x ${formatCurrency(line.unitPrice)} = ${formatCurrency(line.total)}`),
+        `Quote total: ${formatCurrency(quoteTotal)}`,
+        quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n');
+    }
+
     return [
-      `Quote: ${quoteName.trim() || 'Ad Hoc Quote'}`,
-      `Customer: ${customerName.trim() || 'Walk-in / Phone'}`,
-      `Date: ${quoteDate}`,
-      `Spec: ${spec.width} x ${spec.height} mm | ${spec.thickness}mm ${spec.glassType} | ${spec.shape}`,
+      ...header,
+      `Spec: ${describeGlassSpecification(spec)}`,
       spec.cadOutline ? `CAD: ${spec.cadOutline.fileName} | ${spec.cadOutline.shapeLabel} | ${spec.cadOutline.areaSqM.toFixed(3)} m² | ${spec.cadOutline.perimeterM.toFixed(2)} m edge${usesMeasuredGeometry(spec) ? ' (priced on measured outline)' : ''}` : '',
-      `Edgework: ${spec.edgework}`,
       `Qty: ${Math.max(1, quantity)}`,
       `Unit Price: ${formatCurrency(calculation.unitPrice)}`,
       `Total: ${formatCurrency(calculation.totalPrice)}`,
@@ -111,7 +160,7 @@ export default function AdhocQuotePage() {
     ]
       .filter(Boolean)
       .join('\n');
-  }, [calculation.error, calculation.totalPrice, calculation.unitPrice, customerName, quantity, quoteDate, quoteName, quoteNotes, spec]);
+  }, [calculation.error, calculation.totalPrice, calculation.unitPrice, customerName, quantity, quoteDate, quoteLines, quoteName, quoteNotes, quoteTotal, spec]);
 
   useEffect(() => {
 
@@ -127,6 +176,11 @@ export default function AdhocQuotePage() {
         }
 
         setRole(user.effectiveRole as UserRole);
+
+        const db = createClient();
+        const { data: customerData } = await db.from(TABLE_CUSTOMERS).select('*').order('name', { ascending: true });
+        setCustomers((customerData as Customer[]) || []);
+        setSavedQuotes(await listGlassQuotes());
       } catch (loadError: any) {
         setError(loadError?.message || 'Unable to load quote calculator.');
       } finally {
@@ -138,6 +192,7 @@ export default function AdhocQuotePage() {
   function resetCalculator() {
     setQuoteName('');
     setCustomerName('');
+    setCustomerId('');
     setQuoteDate(todayISODate());
     setQuantity(1);
     setMarkupPercent(20);
@@ -145,8 +200,123 @@ export default function AdhocQuotePage() {
     setManualUnitPrice(0);
     setQuoteNotes('');
     setSpec({ ...defaultQuoteSpec });
+    setItemName('');
+    setQuoteItems([]);
     setCopyState('');
+    setStatus(null);
     setCadPanelKey((key) => key + 1);
+  }
+
+  function addToQuote() {
+    if (calculation.error) {
+      setStatus({ tone: 'error', message: calculation.error });
+      return;
+    }
+
+    setQuoteItems((prev) => [
+      ...prev,
+      {
+        localId: `glass-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: itemName.trim(),
+        spec: { ...spec },
+        quantity: Math.max(1, quantity),
+        markupPercent,
+        useRecommendedPrice,
+        manualUnitPrice,
+      },
+    ]);
+    setItemName('');
+    setStatus({ tone: 'success', message: `Added. ${quoteItems.length + 1} piece${quoteItems.length ? 's' : ''} on this quote.` });
+  }
+
+  /** Put a piece back in the form to change it. It leaves the list until it is added again. */
+  function editQuoteItem(localId: string) {
+    const item = quoteItems.find((entry) => entry.localId === localId);
+    if (!item) {
+      return;
+    }
+
+    setSpec({ ...item.spec });
+    setItemName(item.name);
+    setQuantity(item.quantity);
+    setMarkupPercent(item.markupPercent);
+    setUseRecommendedPrice(item.useRecommendedPrice);
+    setManualUnitPrice(item.manualUnitPrice);
+    setQuoteItems((prev) => prev.filter((entry) => entry.localId !== localId));
+    setCadPanelKey((key) => key + 1);
+    setStatus({ tone: 'success', message: 'Loaded back into the form. Add it to the quote when you are done.' });
+  }
+
+  function removeQuoteItem(localId: string) {
+    setQuoteItems((prev) => prev.filter((entry) => entry.localId !== localId));
+  }
+
+  async function handleSaveQuote() {
+    if (!quoteLines.length) {
+      setStatus({ tone: 'warning', message: 'Add at least one piece to the quote before saving it.' });
+      return;
+    }
+
+    try {
+      await saveGlassQuote({
+        name: quoteName,
+        customer: selectedCustomer?.name || customerName,
+        customerId: customerId || null,
+        notes: quoteNotes,
+        items: quoteLines.map((line) => ({
+          name: line.item.name,
+          spec: line.item.spec,
+          quantity: line.item.quantity,
+          markupPercent: line.item.markupPercent,
+          unitPrice: line.unitPrice,
+          breakdown: line.breakdown,
+        })),
+        total: quoteTotal,
+        ratesUpdatedAt: updatedAt,
+      });
+      setSavedQuotes(await listGlassQuotes());
+      setStatus({ tone: 'success', message: 'Quote saved. Load it back to re-quote the same job.' });
+    } catch (saveError: any) {
+      setStatus({ tone: 'error', message: saveError?.message || 'Unable to save the quote.' });
+    }
+  }
+
+  /** Reopen a saved quote at the prices it was given, not at today's. */
+  function loadSavedQuote(quote: SavedGlassQuote) {
+    setQuoteName(quote.name);
+    setCustomerName(quote.customer);
+    setCustomerId(quote.customerId || '');
+    setQuoteDate(quote.date ? quote.date.slice(0, 10) : todayISODate());
+    setQuoteNotes(quote.notes);
+    setQuoteItems(
+      quote.items.map((item, index) => ({
+        localId: `saved-${quote.id}-${index}`,
+        name: item.name,
+        spec: item.spec,
+        quantity: item.quantity,
+        markupPercent: item.markupPercent,
+        useRecommendedPrice: false,
+        manualUnitPrice: item.unitPrice,
+      }))
+    );
+    // Null counts: a quote priced before any rates were saved is on different numbers from one
+    // priced after, and that is exactly the case someone would miss.
+    const moved = (quote.ratesUpdatedAt || null) !== (updatedAt || null);
+    setStatus({
+      tone: moved ? 'warning' : 'success',
+      message: moved
+        ? 'Loaded at the prices it was quoted at. The glass rates have changed since, so a fresh price would differ.'
+        : 'Loaded at the prices it was quoted at.',
+    });
+  }
+
+  async function handleDeleteSavedQuote(id: string) {
+    try {
+      await deleteGlassQuote(id);
+      setSavedQuotes(await listGlassQuotes());
+    } catch (deleteError: any) {
+      setStatus({ tone: 'error', message: deleteError?.message || 'Unable to delete the quote.' });
+    }
   }
 
   async function copyQuoteToClipboard() {
@@ -163,22 +333,33 @@ export default function AdhocQuotePage() {
   }
 
   function handleCreatePurchaseOrder() {
-    if (!calculation.error) {
-      persistQuoteToOrderDraft({
-        quoteName,
-        customerName,
-        quoteDate,
-        quantity,
-        unitPrice: calculation.unitPrice,
-        markupPercent,
-        quoteNotes,
-        spec,
-      });
-      router.push('/glass/new?fromQuote=1');
+    // The quote list when there is one, otherwise the piece on screen.
+    const glassLines: GlassQuoteLine[] = quoteLines.length
+      ? quoteLines.map((line) => ({
+          description: line.item.name,
+          quantity: line.item.quantity,
+          unitPrice: line.unitPrice,
+          markupPercent: line.item.markupPercent,
+          spec: line.item.spec,
+        }))
+      : calculation.error
+        ? []
+        : [{ description: '', quantity: Math.max(1, quantity), unitPrice: calculation.unitPrice, markupPercent, spec }];
+
+    if (!glassLines.length) {
+      router.push('/glass/new');
       return;
     }
 
-    router.push('/glass/new');
+    persistQuoteToOrderDraft({
+      quoteName,
+      customerName: selectedCustomer?.name || customerName,
+      customerId: customerId || null,
+      quoteDate,
+      quoteNotes,
+      glassLines,
+    });
+    router.push('/glass/new?fromQuote=1');
   }
 
   return (
@@ -195,6 +376,8 @@ export default function AdhocQuotePage() {
       sidebar={
         <>
           <Card title="QUICK ACTIONS">
+            <ActionButton onClick={addToQuote}>Add To Quote</ActionButton>
+            <br />
             <ActionButton onClick={handleCreatePurchaseOrder}>Create Purchase Order</ActionButton>
             <br />
             <ActionButton
@@ -297,6 +480,12 @@ export default function AdhocQuotePage() {
                     <TableColumn>Scanning</TableColumn>
                     <TableColumn>{formatCurrency(calculation.breakdown?.scanning)}</TableColumn>
                   </TableRow>
+                  {calculation.breakdown?.minimumTopUp ? (
+                    <TableRow>
+                      <TableColumn>Minimum charge top-up</TableColumn>
+                      <TableColumn>{formatCurrency(calculation.breakdown.minimumTopUp)}</TableColumn>
+                    </TableRow>
+                  ) : null}
                   <TableRow>
                     <TableColumn>Subtotal</TableColumn>
                     <TableColumn>{formatCurrency(calculation.breakdown?.total)}</TableColumn>
@@ -324,21 +513,10 @@ export default function AdhocQuotePage() {
         </>
       }
       actionItems={[
-        {
-          hotkey: '⌘+R',
-          body: 'Reset',
-          onClick: resetCalculator,
-        },
-        {
-          hotkey: '⌘+C',
-          body: 'Copy Quote',
-          onClick: copyQuoteToClipboard,
-        },
-        {
-          hotkey: '⌘+N',
-          body: 'New PO',
-          onClick: handleCreatePurchaseOrder,
-        },
+        { body: 'Reset', onClick: resetCalculator },
+        { body: 'Add To Quote', onClick: addToQuote },
+        { body: 'Copy Quote', onClick: copyQuoteToClipboard },
+        { body: 'New PO', onClick: handleCreatePurchaseOrder },
       ]}
     >
       {error && (
@@ -349,9 +527,43 @@ export default function AdhocQuotePage() {
         </Card>
       )}
 
+      {status ? (
+        <Card title="STATUS">
+          <Text>
+            <span className={`status-${status.tone}`}>{status.message}</span>
+          </Text>
+        </Card>
+      ) : null}
+
       <CardDouble title="QUOTE DETAILS">
         <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} />
-        <Input label="CUSTOMER" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />
+        <Text>CUSTOMER</Text>
+        <select
+          value={customerId}
+          onChange={(event) => {
+            const nextId = event.target.value;
+            setCustomerId(nextId);
+            const picked = customers.find((entry) => entry.id === nextId);
+            if (picked) {
+              setCustomerName(picked.name);
+            }
+          }}
+        >
+          <option value="">Walk-in / not on file</option>
+          {customers
+            .filter((customer) => customer.is_active !== false)
+            .map((customer) => (
+              <option key={customer.id} value={customer.id}>
+                {customer.name}
+              </option>
+            ))}
+        </select>
+        {selectedCustomer ? (
+          <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text>
+        ) : (
+          <Input label="CUSTOMER NAME" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />
+        )}
+        <br />
         <Input label="QUOTE DATE" type="date" name="quote_date" value={quoteDate} onChange={(event) => setQuoteDate(event.target.value)} />
         <Input
           label="QUANTITY"
@@ -386,6 +598,94 @@ export default function AdhocQuotePage() {
         )}
 
         <Input label="QUOTE NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
+        <Input label="THIS PIECE IS FOR (OPTIONAL)" name="item_name" value={itemName} onChange={(event) => setItemName(event.target.value)} placeholder="Front window, side panel..." />
+        <br />
+        <ActionButton onClick={addToQuote}>Add This Piece To The Quote</ActionButton>
+      </CardDouble>
+
+      <CardDouble title={`QUOTE (${quoteLines.length} PIECE${quoteLines.length === 1 ? '' : 'S'})`}>
+        {quoteLines.length ? (
+          <>
+            <Table>
+              <TableRow>
+                <TableColumn style={{ width: '38ch' }}>PIECE</TableColumn>
+                <TableColumn style={{ width: '6ch' }}>QTY</TableColumn>
+                <TableColumn style={{ width: '12ch' }}>UNIT</TableColumn>
+                <TableColumn style={{ width: '12ch' }}>TOTAL</TableColumn>
+                <TableColumn>ACTIONS</TableColumn>
+              </TableRow>
+              {quoteLines.map((line) => (
+                <TableRow key={line.item.localId}>
+                  <TableColumn>
+                    {line.item.name ? `${line.item.name}: ` : ''}
+                    {describeGlassSpecification(line.item.spec)}
+                    {line.error ? (
+                      <>
+                        <br />
+                        <span className="status-error">{line.error}</span>
+                      </>
+                    ) : null}
+                  </TableColumn>
+                  <TableColumn>{line.item.quantity}</TableColumn>
+                  <TableColumn>{formatCurrency(line.unitPrice)}</TableColumn>
+                  <TableColumn>{formatCurrency(line.total)}</TableColumn>
+                  <TableColumn>
+                    <RowSpaceBetween>
+                      <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton>
+                      <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
+                    </RowSpaceBetween>
+                  </TableColumn>
+                </TableRow>
+              ))}
+            </Table>
+            <br />
+            <RowSpaceBetween>
+              <Text>QUOTE TOTAL</Text>
+              <Text>
+                <span className="status-pill status-pill-success">{formatCurrency(quoteTotal)}</span>
+              </Text>
+            </RowSpaceBetween>
+            <br />
+            <RowSpaceBetween>
+              <ActionButton onClick={handleSaveQuote}>Save Quote</ActionButton>
+              <ActionButton onClick={() => setQuoteItems([])}>Clear Quote</ActionButton>
+            </RowSpaceBetween>
+          </>
+        ) : (
+          <Text>No pieces yet. Price one above and add it. A job with several sizes is one quote, not several.</Text>
+        )}
+      </CardDouble>
+
+      <CardDouble title={`SAVED QUOTES (${savedQuotes.length})`}>
+        {savedQuotes.length ? (
+          <Table>
+            <TableRow>
+              <TableColumn style={{ width: '26ch' }}>QUOTE</TableColumn>
+              <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
+              <TableColumn style={{ width: '13ch' }}>DATE</TableColumn>
+              <TableColumn style={{ width: '8ch' }}>PIECES</TableColumn>
+              <TableColumn style={{ width: '12ch' }}>TOTAL</TableColumn>
+              <TableColumn>ACTIONS</TableColumn>
+            </TableRow>
+            {savedQuotes.map((quote) => (
+              <TableRow key={quote.id}>
+                <TableColumn>{quote.name}</TableColumn>
+                <TableColumn>{quote.customer}</TableColumn>
+                <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
+                <TableColumn>{quote.items.length}</TableColumn>
+                <TableColumn>{formatCurrency(quote.total)}</TableColumn>
+                <TableColumn>
+                  <RowSpaceBetween>
+                    <ActionButton onClick={() => loadSavedQuote(quote)}>Load</ActionButton>
+                    <ActionButton onClick={() => handleDeleteSavedQuote(quote.id)}>Delete</ActionButton>
+                  </RowSpaceBetween>
+                </TableColumn>
+              </TableRow>
+            ))}
+          </Table>
+        ) : (
+          <Text>Nothing saved yet. A saved quote keeps the prices it was given, so a customer who rings back gets the same number.</Text>
+        )}
       </CardDouble>
 
       <CardDouble title="CAD FILE IMPORT">

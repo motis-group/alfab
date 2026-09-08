@@ -124,6 +124,11 @@ create table if not exists customers (
   created_at timestamptz not null default now()
 );
 
+-- Work arrives by phone and leaves on a truck. Both were missing, so ringing a customer back or
+-- telling a driver where to go meant leaving the app.
+alter table customers add column if not exists phone text;
+alter table customers add column if not exists delivery_address text;
+
 create table if not exists product_categories (
   id uuid primary key default gen_random_uuid(),
   name text not null,
