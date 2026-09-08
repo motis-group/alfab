@@ -17,7 +17,8 @@ import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 
-import { defaultPricingData } from '@components/PricingProvider';
+import { usePricing } from '@components/PricingProvider';
+import JobSheet from '@components/JobSheet';
 import { CostBreakdown, GlassSpecification, calculateCost, getAvailableGlassTypes, getAvailableThicknesses } from '@utils/calculations';
 import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import {
@@ -64,12 +65,6 @@ const defaultAdhocSpec: GlassSpecification = {
   radiusCorners: false,
   scanning: false,
 };
-
-interface PricingShape {
-  basePrices: typeof defaultPricingData.basePrices;
-  edgeworkPrices: typeof defaultPricingData.edgeworkPrices;
-  otherPrices: typeof defaultPricingData.otherPrices;
-}
 
 interface OrderFormState {
   id: string | null;
@@ -118,28 +113,6 @@ function numberOrFallback(value: string, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function parsePricingDataFromStorage(): PricingShape {
-  if (typeof window === 'undefined') {
-    return defaultPricingData;
-  }
-
-  const raw = localStorage.getItem('glassPricingData');
-  if (!raw) {
-    return defaultPricingData;
-  }
-
-  try {
-    const parsed = JSON.parse(raw);
-    return {
-      basePrices: parsed.basePrices || defaultPricingData.basePrices,
-      edgeworkPrices: parsed.edgeworkPrices || defaultPricingData.edgeworkPrices,
-      otherPrices: parsed.otherPrices || defaultPricingData.otherPrices,
-    };
-  } catch {
-    return defaultPricingData;
-  }
-}
-
 function normalizeLineNote(parsed: ParsedLineNotes, fallbackRaw?: string | null): string {
   if (parsed.note) {
     return parsed.note;
@@ -156,12 +129,12 @@ function normalizeCustomerLookupName(value: string): string {
 
 export default function NewPurchaseOrderPage() {
   const router = useRouter();
+  const { pricingData } = usePricing();
 
   const [role, setRole] = useState<UserRole>('readonly');
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerProducts, setCustomerProducts] = useState<CustomerProduct[]>([]);
-  const [pricingData, setPricingData] = useState<PricingShape>(defaultPricingData);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -181,6 +154,9 @@ export default function NewPurchaseOrderPage() {
   });
 
   const [lineDrafts, setLineDrafts] = useState<LineDraft[]>([createLineDraft()]);
+  // Line ids loaded from the database. A save updates these in place rather than replacing them,
+  // so anything that points at a line (a job sheet, a delivery) keeps pointing at it.
+  const [loadedLineIds, setLoadedLineIds] = useState<string[]>([]);
   const [activeLineId, setActiveLineId] = useState<string>(lineDrafts[0].localId);
 
   const canEditOrders = role !== 'readonly';
@@ -267,6 +243,8 @@ export default function NewPurchaseOrderPage() {
       });
     });
 
+    setLoadedLineIds(lines.map((line) => line.id).filter(Boolean) as string[]);
+
     if (mappedLines.length) {
       setLineDrafts(mappedLines);
       setActiveLineId(mappedLines[0].localId);
@@ -280,7 +258,6 @@ export default function NewPurchaseOrderPage() {
   }
 
   useEffect(() => {
-    setPricingData(parsePricingDataFromStorage());
 
     (async () => {
       setIsLoading(true);
@@ -520,8 +497,12 @@ export default function NewPurchaseOrderPage() {
         const { error } = await db.from(TABLE_PURCHASE_ORDERS).update(orderPayload).eq('id', orderForm.id);
         if (error) throw error;
 
-        const { error: deleteLinesError } = await db.from(TABLE_PURCHASE_ORDER_LINES).delete().eq('purchase_order_id', orderForm.id);
-        if (deleteLinesError) throw deleteLinesError;
+        // Only the lines the user actually removed are deleted. The rest keep their ids.
+        const keptIds = new Set(lineDrafts.map((line) => line.id).filter(Boolean) as string[]);
+        for (const removedId of loadedLineIds.filter((id) => !keptIds.has(id))) {
+          const { error: deleteLineError } = await db.from(TABLE_PURCHASE_ORDER_LINES).delete().eq('id', removedId);
+          if (deleteLineError) throw deleteLineError;
+        }
       } else {
         const { data, error } = await db
           .from(TABLE_PURCHASE_ORDERS)
@@ -542,7 +523,7 @@ export default function NewPurchaseOrderPage() {
         throw new Error('Purchase order ID was not returned after save.');
       }
 
-      const linePayload = lineDrafts.map((line) => {
+      const buildLinePayload = (line: LineDraft) => {
         const selectedCustomerProduct = customerProducts.find((entry) => entry.id === line.customerProductId);
         const selectedLabel = selectedCustomerProduct?.name || selectedCustomerProduct?.customer_part_ref || 'Customer Product';
         const isAdhoc = line.pricingSource === 'adhoc_calculator';
@@ -565,10 +546,20 @@ export default function NewPurchaseOrderPage() {
             productLabel: isAdhoc ? line.lineNote.trim() || 'Ad Hoc Item' : isWindow ? line.lineNote.trim() || 'Window Costing Item' : selectedLabel,
           }),
         };
-      });
+      };
 
-      const { error: insertLineError } = await db.from(TABLE_PURCHASE_ORDER_LINES).insert(linePayload);
-      if (insertLineError) throw insertLineError;
+      const existingLines = lineDrafts.filter((line) => line.id && loadedLineIds.includes(line.id));
+      const newLines = lineDrafts.filter((line) => !line.id || !loadedLineIds.includes(line.id));
+
+      for (const line of existingLines) {
+        const { error: updateLineError } = await db.from(TABLE_PURCHASE_ORDER_LINES).update(buildLinePayload(line)).eq('id', line.id as string);
+        if (updateLineError) throw updateLineError;
+      }
+
+      if (newLines.length) {
+        const { error: insertLineError } = await db.from(TABLE_PURCHASE_ORDER_LINES).insert(newLines.map(buildLinePayload));
+        if (insertLineError) throw insertLineError;
+      }
 
       router.push(`/glass?orderId=${orderId}`);
       router.refresh();
@@ -614,6 +605,12 @@ export default function NewPurchaseOrderPage() {
       }
     } catch (error: any) {
       setFormError(error?.message || 'Failed to update order status.');
+    }
+  }
+
+  function printJobSheet() {
+    if (typeof window !== 'undefined') {
+      window.print();
     }
   }
 
@@ -674,6 +671,13 @@ export default function NewPurchaseOrderPage() {
             <ActionButton onClick={handleSaveOrder}>{isSaving ? 'Saving...' : isEditingOrder ? 'Update Purchase Order' : 'Save Purchase Order'}</ActionButton>
             <ActionButton onClick={() => router.push('/glass')}>Cancel</ActionButton>
           </RowSpaceBetween>
+          {isEditingOrder ? (
+            <>
+              <br />
+              <ActionButton onClick={printJobSheet}>Print Job Sheet</ActionButton>
+              <Text>What to make, for the floor. No prices on it.</Text>
+            </>
+          ) : null}
         </Card>
       }
       actionItems={[
@@ -1246,6 +1250,25 @@ export default function NewPurchaseOrderPage() {
           </>
         )}
       </CardDouble>
+      {isEditingOrder ? (
+        <JobSheet
+          order={{
+            po_number: orderForm.poNumber,
+            received_date: orderForm.receivedDate,
+            required_date: orderForm.requiredDate,
+            status: orderForm.status,
+            notes: orderForm.notes,
+          }}
+          customer={customers.find((entry) => entry.id === orderForm.customerId) || null}
+          lines={lineSummaries.map((summary) => ({
+            id: summary.id,
+            index: summary.index,
+            description: summary.item,
+            quantity: summary.qty,
+            notes: '',
+          }))}
+        />
+      ) : null}
     </AppFrame>
   );
 }

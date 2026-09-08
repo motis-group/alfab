@@ -132,6 +132,7 @@ export default function WindowCostingPage() {
   const [quoteNotes, setQuoteNotes] = useState('');
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
   const [savedCostings, setSavedCostings] = useState<SavedWindowCosting[]>([]);
+  const [sheetAudience, setSheetAudience] = useState<'internal' | 'customer'>('internal');
   const [comparison, setComparison] = useState<{ id: string; quoted: number | null; today: number | null; onOriginal: number | null; stamp: string | null } | null>(null);
 
   const cfg = WINDOW_TYPES[input.type];
@@ -173,10 +174,9 @@ export default function WindowCostingPage() {
     }
 
     const header = [
-      `Window costing: ${quoteName.trim() || 'Ad Hoc'}`,
+      `${quoteName.trim() || 'Window quote'}`,
       `Customer: ${customerName.trim() || 'Walk-in / Phone'}`,
       `Date: ${quoteDate}`,
-      `Rates: ${ratesLabel}`,
     ];
 
     if (quoteLines.length) {
@@ -193,11 +193,9 @@ export default function WindowCostingPage() {
     return [
       ...header,
       `Window: ${describe(input)}`,
-      `Subtotal: ${formatCurrency(result.subtotal)} | Margin ${formatPercent(result.marginRate)}: ${formatCurrency(result.margin)} | Packing: ${formatCurrency(result.packing)} | Uplift ${formatPercent(result.upliftRate)}: ${formatCurrency(result.uplift)}`,
       `Price (${result.unitLabel.toLowerCase()}): ${formatCurrency(result.price)}`,
       `Qty: ${orderQuantity} | Total: ${formatCurrency(currentTotal)}`,
       ...extrasList.map((extra) => `${extra.label}: ${formatExtra(extra)}`),
-      result.unpriced.length ? `Not priced (charged as nil): ${result.unpriced.map((entry) => entry.label).join(', ')}` : '',
       quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : '',
     ]
       .filter(Boolean)
@@ -337,15 +335,42 @@ export default function WindowCostingPage() {
 
     try {
       await navigator.clipboard.writeText(summary);
-      setStatus({ tone: 'success', message: 'Copied the costing summary.' });
+      setStatus({ tone: 'success', message: 'Copied. Prices only, safe to send to a customer.' });
     } catch {
       setStatus({ tone: 'warning', message: 'Clipboard copy failed.' });
     }
   }
 
-  function printCostingSheet() {
+  /** The cost build-up, for Alfab only. Never paste this to a customer. */
+  async function copyCostBreakdown() {
+    if (result.price == null) {
+      return;
+    }
+
+    const text = [
+      `INTERNAL — ${quoteName.trim() || 'Window costing'} — do not send to a customer`,
+      `Window: ${describe(input)}`,
+      `Rates: ${ratesLabel}`,
+      `Subtotal: ${formatCurrency(result.subtotal)} | Margin ${formatPercent(result.marginRate)}: ${formatCurrency(result.margin)} | Packing: ${formatCurrency(result.packing)} | Uplift ${formatPercent(result.upliftRate)}: ${formatCurrency(result.uplift)}`,
+      `Price (${result.unitLabel.toLowerCase()}): ${formatCurrency(result.price)}`,
+      result.unpriced.length ? `Not priced (charged as nil): ${result.unpriced.map((entry) => entry.label).join(', ')}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus({ tone: 'warning', message: 'Copied the cost build-up. It shows your margin, so keep it internal.' });
+    } catch {
+      setStatus({ tone: 'warning', message: 'Clipboard copy failed.' });
+    }
+  }
+
+  function printSheet(audience: 'internal' | 'customer') {
+    setSheetAudience(audience);
     if (typeof window !== 'undefined') {
-      window.print();
+      // Let the sheet re-render for the chosen audience before the print dialog reads the page.
+      window.setTimeout(() => window.print(), 50);
     }
   }
 
@@ -469,9 +494,13 @@ export default function WindowCostingPage() {
             <br />
             <ActionButton onClick={handleCreatePurchaseOrder}>Create Purchase Order</ActionButton>
             <br />
-            <ActionButton onClick={printCostingSheet}>Print Costing Sheet</ActionButton>
+            <ActionButton onClick={() => printSheet('customer')}>Print Quote For Customer</ActionButton>
             <br />
-            <ActionButton onClick={copySummary}>Copy Costing Summary</ActionButton>
+            <ActionButton onClick={() => printSheet('internal')}>Print Costing Sheet (internal)</ActionButton>
+            <br />
+            <ActionButton onClick={copySummary}>Copy Prices For Customer</ActionButton>
+            <br />
+            <ActionButton onClick={copyCostBreakdown}>Copy Cost Build-up (internal)</ActionButton>
             <br />
             <ActionButton onClick={canSaveCostings ? handleSaveCosting : undefined}>{canSaveCostings ? 'Save Costing' : 'Saving Needs Access'}</ActionButton>
             <br />
@@ -683,11 +712,11 @@ export default function WindowCostingPage() {
         {
           hotkey: '⌘+P',
           body: 'Print',
-          onClick: printCostingSheet,
+          onClick: () => printSheet('customer'),
         },
         {
           hotkey: '⌘+C',
-          body: 'Copy Summary',
+          body: 'Copy Prices',
           onClick: copySummary,
         },
         {
@@ -1037,7 +1066,7 @@ export default function WindowCostingPage() {
         <WindowCostingGlossary openGroup="price" />
       </CardDouble>
 
-      <WindowCostingSheet quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} windows={sheetWindows} />
+      <WindowCostingSheet audience={sheetAudience} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} windows={sheetWindows} />
     </AppFrame>
   );
 }

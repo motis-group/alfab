@@ -25,7 +25,8 @@ const navigationItems = APP_NAVIGATION_ITEMS;
 
 export default function PricingSettings() {
   const router = useRouter();
-  const { pricingData, updatePricingData, resetToDefaults } = usePricing();
+  const { pricingData, updatePricingData, resetToDefaults, source, updatedAt, isLoading, error } = usePricing();
+  const [status, setStatus] = useState<{ tone: 'success' | 'error'; message: string } | null>(null);
   const [basePrices, setBasePrices] = useState(pricingData.basePrices);
   const [edgeworkPrices, setEdgeworkPrices] = useState(pricingData.edgeworkPrices);
   const [otherPrices, setOtherPrices] = useState(pricingData.otherPrices);
@@ -71,18 +72,24 @@ export default function PricingSettings() {
     setHasChanges(true);
   };
 
-  const handleSave = () => {
-    updatePricingData({
-      basePrices,
-      edgeworkPrices,
-      otherPrices,
-    });
-    setHasChanges(false);
+  const handleSave = async () => {
+    try {
+      await updatePricingData({ basePrices, edgeworkPrices, otherPrices });
+      setHasChanges(false);
+      setStatus({ tone: 'success', message: 'Glass rates saved for everyone. The rates they replaced are kept.' });
+    } catch (saveError: any) {
+      setStatus({ tone: 'error', message: saveError?.message || 'Unable to save the glass rates.' });
+    }
   };
 
-  const handleReset = () => {
-    resetToDefaults();
-    setHasChanges(false);
+  const handleReset = async () => {
+    try {
+      await resetToDefaults();
+      setHasChanges(false);
+      setStatus({ tone: 'success', message: 'Glass rates reset to the defaults.' });
+    } catch (resetError: any) {
+      setStatus({ tone: 'error', message: resetError?.message || 'Unable to reset the glass rates.' });
+    }
   };
 
   const glassTypes: GlassType[] = ['Clear', 'Green', 'Grey', 'Dark Grey', 'Super Grey'];
@@ -98,7 +105,7 @@ export default function PricingSettings() {
       navRight={<ActionButton onClick={() => router.push('/')}>BACK TO COSTING</ActionButton>}
       heading="COSTING"
       sectionNavigationItems={APP_ACCOUNT_SECTION_ITEMS}
-      badge={hasChanges ? 'UNSAVED CHANGES' : 'SAVED'}
+      badge={isLoading ? 'LOADING' : hasChanges ? 'UNSAVED CHANGES' : source === 'saved' ? 'SAVED RATES' : 'DEFAULT RATES'}
       sidebarWidthCh={44}
       sidebarMobileOrder="top"
       sidebar={
@@ -116,6 +123,20 @@ export default function PricingSettings() {
             </Card>
           )}
 
+          <Card title="THESE RATES">
+            <Text>{source === 'saved' && updatedAt ? `Company glass rates, saved ${new Date(updatedAt).toLocaleString()}.` : 'No saved glass rates yet, so the defaults are in use.'}</Text>
+            <Text>They apply to everyone, not only this computer.</Text>
+            {error ? (
+              <Text>
+                <span className="status-warning">{error}</span>
+              </Text>
+            ) : null}
+            {status ? (
+              <Text>
+                <span className={status.tone === 'success' ? 'status-success' : 'status-error'}>{status.message}</span>
+              </Text>
+            ) : null}
+          </Card>
         </>
       }
       actionItems={[

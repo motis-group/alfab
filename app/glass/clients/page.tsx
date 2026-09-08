@@ -5,6 +5,7 @@ import '@root/global.scss';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
+import { GlassSpecification } from '@utils/calculations';
 
 import ActionButton from '@components/ActionButton';
 import Card from '@components/Card';
@@ -41,6 +42,8 @@ interface CustomerProductFormState {
   defaultQty: number;
   unitPrice: number;
   note: string;
+  /** Carried through an edit untouched. This form does not edit the spec, and must not erase it. */
+  savedSpecification: GlassSpecification | null;
 }
 
 function numberOrDefault(value: string, defaultValue = 0): number {
@@ -66,6 +69,7 @@ function createDefaultProductForm(): CustomerProductFormState {
     defaultQty: 1,
     unitPrice: 0,
     note: '',
+    savedSpecification: null,
   };
 }
 
@@ -165,6 +169,7 @@ export default function CustomersPage() {
       defaultQty: product.default_qty || 1,
       unitPrice: parsedNotes.unitPrice || Number((product as any).negotiated_price || (product as any).unit_price || 0),
       note: parsedNotes.note || '',
+      savedSpecification: parsedNotes.savedSpecification ?? null,
     });
   }
 
@@ -258,7 +263,7 @@ export default function CustomersPage() {
         notes: serializeCustomerProductNotes({
           note: productForm.note.trim(),
           unitPrice: Number(productForm.unitPrice) || 0,
-          savedSpecification: null,
+          savedSpecification: productForm.savedSpecification,
         }),
       };
 

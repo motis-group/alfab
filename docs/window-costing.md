@@ -112,8 +112,12 @@ the glass loading to 15% for every type.
   development minutes divide across the batch, so the price per window falls as the run grows.
 - **Quote with several windows.** Add each costed window to the quote. The quote creates one
   purchase order line per window, and prints one sheet per window.
-- **Printing.** "Print Costing Sheet" prints the quote's windows, or the window on screen when
-  the quote is empty. The app hides itself for the printer; only the sheet prints.
+- **Printing.** Two documents print the quote's windows, or the window on screen when the quote
+  is empty. "Print Quote For Customer" carries the specification and the price only. "Print
+  Costing Sheet (internal)" adds every cost line, the rates used, the labour minutes, margin,
+  packing and uplift. The app hides itself for the printer; only the sheet prints.
+- **Copying.** "Copy Prices For Customer" is the same split in text. "Copy Cost Build-up
+  (internal)" carries the build-up and is marked as not for a customer.
 - **Saved costings.** A saved costing keeps the window, the customer and the price. Load it to
   price the same window again, which makes it the template for a repeat customer. Saved costings
   are rows in `quotes` marked `kind: window`.

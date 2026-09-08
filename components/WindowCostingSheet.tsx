@@ -14,6 +14,8 @@ export interface WindowCostingSheetWindow {
 }
 
 interface WindowCostingSheetProps {
+  /** Internal shows the cost build-up. Customer shows prices only and is safe to hand over. */
+  audience: 'internal' | 'customer';
   quoteName: string;
   customerName: string;
   quoteDate: string;
@@ -29,7 +31,9 @@ function formatQty(line: CostLine): string {
 }
 
 /** Costing sheet for the printer. Hidden on screen; @media print hides the app around it. */
-export default function WindowCostingSheet({ quoteName, customerName, quoteDate, notes, ratesLabel, rates, windows }: WindowCostingSheetProps) {
+export default function WindowCostingSheet({ audience, quoteName, customerName, quoteDate, notes, ratesLabel, rates, windows }: WindowCostingSheetProps) {
+  const internal = audience === 'internal';
+
   return (
     <section className="window-costing-sheet" aria-hidden="true">
       {windows.map((window, index) => {
@@ -39,7 +43,7 @@ export default function WindowCostingSheet({ quoteName, customerName, quoteDate,
         return (
           <article key={window.id} className="window-costing-sheet__window">
             <header className="window-costing-sheet__heading">
-              <h1 className="window-costing-sheet__title">{quoteName.trim() || 'Window costing'}</h1>
+              <h1 className="window-costing-sheet__title">{quoteName.trim() || (internal ? 'Window costing' : 'Quotation')}</h1>
               <span>
                 {quoteDate}
                 {windows.length > 1 ? ` · window ${index + 1} of ${windows.length}` : ''}
@@ -50,55 +54,63 @@ export default function WindowCostingSheet({ quoteName, customerName, quoteDate,
               <span>Customer: {customerName.trim() || 'Walk-in / phone'}</span>
               <span>Quantity: {window.quantity}</span>
               <span>Window: {window.name || `Window ${index + 1}`}</span>
-              <span>Rates: {ratesLabel}</span>
+              {internal ? <span>Rates: {ratesLabel}</span> : null}
             </div>
 
             <p className="window-costing-sheet__spec">{describeWindow(window.input, rates, productFullName(window.input.productId))}</p>
 
             <table className="window-costing-sheet__table">
-              <thead>
-                <tr>
-                  <th>Component</th>
-                  <th>Quantity</th>
-                  <th className="window-costing-sheet__amount">Rate</th>
-                  <th className="window-costing-sheet__amount">Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.lines.map((line) => (
-                  <tr key={line.key}>
-                    <td>{line.label}</td>
-                    <td>{formatQty(line)}</td>
-                    <td className="window-costing-sheet__amount">{line.rate == null ? 'not priced' : formatCurrency(line.rate)}</td>
-                    <td className="window-costing-sheet__amount">{formatCurrency(line.cost)}</td>
+              {internal ? (
+                <thead>
+                  <tr>
+                    <th>Component</th>
+                    <th>Quantity</th>
+                    <th className="window-costing-sheet__amount">Rate</th>
+                    <th className="window-costing-sheet__amount">Cost</th>
                   </tr>
-                ))}
-                {result.glazing.map((line) => (
-                  <tr key={`glazing-${line.key}`}>
-                    <td>Glazing: {line.label}</td>
-                    <td>{formatQty(line)}</td>
-                    <td className="window-costing-sheet__amount">{line.rate == null ? 'not priced' : formatCurrency(line.rate)}</td>
-                    <td className="window-costing-sheet__amount">{formatCurrency(line.cost)}</td>
-                  </tr>
-                ))}
-              </tbody>
+                </thead>
+              ) : null}
+              {internal ? (
+                <tbody>
+                  {result.lines.map((line) => (
+                    <tr key={line.key}>
+                      <td>{line.label}</td>
+                      <td>{formatQty(line)}</td>
+                      <td className="window-costing-sheet__amount">{line.rate == null ? 'not priced' : formatCurrency(line.rate)}</td>
+                      <td className="window-costing-sheet__amount">{formatCurrency(line.cost)}</td>
+                    </tr>
+                  ))}
+                  {result.glazing.map((line) => (
+                    <tr key={`glazing-${line.key}`}>
+                      <td>Glazing: {line.label}</td>
+                      <td>{formatQty(line)}</td>
+                      <td className="window-costing-sheet__amount">{line.rate == null ? 'not priced' : formatCurrency(line.rate)}</td>
+                      <td className="window-costing-sheet__amount">{formatCurrency(line.cost)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              ) : null}
               <tbody className="window-costing-sheet__totals">
-                <tr>
-                  <td colSpan={3}>Subtotal</td>
-                  <td className="window-costing-sheet__amount">{formatCurrency(result.subtotal)}</td>
-                </tr>
-                <tr>
-                  <td colSpan={3}>Margin ({Math.round(result.marginRate * 1000) / 10}%)</td>
-                  <td className="window-costing-sheet__amount">{formatCurrency(result.margin)}</td>
-                </tr>
-                <tr>
-                  <td colSpan={3}>{result.reinforcement ? `${result.reinforcement.label} x ${result.reinforcement.count}` : 'Packing'}</td>
-                  <td className="window-costing-sheet__amount">{formatCurrency(result.packing)}</td>
-                </tr>
-                <tr>
-                  <td colSpan={3}>Uplift ({Math.round(result.upliftRate * 1000) / 10}%)</td>
-                  <td className="window-costing-sheet__amount">{formatCurrency(result.uplift)}</td>
-                </tr>
+                {internal ? (
+                  <>
+                    <tr>
+                      <td colSpan={3}>Subtotal</td>
+                      <td className="window-costing-sheet__amount">{formatCurrency(result.subtotal)}</td>
+                    </tr>
+                    <tr>
+                      <td colSpan={3}>Margin ({Math.round(result.marginRate * 1000) / 10}%)</td>
+                      <td className="window-costing-sheet__amount">{formatCurrency(result.margin)}</td>
+                    </tr>
+                    <tr>
+                      <td colSpan={3}>{result.reinforcement ? `${result.reinforcement.label} x ${result.reinforcement.count}` : 'Packing'}</td>
+                      <td className="window-costing-sheet__amount">{formatCurrency(result.packing)}</td>
+                    </tr>
+                    <tr>
+                      <td colSpan={3}>Uplift ({Math.round(result.upliftRate * 1000) / 10}%)</td>
+                      <td className="window-costing-sheet__amount">{formatCurrency(result.uplift)}</td>
+                    </tr>
+                  </>
+                ) : null}
                 <tr className="window-costing-sheet__grand">
                   <td colSpan={3}>Price {result.unitLabel.toLowerCase()}</td>
                   <td className="window-costing-sheet__amount">{result.price == null ? 'not priced' : formatCurrency(result.price)}</td>
@@ -131,11 +143,11 @@ export default function WindowCostingSheet({ quoteName, customerName, quoteDate,
               </table>
             ) : null}
 
-            <p className="window-costing-sheet__note">Labour: {result.minutes.total.toFixed(1)} minutes at {formatCurrency(rates.labourPerHour)} per hour.</p>
-            {result.unpriced.length ? <p className="window-costing-sheet__note">Not priced, charged as nil: {result.unpriced.map((entry) => entry.label).join(', ')}.</p> : null}
+            {internal ? <p className="window-costing-sheet__note">Labour: {result.minutes.total.toFixed(1)} minutes at {formatCurrency(rates.labourPerHour)} per hour.</p> : null}
+            {internal && result.unpriced.length ? <p className="window-costing-sheet__note">Not priced, charged as nil: {result.unpriced.map((entry) => entry.label).join(', ')}.</p> : null}
             {notes.trim() ? <p className="window-costing-sheet__note">Notes: {notes.trim()}</p> : null}
 
-            <footer className="window-costing-sheet__footer">Comments:</footer>
+            <footer className="window-costing-sheet__footer">{internal ? 'Comments:' : 'Prices exclude GST unless stated. Please confirm sizes before manufacture.'}</footer>
           </article>
         );
       })}

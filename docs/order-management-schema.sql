@@ -275,3 +275,19 @@ create trigger trg_window_costing_rates_updated_at
 before update on window_costing_rates
 for each row
 execute function set_updated_at();
+
+-- Glass costing rates: one JSON document (row id 'default'), edited from /settings and merged over
+-- the code defaults in components/PricingProvider.tsx. Same shape as window_costing_rates, so the
+-- same archive-on-save behaviour applies and an old glass price can be reproduced.
+create table if not exists glass_costing_rates (
+  id text primary key default 'default',
+  rates jsonb not null,
+  updated_by uuid references users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists trg_glass_costing_rates_updated_at on glass_costing_rates;
+create trigger trg_glass_costing_rates_updated_at
+before update on glass_costing_rates
+for each row
+execute function set_updated_at();

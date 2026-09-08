@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { GlassType, EdgeworkType, GlassThickness } from '@utils/calculations';
+import { loadGlassRates, mergeGlassRates, resetGlassRates, saveGlassRates } from '@utils/glass-rate-store';
 
 export interface PricingData {
   basePrices: Record<GlassType, Partial<Record<GlassThickness, number>>>;
@@ -73,8 +74,13 @@ export const defaultPricingData: PricingData = {
 
 interface PricingContextType {
   pricingData: PricingData;
-  updatePricingData: (data: PricingData) => void;
-  resetToDefaults: () => void;
+  updatePricingData: (data: PricingData) => Promise<void>;
+  resetToDefaults: () => Promise<void>;
+  /** Whether these are the company's saved rates or the code defaults, and when they were saved. */
+  source: 'saved' | 'default';
+  updatedAt: string | null;
+  isLoading: boolean;
+  error: string | null;
 }
 
 const PricingContext = createContext<PricingContextType | undefined>(undefined);
@@ -85,37 +91,58 @@ interface PricingProviderProps {
 
 export function PricingProvider({ children }: PricingProviderProps) {
   const [pricingData, setPricingData] = useState<PricingData>(defaultPricingData);
+  const [source, setSource] = useState<'saved' | 'default'>('default');
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Load pricing data from localStorage on mount
+  // Glass rates are company-wide, so they come from the database rather than this browser. A rate
+  // kept per browser meant two people could quote different prices and neither could tell.
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedPricing = localStorage.getItem('glassPricingData');
-      if (savedPricing) {
-        try {
-          const parsed = JSON.parse(savedPricing);
-          setPricingData(parsed);
-        } catch (error) {
-          console.error('Error loading saved pricing data:', error);
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const loaded = await loadGlassRates();
+        if (cancelled) {
+          return;
+        }
+        setPricingData(loaded.rates);
+        setSource(loaded.source);
+        setUpdatedAt(loaded.updatedAt);
+        setError(loaded.error);
+      } catch (loadError: any) {
+        if (!cancelled) {
+          setError(loadError?.message || 'Unable to load the glass rates.');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
         }
       }
-    }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const updatePricingData = (data: PricingData) => {
-    setPricingData(data);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('glassPricingData', JSON.stringify(data));
-    }
+  const updatePricingData = async (data: PricingData) => {
+    await saveGlassRates(data);
+    const loaded = await loadGlassRates();
+    setPricingData(loaded.rates);
+    setSource(loaded.source);
+    setUpdatedAt(loaded.updatedAt);
   };
 
-  const resetToDefaults = () => {
-    setPricingData(defaultPricingData);
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('glassPricingData');
-    }
+  const resetToDefaults = async () => {
+    await resetGlassRates();
+    setPricingData(mergeGlassRates(null));
+    setSource('default');
+    setUpdatedAt(null);
   };
 
-  return <PricingContext.Provider value={{ pricingData, updatePricingData, resetToDefaults }}>{children}</PricingContext.Provider>;
+  return <PricingContext.Provider value={{ pricingData, updatePricingData, resetToDefaults, source, updatedAt, isLoading, error }}>{children}</PricingContext.Provider>;
 }
 
 export function usePricing() {
