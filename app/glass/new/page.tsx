@@ -250,9 +250,9 @@ export default function NewPurchaseOrderPage() {
       return createLineDraft({
         localId: line.id || `line-${Math.random().toString(36).slice(2, 9)}`,
         id: line.id,
-        quantityOrdered: line.quantity_ordered || 1,
-        quantityFulfilled: line.quantity_fulfilled || 0,
-        unitPriceAtOrder: line.unit_price_at_order || 0,
+        quantityOrdered: Number(line.quantity_ordered) || 1,
+        quantityFulfilled: Number(line.quantity_fulfilled) || 0,
+        unitPriceAtOrder: Number(line.unit_price_at_order) || 0,
         lineNote: normalizeLineNote(parsedNotes, line.line_notes),
         pricingSource: parsedNotes.pricingSource || 'existing_config',
         customerProductId: parsedNotes.customerProductId || '',
