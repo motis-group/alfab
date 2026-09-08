@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
+import CadImportPanel from '@components/CadImportPanel';
 import Card from '@components/Card';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
@@ -17,7 +18,7 @@ import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 
 import { defaultPricingData } from '@components/PricingProvider';
-import { GlassSpecification, calculateCost, getAvailableGlassTypes, getAvailableThicknesses } from '@utils/calculations';
+import { GlassSpecification, calculateCost, getAvailableGlassTypes, getAvailableThicknesses, getEffectiveArea, getEffectivePerimeter, usesMeasuredGeometry } from '@utils/calculations';
 import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import { UserRole, formatCurrency, todayISODate } from '@utils/order-management';
 import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
@@ -91,6 +92,7 @@ export default function AdhocQuotePage() {
   const [quoteNotes, setQuoteNotes] = useState('');
   const [spec, setSpec] = useState<GlassSpecification>({ ...defaultQuoteSpec });
   const [copyState, setCopyState] = useState('');
+  const [cadPanelKey, setCadPanelKey] = useState(0);
 
   const calculation = useMemo(() => {
     try {
@@ -127,6 +129,7 @@ export default function AdhocQuotePage() {
       `Customer: ${customerName.trim() || 'Walk-in / Phone'}`,
       `Date: ${quoteDate}`,
       `Spec: ${spec.width} x ${spec.height} mm | ${spec.thickness}mm ${spec.glassType} | ${spec.shape}`,
+      spec.cadOutline ? `CAD: ${spec.cadOutline.fileName} | ${spec.cadOutline.shapeLabel} | ${spec.cadOutline.areaSqM.toFixed(3)} m² | ${spec.cadOutline.perimeterM.toFixed(2)} m edge${usesMeasuredGeometry(spec) ? ' (priced on measured outline)' : ''}` : '',
       `Edgework: ${spec.edgework}`,
       `Qty: ${Math.max(1, quantity)}`,
       `Unit Price: ${formatCurrency(calculation.unitPrice)}`,
@@ -135,7 +138,7 @@ export default function AdhocQuotePage() {
     ]
       .filter(Boolean)
       .join('\n');
-  }, [calculation.error, calculation.totalPrice, calculation.unitPrice, customerName, quantity, quoteDate, quoteName, quoteNotes, spec.edgework, spec.glassType, spec.height, spec.shape, spec.thickness, spec.width]);
+  }, [calculation.error, calculation.totalPrice, calculation.unitPrice, customerName, quantity, quoteDate, quoteName, quoteNotes, spec]);
 
   useEffect(() => {
     setPricingData(parsePricingDataFromStorage());
@@ -171,6 +174,7 @@ export default function AdhocQuotePage() {
     setQuoteNotes('');
     setSpec({ ...defaultQuoteSpec });
     setCopyState('');
+    setCadPanelKey((key) => key + 1);
   }
 
   async function copyQuoteToClipboard() {
@@ -240,6 +244,18 @@ export default function AdhocQuotePage() {
               </Text>
             ) : (
               <>
+                <RowSpaceBetween>
+                  <Text>AREA</Text>
+                  <Text>
+                    {getEffectiveArea(spec).toFixed(3)} m²{usesMeasuredGeometry(spec) ? ' (CAD)' : ''}
+                  </Text>
+                </RowSpaceBetween>
+                <RowSpaceBetween>
+                  <Text>EDGE LENGTH</Text>
+                  <Text>
+                    {getEffectivePerimeter(spec).toFixed(2)} m{usesMeasuredGeometry(spec) ? ' (CAD)' : ''}
+                  </Text>
+                </RowSpaceBetween>
                 <RowSpaceBetween>
                   <Text>RECOMMENDED UNIT</Text>
                   <Text>{formatCurrency(calculation.recommendedUnitPrice)}</Text>
@@ -396,6 +412,10 @@ export default function AdhocQuotePage() {
         <Input label="QUOTE NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
       </CardDouble>
 
+      <CardDouble title="CAD FILE IMPORT">
+        <CadImportPanel key={cadPanelKey} spec={spec} onApply={(result) => setSpec(result.spec)} onClear={() => setSpec((prev) => ({ ...prev, cadOutline: null }))} />
+      </CardDouble>
+
       <CardDouble title="GLASS SPECIFICATION">
         <Text>GLASS THICKNESS (MM)</Text>
         <select
@@ -463,6 +483,13 @@ export default function AdhocQuotePage() {
           }
           min="0"
         />
+        {spec.cadOutline ? (
+          <Text>
+            <span className="status-success">
+              Read from {spec.cadOutline.fileName}: {spec.cadOutline.widthMm} × {spec.cadOutline.heightMm} mm, {spec.cadOutline.shapeLabel}.
+            </span>
+          </Text>
+        ) : null}
 
         <Text>SHAPE</Text>
         <select

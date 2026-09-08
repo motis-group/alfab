@@ -1,0 +1,135 @@
+.root {
+  display: block;
+}
+
+.dropZone {
+  display: block;
+  width: 100%;
+  cursor: pointer;
+  outline: 0;
+  border: 2px dashed var(--theme-text);
+  background: var(--theme-background-input);
+  padding: calc(var(--theme-line-height-base) * 0.5rem) 2ch;
+  text-align: center;
+  transition:
+    background 120ms ease-out,
+    border-color 120ms ease-out;
+
+  &:hover,
+  &:focus {
+    background: var(--theme-focused-foreground-subdued);
+  }
+}
+
+.dropZoneActive {
+  border-style: solid;
+  background: var(--theme-focused-foreground-subdued);
+}
+
+.dropZoneDisabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.dropZoneTitle {
+  display: block;
+  text-transform: uppercase;
+}
+
+.dropZoneHint {
+  display: block;
+  color: var(--theme-text);
+  opacity: 0.7;
+}
+
+.hiddenInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.previewFrame {
+  display: block;
+  width: 100%;
+  background: var(--theme-background-input);
+  box-shadow: inset 0 0 0 2px var(--theme-border);
+  padding: calc(var(--theme-line-height-base) * 0.25rem) 1ch;
+}
+
+.previewSvg {
+  display: block;
+  width: 100%;
+  height: calc(var(--font-size) * var(--theme-line-height-base) * 9);
+  color: var(--theme-text);
+}
+
+.outlinePath {
+  fill: var(--theme-focused-foreground-subdued);
+  stroke: currentColor;
+  stroke-width: 2px;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.holePath {
+  fill: var(--theme-background-input);
+  stroke: currentColor;
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+
+.cutoutPath {
+  fill: var(--theme-background-input);
+  stroke: currentColor;
+  stroke-width: 1.5px;
+  stroke-dasharray: 6 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.dimensionLine {
+  stroke: currentColor;
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.6;
+}
+
+.dimensionLabel {
+  fill: currentColor;
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+}
+
+.previewCaption {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0 2ch;
+}
+
+.list {
+  display: block;
+  list-style-type: '▪';
+  padding-left: 1ch;
+}
+
+.subtle {
+  opacity: 0.75;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1ch;
+  align-items: center;
+}
+
+.control {
+  display: block;
+  width: 100%;
+}

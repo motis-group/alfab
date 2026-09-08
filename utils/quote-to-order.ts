@@ -99,6 +99,7 @@ export function consumeQuoteToOrderDraft(): QuoteToOrderDraft | null {
 export function buildQuoteDraftLineDescription(draft: Pick<QuoteToOrderDraft, 'quoteName' | 'spec'>): string {
   const title = draft.quoteName.trim();
   const specSummary = `${draft.spec.width} x ${draft.spec.height} mm | ${draft.spec.thickness}mm ${draft.spec.glassType} | ${draft.spec.shape}`;
+  const cadSummary = draft.spec.cadOutline ? `CAD: ${draft.spec.cadOutline.fileName}` : '';
 
-  return [title, specSummary].filter(Boolean).join(' | ') || 'Ad Hoc Calculator Item';
+  return [title, specSummary, cadSummary].filter(Boolean).join(' | ') || 'Ad Hoc Calculator Item';
 }

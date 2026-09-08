@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
+import CadImportPanel from '@components/CadImportPanel';
 import Card from '@components/Card';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
@@ -864,6 +865,21 @@ export default function NewPurchaseOrderPage() {
               <>
                 <br />
                 <Text>AD HOC CALCULATOR</Text>
+                <br />
+
+                <Text>CAD FILE</Text>
+                <CadImportPanel
+                  key={activeLine.localId}
+                  spec={activeLine.adhocSpec}
+                  disabled={!canEditOrders}
+                  onApply={(result) => updateLineDraft(activeLine.localId, (current) => ({ ...current, adhocSpec: result.spec }))}
+                  onClear={() =>
+                    updateLineDraft(activeLine.localId, (current) => ({
+                      ...current,
+                      adhocSpec: { ...current.adhocSpec, cadOutline: null },
+                    }))
+                  }
+                />
                 <br />
 
                 <Text>GLASS THICKNESS (MM)</Text>

@@ -9,6 +9,12 @@ npm ci
 npm run dev
 ```
 
+## Tests
+
+```bash
+npm test
+```
+
 ## Build
 
 ```bash
@@ -23,3 +29,7 @@ or the GitHub Actions workflows in `.github/workflows`.
 For AWS RDS -> VPS migration and VPS cutover steps, see:
 
 - `docs/vps-postgres-cutover.md`
+
+For the calculator's CAD file import (DXF/DWG/SVG) and the optional DWG converter, see:
+
+- `docs/cad-import.md`

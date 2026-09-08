@@ -12,7 +12,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "rm -rf .next && tsc --noEmit"
+    "typecheck": "rm -rf .next && tsc --noEmit",
+    "test": "tsx --test utils/cad/*.test.ts"
   },
   "dependencies": {
     "next": "^14.0.0",
@@ -26,6 +27,7 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "sass": "^1.69.0",
+    "tsx": "^4.23.13",
     "typescript": "^5.0.0"
   }
 }

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Inkscape-style export: width in mm, viewBox in mm, so 1 user unit = 1 mm -->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="1400mm" height="1000mm" viewBox="0 0 1400 1000" version="1.1">
+  <defs>
+    <rect id="unused" x="0" y="0" width="5000" height="5000"/>
+  </defs>
+  <g inkscape:label="Glass" id="layer1" transform="translate(100,100)">
+    <rect x="0" y="0" width="1200" height="800" rx="60" ry="60" fill="none" stroke="#000"/>
+    <circle cx="40" cy="40" r="6" fill="none" stroke="#000"/>
+    <circle cx="1160" cy="40" r="6" fill="none" stroke="#000"/>
+    <circle cx="40" cy="760" r="6" fill="none" stroke="#000"/>
+    <circle cx="1160" cy="760" r="6" fill="none" stroke="#000"/>
+  </g>
+  <text x="10" y="990" font-size="20">Panel A - 1200 x 800</text>
+</svg>
