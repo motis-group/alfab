@@ -1,5 +1,5 @@
 import { createClient } from '@utils/db-client';
-import { WindowCostingInput, WindowCostResult } from '@utils/window-costing';
+import { CostLine, WindowCostingInput, WindowCostResult } from '@utils/window-costing';
 
 const TABLE = 'quotes';
 
@@ -12,6 +12,9 @@ export interface SavedWindowCosting {
   input: WindowCostingInput;
   price: number | null;
   unitLabel: string;
+  /** The priced lines as they stood when the costing was saved, so reopening shows what was quoted. */
+  lines: CostLine[];
+  glazing: CostLine[];
   /** Stamp of the rates the saved price was calculated on. */
   ratesUpdatedAt: string | null;
 }
@@ -57,6 +60,8 @@ function toSavedCosting(row: QuoteRow): SavedWindowCosting | null {
     input: specification.input as WindowCostingInput,
     price,
     unitLabel: typeof cost.unitLabel === 'string' ? cost.unitLabel : 'Per Each',
+    lines: Array.isArray(cost.lines) ? (cost.lines as CostLine[]) : [],
+    glazing: Array.isArray(cost.glazing) ? (cost.glazing as CostLine[]) : [],
     ratesUpdatedAt: typeof specification.ratesUpdatedAt === 'string' ? specification.ratesUpdatedAt : null,
   };
 }
@@ -87,6 +92,8 @@ export async function saveWindowCosting(costing: { name: string; customer: strin
       margin: costing.result.margin,
       packing: costing.result.packing,
       uplift: costing.result.uplift,
+      lines: costing.result.lines,
+      glazing: costing.result.glazing,
     },
   });
 

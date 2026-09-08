@@ -159,10 +159,3 @@ export function checkWindowRates(rates: unknown): RateIssue[] {
   walk(rates, []);
   return issues;
 }
-
-export function countRateIssues(issues: RateIssue[]): { errors: number; warnings: number } {
-  return {
-    errors: issues.filter((issue) => issue.tone === 'error').length,
-    warnings: issues.filter((issue) => issue.tone === 'warning').length,
-  };
-}

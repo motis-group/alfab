@@ -4,7 +4,7 @@
  * this file under plain node). See docs/window-costing.md for the model.
  */
 
-import type { GlassGroup, GlazingId, LabourTable, WindowRates, WindowTypeId } from './window-costing-rates';
+import type { AnodCode, EachKey, ExtrusionCode, GlassGroup, GlazingId, LabourTable, PerMetreKey, TrimBlackCode, TrimCode, WindowRates, WindowTypeId } from './window-costing-rates';
 
 export type { GlassGroup, GlazingId, WindowRates, WindowTypeId } from './window-costing-rates';
 
@@ -175,13 +175,13 @@ interface Ctx {
   unpriced: UnpricedRate[];
   anodLines: AnodRef[];
   line(key: string, label: string, qty: number, unit: LineUnit, rate: RateRef | number | null, cost?: number): CostLine;
-  ext(code: string): RateRef;
-  pm(key: string): RateRef;
-  ea(key: string): RateRef;
-  trimEtch(code: string): RateRef;
-  trimBlack(code: string): RateRef;
-  trimRate(code: string): RateRef;
-  anod(key: string, code: string, metres: number, opts?: { minMultiplier?: number; noMin?: boolean }): CostLine;
+  ext(code: ExtrusionCode): RateRef;
+  pm(key: PerMetreKey): RateRef;
+  ea(key: EachKey): RateRef;
+  trimEtch(code: TrimCode): RateRef;
+  trimBlack(code: TrimBlackCode): RateRef;
+  trimRate(code: TrimCode & ExtrusionCode): RateRef;
+  anod(key: string, code: AnodCode, metres: number, opts?: { minMultiplier?: number; noMin?: boolean }): CostLine;
   glassSelected(nonAcrylicOnly: boolean): boolean;
 }
 
@@ -283,7 +283,7 @@ export function extrusionRate(rates: WindowRates, code: string): number | null {
   return entry.kgPerM * perKg * (1 + supplier.loading) * (1 + entry.offcut);
 }
 
-function trimLine(c: Ctx, code: string, label = `M. ${code} TRIM`): CostLine[] {
+function trimLine(c: Ctx, code: TrimCode & ExtrusionCode, label = `M. ${code} TRIM`): CostLine[] {
   return c.trimM > 0 ? [c.line('trim', label, c.trimM, 'm', c.trimRate(code))] : [];
 }
 
@@ -299,7 +299,7 @@ function reinforcementMinutes(c: Ctx): number {
   return table.each + (c.input.qtyShaped > 0 ? table.offSquareExtra : 0);
 }
 
-function hopperReinforcement(c: Ctx, m: LabourMinutes, opts: { bar: string; barLabel: string; frame: string; rubber: string }) {
+function hopperReinforcement(c: Ctx, m: LabourMinutes, opts: { bar: ExtrusionCode; barLabel: string; frame: ExtrusionCode & AnodCode; rubber: PerMetreKey }) {
   const kind = c.input.reinforcement;
   const bars = count(c.input.reinforcementCount);
   if (kind === 'none' || bars === 0) {

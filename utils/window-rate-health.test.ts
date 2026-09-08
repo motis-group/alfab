@@ -4,11 +4,11 @@ import { test } from 'node:test';
 
 import { DEFAULT_WINDOW_RATES, mergeWindowRates } from './window-costing-rates';
 import { costWindow, createWindowInput } from './window-costing';
-import { checkRateValue, checkWindowRates, countRateIssues } from './window-rate-health';
+import { checkRateValue, checkWindowRates } from './window-rate-health';
 
 test('the default rates carry the sheet gaps as warnings and nothing to fix', () => {
   const issues = checkWindowRates(DEFAULT_WINDOW_RATES);
-  const { errors, warnings } = countRateIssues(issues);
+  const errors = issues.filter((issue) => issue.tone === 'error').length;
 
   assert.equal(errors, 0, `expected no errors, got ${JSON.stringify(issues.filter((issue) => issue.tone === 'error'))}`);
   assert.deepEqual(
@@ -16,7 +16,7 @@ test('the default rates carry the sheet gaps as warnings and nothing to fix', ()
     ['anodising.blackPerSqm', 'each.keeperSaddle', 'each.staysFlat', 'each.staysMed', 'glass.processing.laminate.cview'],
     'only the legacy sheet gaps are flagged'
   );
-  assert.equal(warnings, 5);
+  assert.equal(issues.length, 5);
 });
 
 test('a blank Marine Window Service margin is the normal case, not a gap', () => {

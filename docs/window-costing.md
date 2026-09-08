@@ -127,6 +127,10 @@ and unknown keys are dropped. A blank value means not priced: the line costs $0 
 warns. Items the source sheet could not price: black anodising, 015-03 flat and 015-07
 medium stays, keeper saddles (sash & frame), laminate c/view holes.
 
+Recipes reference rates by key, and those keys are unions derived from the defaults
+(`ExtrusionCode`, `PerMetreKey`, `EachKey`, `AnodCode`, `TrimCode`). Renaming a rate now fails the
+typecheck at every call site instead of silently leaving a line unpriced.
+
 ### Which rates are wrong
 
 A rate can be blank for two very different reasons, and the editor colours them apart.
@@ -166,9 +170,21 @@ until someone confirms it.
 ## Reproducing an old price
 
 Saving rates keeps the document it replaced as an archive row, `v-<the stamp it replaced>`.
-Costings and purchase order lines record the stamp of the rates that priced them, so
-`loadWindowRatesVersion(stamp)` in `utils/window-costing-store.ts` returns the exact rates behind
-an old price. Resetting to the defaults leaves the archive rows in place.
+Costings and purchase order lines record the stamp of the rates that priced them. Resetting to the
+defaults leaves the archive rows in place.
+
+A saved costing stores its priced lines, so reopening one shows what was quoted rather than
+repricing it. **Compare** on the saved costings list shows three numbers: what was quoted, what the
+same window costs on today's rates, and what it recomputes to on the rates that priced it. The third
+comes from the archive row, or from the code defaults when the costing carries no stamp. When the
+recomputed figure does not match the quote, the costing itself changed rather than the rates.
+
+## Seeing a rate change before it is saved
+
+The rates editor prices the last twenty saved costings on the current rates and on the edit, and
+lists every one that moves, largest first. A move of 10 percent or more is marked. Saved costings are
+used rather than the golden windows because the goldens are fixed reference sizes that a glass price
+barely moves.
 
 The rates table is keyed by a text id the client sets, which is why `/api/db` lists
 `window_costing_rates` in `NATURAL_KEY_TABLES`. Every other table keeps a server-generated id.

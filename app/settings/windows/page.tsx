@@ -20,10 +20,11 @@ import { APP_ACCOUNT_SECTION_ITEMS, APP_NAVIGATION_ITEMS } from '@utils/app-navi
 import { formatCurrency } from '@utils/order-management';
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 import WindowCostingGlossary from '@components/WindowCostingGlossary';
-import { extrusionRate } from '@utils/window-costing';
+import { WindowCostingInput, costWindow, extrusionRate } from '@utils/window-costing';
 import { WindowRates, mergeWindowRates } from '@utils/window-costing-rates';
 import { loadWindowRates, resetWindowRates, saveWindowRates } from '@utils/window-costing-store';
 import { RateIssue, checkRateValue } from '@utils/window-rate-health';
+import { listWindowCostings } from '@utils/window-quote-store';
 
 const navigationItems = APP_NAVIGATION_ITEMS;
 
@@ -189,6 +190,8 @@ export default function WindowRatesSettings() {
   const [highlight, setHighlight] = useState<string | null>(null);
   // Raw text per field while editing, so a partly typed decimal is not reformatted under the cursor.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // Real saved costings, repriced on the edit, so the effect of a rate change is visible before saving.
+  const [samples, setSamples] = useState<Array<{ id: string; name: string; input: WindowCostingInput }>>([]);
 
   const sections = useMemo(() => buildSections(rates), [rates]);
   const hasChanges = useMemo(() => JSON.stringify(rates) !== JSON.stringify(savedRates), [rates, savedRates]);
@@ -197,6 +200,22 @@ export default function WindowRatesSettings() {
   const errorCount = allIssues.filter((issue) => issue.tone === 'error').length;
   const warningCount = allIssues.length - errorCount;
   const issueLabel = (field: RateField) => `${field.group ? `${humanise(field.group)} / ` : ''}${field.label}`;
+
+  // What this edit does to real quotes. The golden windows would barely move; saved costings do.
+  const impact = useMemo(() => {
+    if (!hasChanges || !samples.length) {
+      return [];
+    }
+    return samples
+      .map((sample) => {
+        const before = costWindow(sample.input, savedRates).price;
+        const after = costWindow(sample.input, rates).price;
+        const delta = before == null || after == null ? null : after - before;
+        return { ...sample, before, after, delta, percent: delta == null || !before ? null : (delta / before) * 100 };
+      })
+      .filter((row) => row.delta === null || Math.abs(row.delta) >= 0.01)
+      .sort((a, b) => Math.abs(b.percent ?? 0) - Math.abs(a.percent ?? 0));
+  }, [hasChanges, rates, samples, savedRates]);
 
   const query = search.trim().toLowerCase();
   const visibleSections = useMemo(() => {
@@ -222,6 +241,10 @@ export default function WindowRatesSettings() {
           return;
         }
         setCanEdit(userCan(user, 'pricing:write'));
+
+        listWindowCostings()
+          .then((costings) => setSamples(costings.slice(0, 20).map((costing) => ({ id: costing.id, name: costing.name, input: costing.input }))))
+          .catch(() => setSamples([]));
 
         const loaded = await loadWindowRates();
         setRates(loaded.rates);
@@ -349,6 +372,40 @@ export default function WindowRatesSettings() {
               </>
             ) : null}
           </Card>
+
+          {hasChanges ? (
+            <Card title="WHAT THIS CHANGES">
+              {impact.length ? (
+                <>
+                  <Text>
+                    {impact.length} of the last {samples.length} saved costing{samples.length === 1 ? '' : 's'} move{impact.length === 1 ? 's' : ''}.
+                  </Text>
+                  <Table>
+                    <TableRow>
+                      <TableColumn style={{ width: '24ch' }}>COSTING</TableColumn>
+                      <TableColumn style={{ width: '12ch' }}>NOW</TableColumn>
+                      <TableColumn style={{ width: '12ch' }}>AFTER</TableColumn>
+                      <TableColumn>CHANGE</TableColumn>
+                    </TableRow>
+                    {impact.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableColumn>{row.name}</TableColumn>
+                        <TableColumn>{formatCurrency(row.before)}</TableColumn>
+                        <TableColumn>{formatCurrency(row.after)}</TableColumn>
+                        <TableColumn>
+                          <span className={Math.abs(row.percent ?? 0) >= 10 ? 'status-warning' : undefined}>
+                            {row.percent == null ? 'not priced' : `${row.percent > 0 ? '+' : ''}${row.percent.toFixed(1)}%`}
+                          </span>
+                        </TableColumn>
+                      </TableRow>
+                    ))}
+                  </Table>
+                </>
+              ) : (
+                <Text>{samples.length ? 'No saved costing changes price.' : 'No saved costings to price against. Save one from the costing page.'}</Text>
+              )}
+            </Card>
+          ) : null}
 
           {allIssues.length ? (
             <Card title={errorCount ? 'RATES TO FIX' : 'RATES NOT PRICED'}>

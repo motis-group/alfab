@@ -48,7 +48,7 @@ import {
   switchWindowType,
 } from '@utils/window-costing';
 import { WINDOW_SERIES, WindowProduct, findProduct, productFullName, productLabel, productForInput, seriesOfProduct, visibleSeries } from '@utils/window-catalogue';
-import { DEFAULT_WINDOW_RATES, GlazingId, WindowRates } from '@utils/window-costing-rates';
+import { DEFAULT_WINDOW_RATES, GlazingId, WindowRates, mergeWindowRates } from '@utils/window-costing-rates';
 import { loadWindowRates, loadWindowRatesVersion } from '@utils/window-costing-store';
 import { SavedWindowCosting, deleteWindowCosting, listWindowCostings, saveWindowCosting } from '@utils/window-quote-store';
 
@@ -371,7 +371,8 @@ export default function WindowCostingPage() {
 
   /** What was quoted, what it costs today, and what it recomputes to on the rates that priced it. */
   async function compareCosting(costing: SavedWindowCosting) {
-    const original = costing.ratesUpdatedAt ? await loadWindowRatesVersion(costing.ratesUpdatedAt).catch(() => null) : null;
+    // No stamp means it was priced on the code defaults, which are still reproducible.
+    const original = costing.ratesUpdatedAt ? await loadWindowRatesVersion(costing.ratesUpdatedAt).catch(() => null) : mergeWindowRates(null);
     setComparison({
       id: costing.id,
       quoted: costing.price,
