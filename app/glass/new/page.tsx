@@ -9,7 +9,6 @@ import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
 import CadImportPanel from '@components/CadImportPanel';
 import Card from '@components/Card';
-import GlassVisualizer from '@components/GlassVisualizer';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
 import RowSpaceBetween from '@components/RowSpaceBetween';
@@ -876,9 +875,6 @@ export default function NewPurchaseOrderPage() {
               <>
                 <br />
                 <Text>AD HOC CALCULATOR</Text>
-                <br />
-
-                <GlassVisualizer spec={activeLine.adhocSpec} />
                 <br />
 
                 <Text>CAD FILE</Text>

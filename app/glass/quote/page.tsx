@@ -346,6 +346,10 @@ export default function AdhocQuotePage() {
               </>
             )}
           </Card>
+
+          <Card title="GLASS VISUALIZER">
+            <GlassVisualizer spec={spec} />
+          </Card>
         </>
       }
       actionItems={[
@@ -373,10 +377,6 @@ export default function AdhocQuotePage() {
           </Text>
         </Card>
       )}
-
-      <CardDouble title="GLASS VISUALIZER">
-        <GlassVisualizer spec={spec} />
-      </CardDouble>
 
       <CardDouble title="QUOTE DETAILS">
         <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} />

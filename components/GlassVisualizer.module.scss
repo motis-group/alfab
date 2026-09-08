@@ -51,28 +51,22 @@
 
 .dimension {
   stroke: currentColor;
-  stroke-width: 1.5;
+  stroke-width: 2;
   opacity: 0.65;
 }
 
 .dimensionLabel {
   fill: currentColor;
   font-family: var(--font-family-mono);
-  font-size: 17px;
+  font-size: 24px;
   opacity: 0.85;
 }
 
-.captionRow {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 0 2ch;
-
-  // Keep the measurements to the right even when the row wraps onto two lines.
-  > :last-child {
-    margin-left: auto;
-    text-align: right;
-  }
+// The visualizer lives in the narrow sidebar column, so the facts stack rather than sitting in
+// space-between rows that collide once the text wraps.
+.facts {
+  display: block;
+  overflow-wrap: anywhere;
 }
 
 .note {

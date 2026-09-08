@@ -38,9 +38,10 @@ Tiny corner clean-up segments (up to 2 mm) are collapsed before counting edges s
 
 ## The glass visualizer
 
-`components/GlassVisualizer.tsx` draws the panel above the calculator on `/glass/quote` and above the
-ad hoc calculator in a purchase order line. It works from the specification alone, so it is useful
-whether or not a CAD file was uploaded:
+`components/GlassVisualizer.tsx` draws the panel in the calculator's left column on `/glass/quote`,
+directly beneath the price breakdown. It is deliberately only on the calculator: purchase order lines
+show the numbers, not the drawing. It works from the specification alone, so it is useful whether or
+not a CAD file was uploaded:
 
 - **With a CAD outline** it draws the real measured profile, its holes and any cutouts, and labels the
   source file. The points come from `cadOutline.geometry`, which `buildCadOutline` stores with the
@@ -53,7 +54,9 @@ whether or not a CAD file was uploaded:
 
 Glass type tints the fill via `glassTypeToRGB`, ceramic banding is drawn as an inner band, and the
 width and height carry dimension lines. The drawing is laid out in a fixed SVG viewBox with
-millimetres mapped into it, so line weights and labels stay legible for a 200 mm pane or a 4 m one.
+millimetres mapped into it, so line weights and labels stay the same size for a 200 mm pane or a 4 m
+one. That viewBox is kept small on purpose: the sidebar is around 400 px wide, and a larger box would
+shrink the dimension labels below a readable size.
 
 ## Pricing with a CAD outline
 
@@ -63,13 +66,27 @@ If width or height are edited by hand after an import, pricing keeps using the m
 
 ## DWG conversion on the server
 
-DWG is a closed binary format, so `/api/cad/convert` shells out to LibreDWG's `dwg2dxf`. On Debian/Ubuntu:
+DWG is a closed binary format, so `/api/cad/convert` shells out to LibreDWG's `dwg2dxf`.
+
+Ubuntu does not ship LibreDWG in its archive (the `libredwg-tools` package is Debian-only), so it is
+built from the pinned upstream release by `scripts/install-libredwg.sh`. The script is idempotent: it
+exits early when a working `dwg2dxf` is already present, and takes `--force` to rebuild.
+
+Run it on the production droplet with the **Install LibreDWG on Production** GitHub Action
+(`.github/workflows/install-libredwg.yml`, run manually from the Actions tab). It uses the same
+deploy secrets as the release workflow, builds on the droplet, verifies the binary, and restarts the
+app. It is deliberately kept out of the deploy path: the build takes several minutes and a failure
+must never be able to break a release. Run it once, and again when the pinned version changes.
+
+To install by hand on any Debian or Ubuntu host:
 
 ```bash
-sudo apt install libredwg-tools
+sudo bash scripts/install-libredwg.sh
 ```
 
-If the binary is not on `PATH`, point the app at it:
+`scripts/bootstrap-vps-1gb.sh` calls the same script, so a freshly provisioned server has it already.
+
+If the binary lives somewhere other than `PATH`, point the app at it:
 
 ```bash
 CAD_DWG2DXF_PATH=/usr/local/bin/dwg2dxf
@@ -77,10 +94,23 @@ CAD_DWG2DXF_PATH=/usr/local/bin/dwg2dxf
 
 The route only accepts real DWG files (header `AC10xx`) up to 40 MB from a signed-in session, converts them in a temporary directory with a 90 s timeout, and returns the DXF text. When the converter is missing the panel tells the user to export a DXF instead. `GET /api/cad/convert` reports whether the converter is available.
 
+`dwg2dxf` exits 0 even when it only partly understood a drawing, writing a DXF with an empty
+`ENTITIES` section. `convertDwgBufferToDxf` checks for that and reports it as a conversion failure,
+quoting the converter's own error, so a half-converted DWG is not blamed on the customer's drawing.
+
 ## Tests
 
 ```bash
 npm test
 ```
 
-runs the CAD parser and analysis tests in `utils/cad/cad.test.ts` against the fixtures in `utils/cad/__fixtures__` (DXF files generated with ezdxf for R12/R2000/R2010, a binary DXF, and hand-written SVGs).
+runs the CAD parser and analysis tests in `utils/cad/cad.test.ts` against the fixtures in
+`utils/cad/__fixtures__` (DXF files generated with ezdxf for R12/R2000/R2010, a binary DXF, and
+hand-written SVGs), plus `utils/cad/dwg-server.test.ts`, which drives the DWG conversion helper
+through stub converters covering the missing-binary, non-zero-exit, empty-output and
+converted-but-empty cases.
+
+There is no DWG fixture in the repository: LibreDWG's DWG *writer* is experimental and produces files
+its own reader rejects, so a synthetic DWG would test nothing. The conversion helper is covered with
+stubs instead, and the real `dwg2dxf` path is exercised by uploading a DWG produced by an actual CAD
+package.
