@@ -25,13 +25,13 @@ export default function SettingsPage() {
       sidebarMobileOrder="top"
       sidebar={
         <Card title="QUICK ACTIONS">
-          <ActionListItem icon="⭢" href="/doors">
+          <ActionListItem icon="⭢" href="/glass">
             Return to Dashboard
           </ActionListItem>
-          <ActionListItem icon="⭢" href="/doors/clients">
+          <ActionListItem icon="⭢" href="/glass/clients">
             Manage Clients
           </ActionListItem>
-          <ActionListItem icon="⭢" href="/doors/clients">
+          <ActionListItem icon="⭢" href="/glass/clients">
             Manage Customer Products
           </ActionListItem>
         </Card>

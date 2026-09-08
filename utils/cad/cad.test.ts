@@ -322,6 +322,35 @@ describe('applying CAD geometry to a specification', () => {
     assert.ok(applied.some((field) => field.field === 'Width' && field.value === '1000 mm'));
   });
 
+  it('stores a compact drawable outline with the specification', () => {
+    const rounded = analyzeFixture('rounded-rect-lines-arcs-r12.dxf').analysis;
+    const outline = buildCadOutline(rounded, { fileName: 'panel.dxf', format: 'dxf', priceOnMeasured: true });
+    const geometry = outline.geometry!;
+    assert.ok(geometry.points.length >= 4, 'outline keeps enough points to draw');
+    assert.ok(geometry.points.length <= 240, `outline is decimated for storage, got ${geometry.points.length}`);
+    near(geometry.boundingWidthMm, 1000, 0.5, 'stored bounding width');
+    near(geometry.boundingHeightMm, 600, 0.5, 'stored bounding height');
+    assert.equal(geometry.holes?.length, 2);
+    geometry.points.forEach(([x, y]) => {
+      assert.ok(x >= -0.5 && x <= geometry.boundingWidthMm + 0.5, `x ${x} sits inside the bounding box`);
+      assert.ok(y >= -0.5 && y <= geometry.boundingHeightMm + 0.5, `y ${y} sits inside the bounding box`);
+      assert.equal(Math.round(x * 10) / 10, x, 'x is rounded to 0.1mm');
+    });
+    // A spec has to survive a round trip through purchase order line notes.
+    const serialized = JSON.stringify(outline);
+    assert.ok(serialized.length < 40000, `stored outline stays small, got ${serialized.length} bytes`);
+    assert.deepEqual(JSON.parse(serialized).geometry.points[0], geometry.points[0]);
+  });
+
+  it('keeps a curved outline drawable without collapsing it to a box', () => {
+    const { analysis } = analyzeFixture('spline-blob-r2010.dxf');
+    const outline = buildCadOutline(analysis, { fileName: 'blob.dxf', format: 'dxf', priceOnMeasured: true });
+    const geometry = outline.geometry!;
+    assert.ok(geometry.points.length > 20, 'a curved outline keeps enough points to look curved');
+    const distinctX = new Set(geometry.points.map(([x]) => Math.round(x))).size;
+    assert.ok(distinctX > 10, 'points vary along x rather than tracing a rectangle');
+  });
+
   it('switches straight edgework to curved when the outline has curved edges', () => {
     const { analysis } = analyzeFixture('arched-top-r2010.dxf');
     const outline = buildCadOutline(analysis, { fileName: 'arch.dxf', format: 'dxf', priceOnMeasured: true });

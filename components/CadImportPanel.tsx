@@ -51,43 +51,6 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function polygonPath(points: Array<{ x: number; y: number }>): string {
-  if (!points.length) {
-    return '';
-  }
-  return `${points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ')} Z`;
-}
-
-function OutlinePreview({ analysis }: { analysis: CadAnalysis }) {
-  const width = Math.max(analysis.previewWidthMm, 1);
-  const height = Math.max(analysis.previewHeightMm, 1);
-  const pad = Math.max(width, height) * 0.06;
-  const viewBox = `${-pad} ${-pad} ${width + pad * 2} ${height + pad * 2}`;
-  const label = `${formatMm(analysis.outline.widthMm)} × ${formatMm(analysis.outline.heightMm)} mm outline preview`;
-
-  return (
-    <div className={styles.previewFrame}>
-      <svg className={styles.previewSvg} viewBox={viewBox} preserveAspectRatio="xMidYMid meet" role="img" aria-label={label}>
-        <path className={styles.outlinePath} d={polygonPath(analysis.outline.polygon)} />
-        {analysis.holes.cutoutPolygons.map((polygon, index) => (
-          <path key={`cutout-${index}`} className={styles.cutoutPath} d={polygonPath(polygon)} />
-        ))}
-        {analysis.holes.centers.map((center, index) => (
-          <circle key={`hole-${index}`} className={styles.holePath} cx={center.x} cy={center.y} r={Math.max(analysis.holes.diametersMm[index] / 2, Math.max(width, height) * 0.004)} />
-        ))}
-      </svg>
-      <div className={styles.previewCaption}>
-        <Text>
-          W {formatMm(analysis.outline.boundingWidthMm)} × H {formatMm(analysis.outline.boundingHeightMm)} mm
-        </Text>
-        <Text>
-          {analysis.outline.areaSqM.toFixed(3)} m² · {analysis.outline.perimeterM.toFixed(2)} m edge
-        </Text>
-      </div>
-    </div>
-  );
-}
-
 export default function CadImportPanel({ spec, onApply, onClear, disabled = false }: CadImportPanelProps) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const specRef = React.useRef(spec);
@@ -238,8 +201,6 @@ export default function CadImportPanel({ spec, onApply, onClear, disabled = fals
               {loaded.fileName} · {formatLabel(loaded.format)} · {formatBytes(loaded.sizeBytes)}
             </Text>
           </RowSpaceBetween>
-
-          <OutlinePreview analysis={analysis} />
 
           <Table>
             <TableRow>

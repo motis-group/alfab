@@ -302,7 +302,7 @@ export default function CustomersPage() {
       logo="⬡"
       navigationItems={navigationItems}
       navLabel="CUSTOMERS"
-      navRight={<ActionButton onClick={() => router.push('/doors')}>ORDER DASHBOARD</ActionButton>}
+      navRight={<ActionButton onClick={() => router.push('/glass')}>ORDER DASHBOARD</ActionButton>}
       heading="CUSTOMER MANAGEMENT"
       badge={`${customers.filter((customer) => customer.is_active !== false).length} ACTIVE`}
       sidebarWidthCh={50}
@@ -401,7 +401,7 @@ export default function CustomersPage() {
         {
           hotkey: '⌘+B',
           body: 'Back to Orders',
-          onClick: () => router.push('/doors'),
+          onClick: () => router.push('/glass'),
         },
       ]}
     >

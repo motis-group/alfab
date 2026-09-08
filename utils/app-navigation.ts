@@ -6,10 +6,10 @@ export interface AppNavigationItem {
 }
 
 export const APP_NAVIGATION_ITEMS: AppNavigationItem[] = [
-  { icon: '⊹', children: 'Order Dashboard', href: '/doors' },
-  { icon: '⊹', children: 'New Purchase Order', href: '/doors/new' },
-  { icon: '⊹', children: 'Calculator', href: '/doors/quote' },
-  { icon: '⊹', children: 'Customers & Products', href: '/doors/clients' },
+  { icon: '⊹', children: 'Order Dashboard', href: '/glass' },
+  { icon: '⊹', children: 'New Purchase Order', href: '/glass/new' },
+  { icon: '⊹', children: 'Calculator', href: '/glass/quote' },
+  { icon: '⊹', children: 'Customers & Products', href: '/glass/clients' },
   { icon: '⊹', children: 'Component Library', href: '/examples' },
 ];
 
@@ -19,10 +19,10 @@ export interface AppSectionItem {
 }
 
 export const APP_WORK_SECTION_ITEMS: AppSectionItem[] = [
-  { href: '/doors', label: 'Dashboard' },
-  { href: '/doors/new', label: 'New Order' },
-  { href: '/doors/quote', label: 'Calculator' },
-  { href: '/doors/clients', label: 'Customers' },
+  { href: '/glass', label: 'Dashboard' },
+  { href: '/glass/new', label: 'New Order' },
+  { href: '/glass/quote', label: 'Calculator' },
+  { href: '/glass/clients', label: 'Customers' },
 ];
 
 export const APP_ACCOUNT_SECTION_ITEMS: AppSectionItem[] = [

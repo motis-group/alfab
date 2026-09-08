@@ -9,6 +9,7 @@ import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
 import CadImportPanel from '@components/CadImportPanel';
 import Card from '@components/Card';
+import GlassVisualizer from '@components/GlassVisualizer';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
 import RowSpaceBetween from '@components/RowSpaceBetween';
@@ -202,11 +203,11 @@ export default function AdhocQuotePage() {
         quoteNotes,
         spec,
       });
-      router.push('/doors/new?fromQuote=1');
+      router.push('/glass/new?fromQuote=1');
       return;
     }
 
-    router.push('/doors/new');
+    router.push('/glass/new');
   }
 
   return (
@@ -215,7 +216,7 @@ export default function AdhocQuotePage() {
       logo="⬡"
       navigationItems={navigationItems}
       navLabel="AD HOC QUOTE"
-      navRight={<ActionButton onClick={() => router.push('/doors')}>ORDER DASHBOARD</ActionButton>}
+      navRight={<ActionButton onClick={() => router.push('/glass')}>ORDER DASHBOARD</ActionButton>}
       heading="AD HOC PRICING CALCULATOR"
       badge={isLoading ? 'LOADING' : `${role.toUpperCase()} SESSION`}
       sidebarWidthCh={44}
@@ -372,6 +373,10 @@ export default function AdhocQuotePage() {
           </Text>
         </Card>
       )}
+
+      <CardDouble title="GLASS VISUALIZER">
+        <GlassVisualizer spec={spec} />
+      </CardDouble>
 
       <CardDouble title="QUOTE DETAILS">
         <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} />

@@ -1,8 +1,9 @@
 // Entry points for the CAD import feature: file-type detection, parsing and applying the
 // analysed outline to a glass specification.
 
-import { EdgeworkType, GlassSpecification, CadOutline } from '../calculations';
+import { EdgeworkType, GlassSpecification, CadOutline, CadOutlineGeometry } from '../calculations';
 import { CadAnalysis, CadAnalysisOptions, CadAnalysisError, analyzeCadDocument, formatMm } from './analyze';
+import { decimatePolygon } from './geometry';
 import { isBinaryDxf, looksLikeAsciiDxf, parseDxf } from './dxf';
 import { CadDocument } from './model';
 import { looksLikeSvg, parseSvg } from './svg';
@@ -192,6 +193,28 @@ export interface CadOutlineBuildOptions {
   importedAt?: string;
 }
 
+// Points kept with the spec so the visualizer can redraw the shape. Decimated and rounded to 0.1 mm
+// so a spec stays small enough to store in a purchase order line's notes.
+const STORED_OUTLINE_POINTS = 240;
+const STORED_CUTOUT_POINTS = 60;
+
+function roundPoint(point: { x: number; y: number }): [number, number] {
+  return [Math.round(point.x * 10) / 10, Math.round(point.y * 10) / 10];
+}
+
+export function buildCadOutlineGeometry(analysis: CadAnalysis): CadOutlineGeometry {
+  return {
+    points: decimatePolygon(analysis.outline.polygon, STORED_OUTLINE_POINTS).map(roundPoint),
+    holes: analysis.holes.centers.map((center, index) => {
+      const [x, y] = roundPoint(center);
+      return { x, y, d: analysis.holes.diametersMm[index] ?? 0 };
+    }),
+    cutouts: analysis.holes.cutoutPolygons.map((polygon) => decimatePolygon(polygon, STORED_CUTOUT_POINTS).map(roundPoint)),
+    boundingWidthMm: Math.round(analysis.previewWidthMm * 10) / 10,
+    boundingHeightMm: Math.round(analysis.previewHeightMm * 10) / 10,
+  };
+}
+
 export function buildCadOutline(analysis: CadAnalysis, options: CadOutlineBuildOptions): CadOutline {
   return {
     fileName: options.fileName,
@@ -203,6 +226,7 @@ export function buildCadOutline(analysis: CadAnalysis, options: CadOutlineBuildO
     shapeLabel: analysis.outline.shapeLabel,
     cornerRadiiMm: analysis.outline.cornerRadiiMm,
     holeCount: analysis.holes.count,
+    geometry: buildCadOutlineGeometry(analysis),
     priceOnMeasured: options.priceOnMeasured,
     importedAt: options.importedAt || new Date().toISOString(),
   };

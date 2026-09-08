@@ -265,7 +265,7 @@ export default function OrderDashboardPage() {
       logo="⬡"
       navigationItems={navigationItems}
       navLabel="ORDER DASHBOARD"
-      navRight={<ActionButton onClick={() => router.push('/doors/new')}>NEW ORDER</ActionButton>}
+      navRight={<ActionButton onClick={() => router.push('/glass/new')}>NEW ORDER</ActionButton>}
       heading="PURCHASE ORDER DASHBOARD"
       badge={`${ordersInScope.length} TOTAL`}
       sidebarWidthCh={44}
@@ -377,7 +377,7 @@ export default function OrderDashboardPage() {
         {
           hotkey: '⌘+N',
           body: 'New PO',
-          onClick: () => router.push('/doors/new'),
+          onClick: () => router.push('/glass/new'),
         },
         {
           hotkey: '⌘+R',
@@ -387,7 +387,7 @@ export default function OrderDashboardPage() {
         {
           hotkey: '⌘+C',
           body: 'Customers',
-          onClick: () => router.push('/doors/clients'),
+          onClick: () => router.push('/glass/clients'),
         },
       ]}
     >
@@ -446,7 +446,7 @@ export default function OrderDashboardPage() {
                   <TableColumn>{lines.length}</TableColumn>
                   <TableColumn>{formatCurrency(total)}</TableColumn>
                   <TableColumn>
-                    <ActionButton onClick={() => router.push(`/doors/new?orderId=${order.id}`)}>View</ActionButton>
+                    <ActionButton onClick={() => router.push(`/glass/new?orderId=${order.id}`)}>View</ActionButton>
                   </TableColumn>
                 </TableRow>
               );

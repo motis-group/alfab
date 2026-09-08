@@ -13,6 +13,16 @@ export interface CostBreakdown {
   total: number;
 }
 
+// Drawable outline shape kept with the specification so the glass can be redrawn without the source file.
+// Points are millimetres, origin at the top-left of the outline's bounding box, y increasing downward (SVG convention).
+export interface CadOutlineGeometry {
+  points: Array<[number, number]>;
+  holes?: Array<{ x: number; y: number; d: number }>;
+  cutouts?: Array<Array<[number, number]>>;
+  boundingWidthMm: number;
+  boundingHeightMm: number;
+}
+
 // Geometry measured from an uploaded CAD file (DXF/DWG/SVG). Optional: specs entered by hand have none.
 export interface CadOutline {
   fileName: string;
@@ -24,6 +34,7 @@ export interface CadOutline {
   shapeLabel: string;
   cornerRadiiMm?: number[];
   holeCount?: number;
+  geometry?: CadOutlineGeometry | null;
   // When true the measured area/perimeter drive pricing instead of the width x height formulas.
   priceOnMeasured: boolean;
   importedAt: string;

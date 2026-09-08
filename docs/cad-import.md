@@ -1,6 +1,6 @@
 # CAD File Import (Calculator)
 
-The ad hoc pricing calculator (`/doors/quote`) and the ad hoc line editor on the purchase order page (`/doors/new`) accept a customer's 2D CAD drawing and fill in the glass geometry automatically: width, height, shape class, radius corners, hole count, and the measured area and edge length used for pricing. Glass type, thickness, ceramic banding and scanning are never changed by an import.
+The ad hoc pricing calculator (`/glass/quote`) and the ad hoc line editor on the purchase order page (`/glass/new`) accept a customer's 2D CAD drawing and fill in the glass geometry automatically: width, height, shape class, radius corners, hole count, and the measured area and edge length used for pricing. Glass type, thickness, ceramic banding and scanning are never changed by an import.
 
 ## Supported files
 
@@ -35,6 +35,25 @@ Elements read from SVG: `rect` (including `rx`/`ry`), `circle`, `ellipse`, `line
 | Curved edges, circles, ellipses, notches, or more than 6 edges | Complex Shape | Edgework switches from a `STRAIGHT` to the matching `CURVED` variant (and back) when the current edgework is grind or polish. |
 
 Tiny corner clean-up segments (up to 2 mm) are collapsed before counting edges so they do not turn a rectangle into an 8-sided shape.
+
+## The glass visualizer
+
+`components/GlassVisualizer.tsx` draws the panel above the calculator on `/glass/quote` and above the
+ad hoc calculator in a purchase order line. It works from the specification alone, so it is useful
+whether or not a CAD file was uploaded:
+
+- **With a CAD outline** it draws the real measured profile, its holes and any cutouts, and labels the
+  source file. The points come from `cadOutline.geometry`, which `buildCadOutline` stores with the
+  specification (decimated to at most 240 points and rounded to 0.1 mm) so the shape survives into
+  purchase order lines without re-reading the file.
+- **Without one** it draws a rectangle, a right-angled triangle for `TRIANGLE` (matching the costing
+  formulas), or, for `SIMPLE`/`COMPLEX`, a dashed width x height envelope with a note that the real
+  profile is unknown. Hole markers are then positioned indicatively and labelled as such, because only
+  the hole count affects the price.
+
+Glass type tints the fill via `glassTypeToRGB`, ceramic banding is drawn as an inner band, and the
+width and height carry dimension lines. The drawing is laid out in a fixed SVG viewBox with
+millimetres mapped into it, so line weights and labels stay legible for a 200 mm pane or a 4 m one.
 
 ## Pricing with a CAD outline
 

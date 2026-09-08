@@ -9,6 +9,7 @@ import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
 import CadImportPanel from '@components/CadImportPanel';
 import Card from '@components/Card';
+import GlassVisualizer from '@components/GlassVisualizer';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
 import RowSpaceBetween from '@components/RowSpaceBetween';
@@ -541,7 +542,7 @@ export default function NewPurchaseOrderPage() {
       const { error: insertLineError } = await db.from(TABLE_PURCHASE_ORDER_LINES).insert(linePayload);
       if (insertLineError) throw insertLineError;
 
-      router.push(`/doors?orderId=${orderId}`);
+      router.push(`/glass?orderId=${orderId}`);
       router.refresh();
     } catch (error: any) {
       setFormError(error?.message || 'Failed to save purchase order.');
@@ -611,7 +612,7 @@ export default function NewPurchaseOrderPage() {
       logo="⬡"
       navigationItems={navigationItems}
       navLabel={isEditingOrder ? 'EDIT ORDER' : 'NEW ORDER'}
-      navRight={<ActionButton onClick={() => router.push('/doors')}>BACK TO DASHBOARD</ActionButton>}
+      navRight={<ActionButton onClick={() => router.push('/glass')}>BACK TO DASHBOARD</ActionButton>}
       heading={isEditingOrder ? 'EDIT PURCHASE ORDER' : 'CREATE PURCHASE ORDER'}
       badge={isEditingOrder ? 'EDIT MODE' : 'NEW ORDER'}
       sidebarWidthCh={44}
@@ -642,7 +643,7 @@ export default function NewPurchaseOrderPage() {
           <br />
           <RowSpaceBetween>
             <ActionButton onClick={handleSaveOrder}>{isSaving ? 'Saving...' : isEditingOrder ? 'Update Purchase Order' : 'Save Purchase Order'}</ActionButton>
-            <ActionButton onClick={() => router.push('/doors')}>Cancel</ActionButton>
+            <ActionButton onClick={() => router.push('/glass')}>Cancel</ActionButton>
           </RowSpaceBetween>
         </Card>
       }
@@ -665,7 +666,7 @@ export default function NewPurchaseOrderPage() {
         {
           hotkey: '⌘+B',
           body: 'Back',
-          onClick: () => router.push('/doors'),
+          onClick: () => router.push('/glass'),
         },
       ]}
     >
@@ -865,6 +866,9 @@ export default function NewPurchaseOrderPage() {
               <>
                 <br />
                 <Text>AD HOC CALCULATOR</Text>
+                <br />
+
+                <GlassVisualizer spec={activeLine.adhocSpec} />
                 <br />
 
                 <Text>CAD FILE</Text>
