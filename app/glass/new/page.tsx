@@ -37,7 +37,7 @@ import {
   statusLabel,
   todayISODate,
 } from '@utils/order-management';
-import { QuoteToOrderDraft, buildQuoteDraftLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
+import { QuoteToOrderDraft, buildQuoteDraftLineDescription, buildWindowLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
 import { WindowCostingInput } from '@utils/window-costing';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
@@ -92,6 +92,7 @@ interface LineDraft {
   customerProductId: string;
   adhocSpec: GlassSpecification;
   windowSpec: WindowCostingInput | null;
+  windowRatesUpdatedAt: string | null;
   markupPercent: number;
 }
 
@@ -107,6 +108,7 @@ function createLineDraft(partial?: Partial<LineDraft>): LineDraft {
     customerProductId: partial?.customerProductId || '',
     adhocSpec: partial?.adhocSpec || { ...defaultAdhocSpec },
     windowSpec: partial?.windowSpec ?? null,
+    windowRatesUpdatedAt: partial?.windowRatesUpdatedAt ?? null,
     markupPercent: partial?.markupPercent ?? 20,
   };
 }
@@ -260,6 +262,7 @@ export default function NewPurchaseOrderPage() {
         customerProductId: parsedNotes.customerProductId || '',
         adhocSpec: parsedNotes.adhocSpecification || { ...defaultAdhocSpec },
         windowSpec: parsedNotes.windowSpecification || null,
+        windowRatesUpdatedAt: parsedNotes.windowRatesUpdatedAt || null,
         markupPercent: parsedNotes.markupPercent ?? 20,
       });
     });
@@ -393,16 +396,33 @@ export default function NewPurchaseOrderPage() {
       : [];
     const matchedCustomerId = matchedCustomers.length === 1 ? matchedCustomers[0].id : '';
 
-    const isWindow = quoteDraft.kind === 'window';
-    const draftLine = createLineDraft({
-      pricingSource: isWindow ? 'window_calculator' : 'adhoc_calculator',
-      quantityOrdered: quoteDraft.quantity,
-      unitPriceAtOrder: quoteDraft.unitPrice,
-      lineNote: buildQuoteDraftLineDescription(quoteDraft),
-      adhocSpec: quoteDraft.spec ? { ...quoteDraft.spec } : { ...defaultAdhocSpec },
-      windowSpec: quoteDraft.windowSpec,
-      markupPercent: quoteDraft.markupPercent,
-    });
+    // A window quote carries one line per costed window; a glass quote carries a single line.
+    const draftLines =
+      quoteDraft.kind === 'window'
+        ? quoteDraft.windowLines.map((line) =>
+            createLineDraft({
+              pricingSource: 'window_calculator',
+              quantityOrdered: line.quantity,
+              unitPriceAtOrder: line.unitPrice,
+              lineNote: buildWindowLineDescription(quoteDraft.quoteName, line),
+              windowSpec: line.windowSpec,
+              windowRatesUpdatedAt: line.ratesUpdatedAt,
+            })
+          )
+        : [
+            createLineDraft({
+              pricingSource: 'adhoc_calculator',
+              quantityOrdered: quoteDraft.quantity,
+              unitPriceAtOrder: quoteDraft.unitPrice,
+              lineNote: buildQuoteDraftLineDescription(quoteDraft),
+              adhocSpec: quoteDraft.spec ? { ...quoteDraft.spec } : { ...defaultAdhocSpec },
+              markupPercent: quoteDraft.markupPercent,
+            }),
+          ];
+
+    if (!draftLines.length) {
+      return;
+    }
 
     const draftNotes = [
       quoteDraft.quoteNotes.trim(),
@@ -417,8 +437,8 @@ export default function NewPurchaseOrderPage() {
       receivedDate: quoteDraft.quoteDate || prev.receivedDate,
       notes: draftNotes,
     }));
-    setLineDrafts([draftLine]);
-    setActiveLineId(draftLine.localId);
+    setLineDrafts(draftLines);
+    setActiveLineId(draftLines[0].localId);
   }
 
   function applyCustomerConfig(lineId: string, customerProductId: string) {
@@ -540,6 +560,7 @@ export default function NewPurchaseOrderPage() {
             customerProductId: line.customerProductId || null,
             adhocSpecification: isAdhoc ? line.adhocSpec : null,
             windowSpecification: isWindow ? line.windowSpec : null,
+            windowRatesUpdatedAt: isWindow ? line.windowRatesUpdatedAt : null,
             markupPercent: isAdhoc ? line.markupPercent : null,
             productLabel: isAdhoc ? line.lineNote.trim() || 'Ad Hoc Item' : isWindow ? line.lineNote.trim() || 'Window Costing Item' : selectedLabel,
           }),
@@ -1203,6 +1224,7 @@ export default function NewPurchaseOrderPage() {
                     ? 'Priced on the Window Costing page; the unit price above is the costing price.'
                     : 'No window costing attached. Price the window on the Window Costing page and create the order from there.'}
                 </Text>
+                {activeLine.windowRatesUpdatedAt ? <Text>Priced on the window rates saved {new Date(activeLine.windowRatesUpdatedAt).toLocaleString()}.</Text> : null}
                 <ActionButton onClick={() => router.push('/glass/windows')}>Open Window Costing</ActionButton>
               </>
             )}

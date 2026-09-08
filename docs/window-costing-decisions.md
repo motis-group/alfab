@@ -85,23 +85,23 @@ Say "keep" or tell us the rule.
 | 5.2 | Window types: are all nine still made? Is a type missing? |
 | 5.3 | The sheet also pointed to three other programs: 500 development, 600 development and windscreen costing. We do not have those files. Are they needed? |
 | 5.4 | Rates access: admins edit rates, every user sees the costing page. Correct? |
-| 5.5 | Printed costing sheet: what must it show? The Lotus program printed one sheet per window. |
-| 5.6 | Do you want to save costings and reuse them per customer, like the glass calculator's saved products? |
-| 5.7 | Do you want one quote with several windows, sent to one purchase order? |
+| 5.5 | The costing sheet prints one page per window: the window, every cost line, the labour minutes, the totals and a comments line. Does it show what the Lotus printout showed? |
+| 5.6 | A saved costing keeps the window, the customer and the price, and loads back into the form. Is that the right shape for a repeat customer, or should it hang off the customer record? |
+| 5.7 | A quote holds several windows and creates one order line per window. Do you also need a single quote sheet for the customer, with the quote total? |
 | 5.8 | May a user change the margin on one quote? Who? |
 | 5.9 | T4633 in the sheet shows a trade price and a retail price. Do you need both? |
 
-## 6. Work that needs no decision
+## 6. Built without your input
 
-We can do these now. None depend on the answers above.
+These are in the app now. None of them changes a price.
 
-- Price-per-each at batch sizes 1, 2, 5 and 10, shown beside the price.
-- A print view of the costing sheet.
-- A date per rates section, shown on the rates page.
-- Links from each "not priced" warning to the rate field.
-- A rates page with proper tables per section and a search box.
-- Saving costings, and customer templates for window specs.
-- A quote list with several windows that creates one purchase order.
-- A copy of the rates stored with each costing and purchase order line, so an old price can be recalculated.
-- Hand-checked test cases for the seven window types that have none yet.
-- Two app bugs found while testing: a stale login cookie loops between the home page and the login page, and a reopened order shows $0.00 in the unit price column.
+- Price per each at batch sizes 1, 2, 5 and 10, beside the price.
+- A printed costing sheet, one page per window.
+- The date each group of prices was last known good, on the rates page.
+- A link from each "not priced" line straight to its rate field.
+- A rates page with a search box, the unit of every rate, and the price per metre for each extrusion.
+- Saved costings, which double as templates for repeat customers.
+- One quote with several windows, which creates one purchase order line per window.
+- A copy of the rates kept whenever rates are saved. Costings and order lines record which rates priced them, so an old price can be recalculated.
+- Hand-checked test cases for all nine window types.
+- Two bugs: an expired login cookie looped between the home page and the login page, and a reopened order showed $0.00 in the unit price column.

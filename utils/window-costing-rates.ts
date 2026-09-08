@@ -89,6 +89,8 @@ export interface GlassProcessing {
 
 export interface WindowRates {
   state: 'VIC';
+  /** When each section of rates was last known good, keyed by the section it labels. */
+  asAt: Record<string, string>;
   labourPerHour: number;
   suppliers: {
     capral: { perKg: number; loading: number };
@@ -122,6 +124,19 @@ export interface WindowRates {
 
 export const DEFAULT_WINDOW_RATES: WindowRates = {
   state: 'VIC',
+  // Dates the legacy sheet recorded against each price list. "unknown" means the sheet gave none.
+  asAt: {
+    labourPerHour: 'Oct 2021',
+    suppliers: '2021',
+    extrusions: '2021',
+    anodising: 'Apr 2010 (etch), Mar 2015 (powder coat)',
+    perMetre: 'Sept 2021 (rubber), July 2007 (plastic)',
+    each: 'July 2007',
+    glass: 'unknown',
+    packingPerSqm: 'unknown',
+    labour: 'Oct 2021',
+    margins: 'unknown',
+  },
   labourPerHour: 85,
   suppliers: {
     capral: { perKg: 12, loading: 0.2 },
@@ -344,6 +359,9 @@ function mergeValue(base: unknown, saved: unknown): unknown {
   if (typeof base === 'number' || base === null) {
     return typeof saved === 'number' && Number.isFinite(saved) ? saved : saved === null ? null : base;
   }
+  if (typeof base === 'string') {
+    return typeof saved === 'string' ? saved : base;
+  }
   return base;
 }
 
@@ -352,8 +370,9 @@ function cloneValue<T>(value: T): T {
 }
 
 /**
- * Overlay a saved rates document on the defaults. Only numeric leaves (and null = not priced) are
- * taken from the saved document; unknown keys are dropped, missing keys keep their default.
+ * Overlay a saved rates document on the defaults. Numeric leaves (null = not priced) and the
+ * as-at text are taken from the saved document. Unknown keys are dropped, missing keys keep
+ * their default, so a rates document saved before a new rate existed still loads.
  */
 export function mergeWindowRates(saved: unknown): WindowRates {
   return mergeValue(DEFAULT_WINDOW_RATES, saved) as WindowRates;

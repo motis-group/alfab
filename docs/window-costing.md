@@ -12,7 +12,12 @@ only; the Queensland branch of the sheet is not implemented (`state` is fixed to
 | Saved rates (DB row) | table `window_costing_rates`, row `default`, via `utils/window-costing-store.ts` |
 | Rates editor | `/settings/windows` (`pricing:write` to save; every role can read) |
 | Costing page | `app/glass/windows/page.tsx` |
+| Printed sheet | `components/WindowCostingSheet.tsx`, print styles in `global.scss` |
+| Saved costings | `utils/window-quote-store.ts`, table `quotes` |
 | Golden checks | `utils/window-costing.test.ts` (`npm test`) |
+
+Every window type has a golden check: a window worked by hand from the sheet's own formulas.
+A change that moves any price fails those checks.
 
 ## Inputs
 
@@ -72,6 +77,19 @@ mullions, so those extras are not entered by hand.
 Marine Window Service lowers the margin to 22.5% for T5836, T8610 and sash & frame only, and
 the glass loading to 15% for every type.
 
+## Working with a costing
+
+- **Batch price.** The sidebar prices the same window at batches of 1, 2, 5 and 10. Setup and
+  development minutes divide across the batch, so the price per window falls as the run grows.
+- **Quote with several windows.** Add each costed window to the quote. The quote creates one
+  purchase order line per window, and prints one sheet per window.
+- **Printing.** "Print Costing Sheet" prints the quote's windows, or the window on screen when
+  the quote is empty. The app hides itself for the printer; only the sheet prints.
+- **Saved costings.** A saved costing keeps the window, the customer and the price. Load it to
+  price the same window again, which makes it the template for a repeat customer. Saved costings
+  are rows in `quotes` marked `kind: window`.
+- **Not priced.** Each line with no rate links to its own field in the rates editor.
+
 ## Rates
 
 `DEFAULT_WINDOW_RATES` holds the sheet's numbers. The editor writes the whole document to the
@@ -79,6 +97,19 @@ DB row; `mergeWindowRates` overlays it on the defaults, so keys added later keep
 and unknown keys are dropped. A blank value means not priced: the line costs $0 and the page
 warns. Items the source sheet could not price: black anodising, 015-03 flat and 015-07
 medium stays, keeper saddles (sash & frame), laminate c/view holes.
+
+Each section carries the date its prices were last known good. The editor shows the date, a
+search box, the unit of every rate, and the resulting price per metre for each extrusion.
+
+## Reproducing an old price
+
+Saving rates keeps the document it replaced as an archive row, `v-<the stamp it replaced>`.
+Costings and purchase order lines record the stamp of the rates that priced them, so
+`loadWindowRatesVersion(stamp)` in `utils/window-costing-store.ts` returns the exact rates behind
+an old price. Resetting to the defaults leaves the archive rows in place.
+
+The rates table is keyed by a text id the client sets, which is why `/api/db` lists
+`window_costing_rates` in `NATURAL_KEY_TABLES`. Every other table keeps a server-generated id.
 
 ## Source behaviour kept on purpose
 

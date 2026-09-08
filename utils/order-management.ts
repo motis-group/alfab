@@ -81,6 +81,8 @@ export interface LineNotesPayload {
   customerProductId?: string | null;
   adhocSpecification?: GlassSpecification | null;
   windowSpecification?: WindowCostingInput | null;
+  /** Stamp of the window rates the line was priced on, so the price can be reproduced. */
+  windowRatesUpdatedAt?: string | null;
   markupPercent?: number | null;
   productLabel?: string | null;
 }
@@ -191,6 +193,7 @@ export function parseLineNotes(rawValue: string | null | undefined): ParsedLineN
     customerProductId: typeof (parsed as any).customerProductId === 'string' ? (parsed as any).customerProductId : null,
     adhocSpecification: typeof (parsed as any).adhocSpecification === 'object' ? ((parsed as any).adhocSpecification as GlassSpecification) : null,
     windowSpecification: (parsed as any).windowSpecification && typeof (parsed as any).windowSpecification === 'object' ? ((parsed as any).windowSpecification as WindowCostingInput) : null,
+    windowRatesUpdatedAt: typeof (parsed as any).windowRatesUpdatedAt === 'string' ? (parsed as any).windowRatesUpdatedAt : null,
     markupPercent: toNumber((parsed as any).markupPercent),
     productLabel: typeof (parsed as any).productLabel === 'string' ? (parsed as any).productLabel : null,
     isJson: true,
@@ -204,6 +207,7 @@ export function serializeLineNotes(input: LineNotesPayload): string {
     customerProductId: input.customerProductId || null,
     adhocSpecification: input.adhocSpecification ?? null,
     windowSpecification: input.windowSpecification ?? null,
+    windowRatesUpdatedAt: input.windowRatesUpdatedAt ?? null,
     markupPercent: toNumber(input.markupPercent),
     productLabel: input.productLabel || null,
   });

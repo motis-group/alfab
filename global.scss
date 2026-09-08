@@ -680,3 +680,116 @@ select option {
   background: var(--theme-status-warning-subdued);
   color: var(--theme-status-warning);
 }
+
+/* Printed window costing sheet. Hidden on screen; printing hides the app around it. */
+.window-costing-sheet {
+  display: none;
+}
+
+@media print {
+  body {
+    visibility: hidden;
+    background: #fff;
+  }
+
+  .window-costing-sheet,
+  .window-costing-sheet * {
+    visibility: visible;
+  }
+
+  .window-costing-sheet {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0 12mm;
+    color: #000;
+    background: #fff;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 9pt;
+    line-height: 1.4;
+  }
+
+  .window-costing-sheet__window {
+    page-break-inside: avoid;
+    page-break-after: always;
+  }
+
+  .window-costing-sheet__window:last-child {
+    page-break-after: auto;
+  }
+
+  .window-costing-sheet__heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 1pt solid #000;
+    padding-bottom: 2mm;
+    margin-bottom: 3mm;
+  }
+
+  .window-costing-sheet__title {
+    font-size: 12pt;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  .window-costing-sheet__meta {
+    display: grid;
+    grid-template-columns: repeat(2, auto);
+    gap: 0 8mm;
+    margin-bottom: 3mm;
+  }
+
+  .window-costing-sheet__spec {
+    margin: 0 0 3mm;
+    font-weight: 700;
+  }
+
+  .window-costing-sheet__table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 3mm;
+  }
+
+  .window-costing-sheet__table th,
+  .window-costing-sheet__table td {
+    text-align: left;
+    padding: 0.6mm 2mm 0.6mm 0;
+    border-bottom: 0.25pt solid #999;
+    vertical-align: top;
+  }
+
+  .window-costing-sheet__table th {
+    border-bottom: 0.75pt solid #000;
+    font-weight: 700;
+  }
+
+  .window-costing-sheet__amount {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .window-costing-sheet__totals td {
+    border-bottom: 0;
+    padding-top: 0.4mm;
+  }
+
+  .window-costing-sheet__grand td {
+    border-top: 0.75pt solid #000;
+    font-weight: 700;
+    padding-top: 1mm;
+  }
+
+  .window-costing-sheet__note {
+    margin: 2mm 0 0;
+  }
+
+  .window-costing-sheet__footer {
+    margin-top: 4mm;
+    padding-top: 2mm;
+    border-top: 0.25pt solid #999;
+  }
+}

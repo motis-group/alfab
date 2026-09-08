@@ -177,8 +177,9 @@ function normalizeRows(input: Record<string, unknown> | Array<Record<string, unk
   return Array.isArray(input) ? input : [input];
 }
 
-function requireWritableColumns(table: string, row: Record<string, unknown>): string[] {
-  const keys = Object.keys(row).filter((key) => key !== 'id');
+function requireWritableColumns(table: string, row: Record<string, unknown>, action: Operation): string[] {
+  const keepId = action === 'insert' && NATURAL_KEY_TABLES.has(table);
+  const keys = Object.keys(row).filter((key) => key !== 'id' || keepId);
   if (!keys.length) {
     throw new Error(`No writable values supplied for table "${table}"`);
   }
@@ -203,6 +204,10 @@ function requiredPermission(table: string, action: Operation): AppPermission {
 
   return action === 'select' ? permissionSet.read : permissionSet.write;
 }
+
+// Tables keyed by a text id the client chooses, rather than a generated uuid. Inserts into these
+// may set "id"; everywhere else it stays server-generated.
+const NATURAL_KEY_TABLES = new Set(['window_costing_rates']);
 
 const AUDITED_TABLES: Record<string, { createdBy: boolean }> = {
   purchase_orders: { createdBy: true },
@@ -283,7 +288,7 @@ export async function POST(request: Request) {
 
       applyServerAuditColumns(table, action, rows, session.userId);
 
-      const columns = requireWritableColumns(table, rows[0]);
+      const columns = requireWritableColumns(table, rows[0], action);
       const columnSql = columns.map((column) => requireAllowedColumn(table, column)).join(', ');
       const valuesSql = rows
         .map((row) => {
@@ -313,7 +318,7 @@ export async function POST(request: Request) {
       applyServerAuditColumns(table, action, rows, session.userId);
 
       const values = rows[0];
-      const columns = requireWritableColumns(table, values);
+      const columns = requireWritableColumns(table, values, action);
       const setSql = columns
         .map((column) => {
           params.push(toDbValue(values[column]));
