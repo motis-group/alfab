@@ -25,7 +25,8 @@ interface ConverterRun {
   timedOut: boolean;
 }
 
-// Debian/Ubuntu: `apt install libredwg-tools`. Override the binary with CAD_DWG2DXF_PATH.
+// Ubuntu does not package LibreDWG, so the server builds it from source via
+// scripts/install-libredwg.sh (see docs/cad-import.md). Override the binary with CAD_DWG2DXF_PATH.
 export function dwgConverterPath(): string {
   return (process.env.CAD_DWG2DXF_PATH || '').trim() || 'dwg2dxf';
 }
@@ -59,6 +60,29 @@ export async function checkDwgConverter(): Promise<boolean> {
   return !probe.missing;
 }
 
+// True when the DXF has a non-empty ENTITIES section. Reads only the tail of the buffer that can
+// hold the section, so a large conversion is not copied into a string in full.
+export function hasDxfEntities(dxf: Buffer): boolean {
+  const text = dxf.toString('latin1');
+  const start = text.indexOf('ENTITIES');
+  if (start < 0) {
+    return false;
+  }
+
+  const end = text.indexOf('ENDSEC', start);
+  const body = end < 0 ? text.slice(start) : text.slice(start, end);
+  // Every entity in the section starts with a `0` group code naming its type.
+  return /\r?\n\s*0\r?\n\s*[A-Z][A-Z0-9_]*\s*\r?\n/.test(body);
+}
+
+function converterErrorDetail(stderr: string, stdout: string): string {
+  const lines = `${stderr}\n${stdout}`
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => /^(ERROR|Warning)\b/i.test(line));
+  return lines.slice(0, 2).join('; ').slice(0, 300);
+}
+
 export async function convertDwgBufferToDxf(input: Buffer, timeoutMs = DWG_CONVERT_TIMEOUT_MS): Promise<DwgConversionResult> {
   const workDir = await mkdtemp(path.join(tmpdir(), 'alfab-cad-'));
   const inputPath = path.join(workDir, 'input.dwg');
@@ -73,7 +97,7 @@ export async function convertDwgBufferToDxf(input: Buffer, timeoutMs = DWG_CONVE
         ok: false,
         status: 501,
         error: 'DWG conversion is not available on this server.',
-        hint: 'Install LibreDWG (`apt install libredwg-tools`) on the server or set CAD_DWG2DXF_PATH, or export the drawing as DXF from your CAD package and upload that instead.',
+        hint: 'Export the drawing as DXF from your CAD package and upload that instead. DWG support has not been switched on for this server yet.',
       };
     }
 
@@ -101,6 +125,19 @@ export async function convertDwgBufferToDxf(input: Buffer, timeoutMs = DWG_CONVE
 
     if (output.length > DWG_MAX_OUTPUT_BYTES) {
       return { ok: false, status: 413, error: 'The converted drawing is too large to process.', hint: 'Export only the glass outline as DXF and upload that.' };
+    }
+
+    // dwg2dxf exits 0 even when it only partially understood the drawing, writing a DXF whose
+    // ENTITIES section is empty. Catch that here so the failure is reported against the conversion
+    // rather than surfacing later as "no geometry in the file", which blames the customer's drawing.
+    if (!hasDxfEntities(output)) {
+      const detail = converterErrorDetail(result.stderr, result.stdout);
+      return {
+        ok: false,
+        status: 422,
+        error: 'The DWG file was converted but contained no drawable geometry.',
+        hint: detail ? `The converter reported: ${detail}. Export the drawing as DXF from your CAD package and upload that instead.` : 'The drawing may use features the converter does not support. Export it as DXF from your CAD package and upload that instead.',
+      };
     }
 
     return { ok: true, dxf: output };

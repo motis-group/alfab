@@ -1,0 +1,123 @@
+name: Install LibreDWG on Production
+
+# LibreDWG provides dwg2dxf, which /api/cad/convert shells out to so the calculator can accept
+# customer DWG drawings. Ubuntu does not package it, so it is built from source on the droplet.
+#
+# This is deliberately a manual workflow rather than a step in the deploy: the build takes several
+# minutes and a failure here must never be able to break a release. It only needs to be run once,
+# and again when the pinned LibreDWG version changes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: 'Rebuild even if dwg2dxf is already installed'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-libredwg
+  cancel-in-progress: false
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: production
+    env:
+      DEPLOY_HOST: ${{ secrets.DO_DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DO_DEPLOY_USER }}
+      DEPLOY_PORT: ${{ secrets.DO_DEPLOY_PORT }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DO_DEPLOY_KNOWN_HOSTS }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate deploy configuration
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_HOST:?Missing DO_DEPLOY_HOST secret}"
+          : "${DEPLOY_USER:?Missing DO_DEPLOY_USER secret}"
+
+          deploy_port="${DEPLOY_PORT:-22}"
+          if ! [[ "${deploy_port}" =~ ^[0-9]+$ ]]; then
+            echo "DO_DEPLOY_PORT must be a numeric SSH port." >&2
+            exit 1
+          fi
+
+      - name: Write deploy SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DO_DEPLOY_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          : "${DEPLOY_SSH_KEY:?Missing DO_DEPLOY_SSH_KEY secret}"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/alfab_deploy_key
+          chmod 600 ~/.ssh/alfab_deploy_key
+
+      - name: Add deploy host to known_hosts
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          if [[ -n "${DEPLOY_KNOWN_HOSTS}" ]]; then
+            printf '%s\n' "${DEPLOY_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -H "${DEPLOY_HOST}" > ~/.ssh/known_hosts
+          fi
+
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Upload install script
+        run: |
+          set -euo pipefail
+          deploy_port="${DEPLOY_PORT:-22}"
+          scp -i ~/.ssh/alfab_deploy_key -P "${deploy_port}" scripts/install-libredwg.sh "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/install-libredwg.sh"
+
+      - name: Build and install LibreDWG
+        env:
+          FORCE_REBUILD: ${{ inputs.force_rebuild }}
+        run: |
+          set -euo pipefail
+          deploy_port="${DEPLOY_PORT:-22}"
+
+          force_flag=""
+          if [[ "${FORCE_REBUILD}" == "true" ]]; then
+            force_flag="--force"
+          fi
+
+          ssh -i ~/.ssh/alfab_deploy_key -p "${deploy_port}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "set -euo pipefail
+            sudo bash /tmp/install-libredwg.sh ${force_flag}
+            rm -f /tmp/install-libredwg.sh"
+
+      - name: Verify the converter is usable by the app
+        run: |
+          set -euo pipefail
+          deploy_port="${DEPLOY_PORT:-22}"
+
+          ssh -i ~/.ssh/alfab_deploy_key -p "${deploy_port}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "set -euo pipefail
+            command -v dwg2dxf
+            dwg2dxf --version | head -n1"
+
+      - name: Restart the app so it picks up the new PATH entry
+        run: |
+          set -euo pipefail
+          deploy_port="${DEPLOY_PORT:-22}"
+
+          ssh -i ~/.ssh/alfab_deploy_key -p "${deploy_port}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "set -euo pipefail
+            sudo systemctl restart alfab
+            sudo systemctl is-active alfab"
+
+      - name: Remove deploy SSH key
+        if: ${{ always() }}
+        run: rm -f ~/.ssh/alfab_deploy_key

@@ -165,6 +165,15 @@ run_deploy() {
     bash scripts/ec2-deploy.sh
 }
 
+install_cad_converter() {
+  # dwg2dxf lets the calculator accept customer DWG drawings. Not having it only disables that one
+  # upload format (DXF and SVG still work), so a failure here must not fail the whole bootstrap.
+  log "Installing LibreDWG (dwg2dxf) for DWG uploads."
+  if ! bash "${APP_DIR}/scripts/install-libredwg.sh"; then
+    log "WARNING: LibreDWG install failed. DWG uploads will be rejected until it is installed; DXF and SVG are unaffected."
+  fi
+}
+
 maybe_request_tls() {
   if [[ "${REQUEST_TLS}" != "1" ]]; then
     return
@@ -211,6 +220,7 @@ main() {
   configure_postgres
   write_env_file
   run_deploy
+  install_cad_converter
   maybe_request_tls
   print_summary
 }

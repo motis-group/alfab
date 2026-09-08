@@ -5,19 +5,27 @@ import styles from '@components/GlassVisualizer.module.scss';
 import * as React from 'react';
 import * as Utilities from '@common/utilities';
 
-import RowSpaceBetween from '@components/RowSpaceBetween';
 import Text from '@components/Text';
 
 import { CadOutlineGeometry, GlassSpecification, getEffectiveArea, getEffectivePerimeter, glassTypeToRGB, usesMeasuredGeometry } from '@utils/calculations';
 
 // The drawing is laid out in a fixed viewBox so stroke widths and label sizes stay constant
-// whatever the real size of the glass. Millimetres are mapped into this space.
-const VIEW_WIDTH = 880;
-const VIEW_HEIGHT = 560;
-const PAD_LEFT = 78;
-const PAD_RIGHT = 28;
-const PAD_TOP = 28;
-const PAD_BOTTOM = 64;
+// whatever the real size of the glass. Millimetres are mapped into this space. The box is kept
+// tight because this renders in the calculator's narrow sidebar column, where a larger viewBox
+// would shrink the dimension labels below a readable size.
+const VIEW_WIDTH = 720;
+const VIEW_HEIGHT = 500;
+const PAD_LEFT = 66;
+const PAD_RIGHT = 24;
+const PAD_TOP = 24;
+const PAD_BOTTOM = 56;
+
+const SHAPE_NAMES: Record<GlassSpecification['shape'], string> = {
+  RECTANGLE: 'Rectangle',
+  TRIANGLE: 'Triangle',
+  SIMPLE: 'Simple shape',
+  COMPLEX: 'Complex shape',
+};
 
 type Point = { x: number; y: number };
 
@@ -190,9 +198,14 @@ export default function GlassVisualizer({ spec }: GlassVisualizerProps) {
 
   const widthLabel = `${formatMm(spec.cadOutline && drawing.exact ? spec.cadOutline.widthMm : drawing.widthMm)} mm`;
   const heightLabel = `${formatMm(spec.cadOutline && drawing.exact ? spec.cadOutline.heightMm : drawing.heightMm)} mm`;
-  const dimensionY = originY + drawnHeight + 34;
-  const dimensionX = originX - 34;
+  const dimensionY = originY + drawnHeight + 28;
+  const dimensionX = originX - 28;
   const measured = usesMeasuredGeometry(spec);
+
+  // The CAD label ("Rectangle with R50 corners") already says what the shape is, so prefer it over
+  // repeating the generic shape name next to it.
+  const shapeSummary = spec.cadOutline?.shapeLabel || SHAPE_NAMES[spec.shape];
+  const featureSummary = [drawing.holes.length ? `${drawing.holes.length} hole${drawing.holes.length === 1 ? '' : 's'}` : 'No holes', spec.ceramicBand ? 'ceramic band' : null, spec.radiusCorners && !spec.cadOutline ? 'radius corners' : null].filter(Boolean).join(' · ');
 
   return (
     <div className={styles.root}>
@@ -232,36 +245,27 @@ export default function GlassVisualizer({ spec }: GlassVisualizerProps) {
             <line x1={dimensionX - 7} y1={originY + drawnHeight} x2={dimensionX + 7} y2={originY + drawnHeight} />
           </g>
 
-          <text className={styles.dimensionLabel} x={originX + drawnWidth / 2} y={dimensionY + 24} textAnchor="middle">
+          <text className={styles.dimensionLabel} x={originX + drawnWidth / 2} y={dimensionY + 26} textAnchor="middle">
             {widthLabel}
           </text>
-          <text className={styles.dimensionLabel} x={dimensionX - 12} y={originY + drawnHeight / 2} textAnchor="middle" transform={`rotate(-90 ${dimensionX - 12} ${originY + drawnHeight / 2})`}>
+          <text className={styles.dimensionLabel} x={dimensionX - 10} y={originY + drawnHeight / 2} textAnchor="middle" transform={`rotate(-90 ${dimensionX - 10} ${originY + drawnHeight / 2})`}>
             {heightLabel}
           </text>
         </svg>
       </div>
 
-      <div className={styles.captionRow}>
+      <div className={styles.facts}>
         <Text>
-          {spec.thickness}mm {spec.glassType} · {spec.shape === 'RECTANGLE' ? 'Rectangle' : spec.shape === 'TRIANGLE' ? 'Triangle' : spec.shape === 'SIMPLE' ? 'Simple shape' : 'Complex shape'}
-          {spec.cadOutline ? ` · ${spec.cadOutline.shapeLabel}` : ''}
+          {spec.thickness}mm {spec.glassType} · {shapeSummary}
         </Text>
         <Text>
           {getEffectiveArea(spec).toFixed(3)} m² · {getEffectivePerimeter(spec).toFixed(2)} m edge{measured ? ' (measured)' : ''}
         </Text>
-      </div>
-
-      <RowSpaceBetween>
+        <Text>{featureSummary}</Text>
         <Text>
           <span className={styles.note}>{drawing.source}</span>
         </Text>
-        <Text>
-          <span className={styles.note}>
-            {spec.ceramicBand ? 'Ceramic band shown · ' : ''}
-            {drawing.holes.length ? `${drawing.holes.length} hole${drawing.holes.length === 1 ? '' : 's'}` : 'No holes'}
-          </span>
-        </Text>
-      </RowSpaceBetween>
+      </div>
 
       {drawing.notes.map((note) => (
         <Text key={note}>
