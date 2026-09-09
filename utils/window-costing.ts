@@ -1,7 +1,7 @@
 /**
  * Window costing engine: a port of the legacy Lotus 1-2-3 costing sheet (docs/legacy/WINDOWS.12M),
- * Victorian basis. Pure functions, no React, no runtime imports (utils/window-costing.spec.ts runs
- * this file under plain node). See projects/costing/development/specs/window-costing.md for the model.
+ * Victorian basis. Pure functions, no React, no runtime imports (utils/window-costing.test.ts runs
+ * this file under tsx). See projects/costing/development/specs/window-costing.md for the model.
  */
 
 import type { AnodCode, EachKey, ExtrusionCode, GlassGroup, GlazingId, LabourTable, PerMetreKey, TrimBlackCode, TrimCode, WindowRates, WindowTypeId } from './window-costing-rates';

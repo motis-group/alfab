@@ -1,4 +1,5 @@
 import { createClient } from '@utils/db-client';
+import { QuoteStatus, readQuoteStatus } from '@utils/quote-status';
 import { CostBreakdown, GlassSpecification } from '@utils/calculations';
 
 const TABLE = 'quotes';
@@ -26,6 +27,9 @@ export interface SavedGlassQuote {
   notes: string;
   items: SavedGlassItem[];
   total: number;
+  status: QuoteStatus;
+  /** Why it was lost, when it was lost. */
+  statusReason: string | null;
   /** Stamp of the glass rates the saved prices were calculated on. */
   ratesUpdatedAt: string | null;
 }
@@ -37,6 +41,8 @@ interface QuoteRow {
   date: string | null;
   specification: unknown;
   cost: unknown;
+  status?: unknown;
+  status_reason?: string | null;
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -71,6 +77,8 @@ function toSavedQuote(row: QuoteRow): SavedGlassQuote | null {
     notes: typeof specification.notes === 'string' ? specification.notes : '',
     items: specification.items as SavedGlassItem[],
     total: typeof cost.total === 'number' ? cost.total : 0,
+    status: readQuoteStatus(row.status),
+    statusReason: typeof row.status_reason === 'string' ? row.status_reason : null,
     ratesUpdatedAt: typeof specification.ratesUpdatedAt === 'string' ? specification.ratesUpdatedAt : null,
   };
 }
@@ -84,15 +92,7 @@ export async function listGlassQuotes(): Promise<SavedGlassQuote[]> {
   return ((data as QuoteRow[]) || []).map(toSavedQuote).filter(Boolean) as SavedGlassQuote[];
 }
 
-export async function saveGlassQuote(quote: {
-  name: string;
-  customer: string;
-  customerId: string | null;
-  notes: string;
-  items: SavedGlassItem[];
-  total: number;
-  ratesUpdatedAt: string | null;
-}): Promise<void> {
+export async function saveGlassQuote(quote: { name: string; customer: string; customerId: string | null; notes: string; items: SavedGlassItem[]; total: number; ratesUpdatedAt: string | null }): Promise<void> {
   const db = createClient();
   const { error } = await db.from(TABLE).insert({
     name: quote.name.trim() || 'Glass quote',

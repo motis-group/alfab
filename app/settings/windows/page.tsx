@@ -15,6 +15,11 @@ import Table from '@components/Table';
 import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
+import { RateAgeBadge, RateReviewCard } from '@components/RateAgeNotice';
+import EstimateAccuracyCard from '@components/EstimateAccuracyCard';
+import { AccuracySummary, measureAccuracy } from '@utils/estimate-accuracy';
+import { loadMeasuredLines } from '@utils/estimate-accuracy-store';
+import { DEFAULT_AWNING_RATES } from '@utils/awning-costing-rates';
 
 import { APP_ACCOUNT_SECTION_ITEMS, APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import { formatCurrency } from '@utils/order-management';
@@ -146,24 +151,26 @@ function collectFields(value: unknown, segments: string[], out: RateField[]): vo
 }
 
 function buildSections(rates: WindowRates): RateSection[] {
-  return Object.entries(rates)
-    // A blanked top-level rate is null, which is still a field to show. Without the explicit null the
-    // section would disappear and the value could not be typed back in.
-    .filter(([key, value]) => key !== 'asAt' && (typeof value === 'number' || value === null || (value && typeof value === 'object')))
-    .map(([key, value]) => {
-      const fields: RateField[] = [];
-      collectFields(value, [key], fields);
-      return {
-        key,
-        title: SECTION_TITLES[key] || key.toUpperCase(),
-        note: SECTION_NOTES[key] || '',
-        asAt: rates.asAt?.[key] || '',
-        fields,
-        errors: fields.filter((field) => field.issue?.tone === 'error').length,
-        warnings: fields.filter((field) => field.issue?.tone === 'warning').length,
-      };
-    })
-    .filter((section) => section.fields.length > 0);
+  return (
+    Object.entries(rates)
+      // A blanked top-level rate is null, which is still a field to show. Without the explicit null the
+      // section would disappear and the value could not be typed back in.
+      .filter(([key, value]) => key !== 'asAt' && (typeof value === 'number' || value === null || (value && typeof value === 'object')))
+      .map(([key, value]) => {
+        const fields: RateField[] = [];
+        collectFields(value, [key], fields);
+        return {
+          key,
+          title: SECTION_TITLES[key] || key.toUpperCase(),
+          note: SECTION_NOTES[key] || '',
+          asAt: rates.asAt?.[key] || '',
+          fields,
+          errors: fields.filter((field) => field.issue?.tone === 'error').length,
+          warnings: fields.filter((field) => field.issue?.tone === 'warning').length,
+        };
+      })
+      .filter((section) => section.fields.length > 0)
+  );
 }
 
 function setAtPath(rates: WindowRates, segments: string[], value: number | string | null): WindowRates {
@@ -192,6 +199,7 @@ export default function WindowRatesSettings() {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   // Real saved costings, repriced on the edit, so the effect of a rate change is visible before saving.
   const [samples, setSamples] = useState<Array<{ id: string; name: string; input: WindowCostingInput }>>([]);
+  const [accuracy, setAccuracy] = useState<AccuracySummary | null>(null);
 
   const sections = useMemo(() => buildSections(rates), [rates]);
   const hasChanges = useMemo(() => JSON.stringify(rates) !== JSON.stringify(savedRates), [rates, savedRates]);
@@ -261,6 +269,18 @@ export default function WindowRatesSettings() {
       }
     })();
   }, [router]);
+
+  // The shop floor's answer to whether the labour minutes below are true.
+  useEffect(() => {
+    (async () => {
+      try {
+        const measured = await loadMeasuredLines();
+        setAccuracy(measureAccuracy(measured, rates, DEFAULT_AWNING_RATES).find((entry) => entry.kind === 'window') || null);
+      } catch {
+        setAccuracy(null);
+      }
+    })();
+  }, [rates]);
 
   // The costing page links straight to the rate behind an unpriced line.
   useEffect(() => {
@@ -396,9 +416,7 @@ export default function WindowRatesSettings() {
                         <TableColumn>{formatCurrency(row.before)}</TableColumn>
                         <TableColumn>{formatCurrency(row.after)}</TableColumn>
                         <TableColumn>
-                          <span className={Math.abs(row.percent ?? 0) >= 10 ? 'status-warning' : undefined}>
-                            {row.percent == null ? 'not priced' : `${row.percent > 0 ? '+' : ''}${row.percent.toFixed(1)}%`}
-                          </span>
+                          <span className={Math.abs(row.percent ?? 0) >= 10 ? 'status-warning' : undefined}>{row.percent == null ? 'not priced' : `${row.percent > 0 ? '+' : ''}${row.percent.toFixed(1)}%`}</span>
                         </TableColumn>
                       </TableRow>
                     ))}
@@ -459,9 +477,17 @@ export default function WindowRatesSettings() {
             </Card>
           ) : null}
 
+          {accuracy ? <EstimateAccuracyCard summary={accuracy} /> : null}
+
+          <RateReviewCard asAt={rates.asAt} label={(key) => SECTION_TITLES[key] || key} />
+
           <Card title="FIND A RATE">
             <Input label="SEARCH" name="rate_search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="stays, anodising, T5573" />
-            {query ? <Text>{matchCount} rate{matchCount === 1 ? '' : 's'} match.</Text> : null}
+            {query ? (
+              <Text>
+                {matchCount} rate{matchCount === 1 ? '' : 's'} match.
+              </Text>
+            ) : null}
             {query ? (
               <>
                 <br />
@@ -523,9 +549,15 @@ export default function WindowRatesSettings() {
           ) : null}
 
           {canEdit ? (
-            <Input label="PRICES AS AT" name={`asat-${section.key}`} value={section.asAt} onChange={(event) => updateAsAt(section.key, event.target.value)} placeholder="unknown" />
+            <>
+              <Input label="PRICES AS AT" name={`asat-${section.key}`} value={section.asAt} onChange={(event) => updateAsAt(section.key, event.target.value)} placeholder="unknown" />
+              <RateAgeBadge text={section.asAt} />
+            </>
           ) : (
-            <Text>Prices as at: {section.asAt || 'unknown'}</Text>
+            <>
+              <Text>Prices as at: {section.asAt || 'unknown'}</Text>
+              <RateAgeBadge text={section.asAt} />
+            </>
           )}
 
           <Table>
@@ -562,15 +594,7 @@ export default function WindowRatesSettings() {
                     </TableColumn>
                     <TableColumn className={cellClass}>{field.unit}</TableColumn>
                     <TableColumn className={cellClass}>
-                      <Input
-                        type="number"
-                        name={field.path}
-                        value={drafts[field.path] ?? (field.value == null ? '' : String(field.value))}
-                        onChange={(event) => updateField(field, event.target.value)}
-                        placeholder="not priced"
-                        step="0.001"
-                        disabled={!canEdit}
-                      />
+                      <Input type="number" name={field.path} value={drafts[field.path] ?? (field.value == null ? '' : String(field.value))} onChange={(event) => updateField(field, event.target.value)} placeholder="not priced" step="0.001" disabled={!canEdit} />
                     </TableColumn>
                   </TableRow>
                   {field.issue ? (

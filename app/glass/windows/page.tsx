@@ -16,38 +16,19 @@ import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 import WindowCostingGlossary from '@components/WindowCostingGlossary';
+import { RateReviewCard } from '@components/RateAgeNotice';
 import WindowCostingSheet, { WindowCostingSheetWindow } from '@components/WindowCostingSheet';
 
+import QuoteStatusControl, { WinRateCard } from '@components/QuoteStatusControl';
+import { QuoteStatus, setQuoteStatus, winRate } from '@utils/quote-status';
+import JobPanel, { useJob } from '@components/JobPanel';
+import { addToJob, jobLineId } from '@utils/job-basket';
 import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import { Customer, UserRole, formatCurrency, todayISODate } from '@utils/order-management';
 import { createClient } from '@utils/db-client';
 import { WindowQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
-import {
-  CostExtra,
-  CostLine,
-  FINISH_LABELS,
-  Finish,
-  GLASS_GROUP_LABELS,
-  GLAZING_ORDER,
-  GlassGroup,
-  LOCK_LABELS,
-  LabourPart,
-  LockType,
-  MullionKind,
-  Reinforcement,
-  StayType,
-  TRIM_LABELS,
-  TrimMode,
-  WINDOW_TYPES,
-  WindowCostingInput,
-  WindowTypeId,
-  costWindow,
-  costWindowBatches,
-  createWindowInput,
-  describeWindow,
-  switchWindowType,
-} from '@utils/window-costing';
+import { CostExtra, CostLine, FINISH_LABELS, Finish, GLASS_GROUP_LABELS, GLAZING_ORDER, GlassGroup, LOCK_LABELS, LabourPart, LockType, MullionKind, Reinforcement, StayType, TRIM_LABELS, TrimMode, WINDOW_TYPES, WindowCostingInput, WindowTypeId, costWindow, costWindowBatches, createWindowInput, describeWindow, switchWindowType } from '@utils/window-costing';
 import { WINDOW_SERIES, WindowProduct, findProduct, productFullName, productLabel, productForInput, seriesOfProduct, visibleSeries } from '@utils/window-catalogue';
 import { DEFAULT_WINDOW_RATES, GlazingId, WindowRates, mergeWindowRates } from '@utils/window-costing-rates';
 import { loadWindowRates, loadWindowRatesVersion } from '@utils/window-costing-store';
@@ -170,42 +151,20 @@ export default function WindowCostingPage() {
   const quoteTotal = quoteLines.reduce((sum, line) => sum + (line.total ?? 0), 0);
 
   // The quote prints the windows it holds; a quote with none prints the window on screen.
-  const sheetWindows: WindowCostingSheetWindow[] = quoteLines.length
-    ? quoteLines.map((line) => ({ id: line.item.localId, name: line.item.name, quantity: line.item.quantity, input: line.item.input, result: line.result }))
-    : [{ id: 'current', name: windowName, quantity: orderQuantity, input, result }];
+  const sheetWindows: WindowCostingSheetWindow[] = quoteLines.length ? quoteLines.map((line) => ({ id: line.item.localId, name: line.item.name, quantity: line.item.quantity, input: line.item.input, result: line.result })) : [{ id: 'current', name: windowName, quantity: orderQuantity, input, result }];
 
   const summary = useMemo(() => {
     if (result.price == null) {
       return '';
     }
 
-    const header = [
-      `${quoteName.trim() || 'Window quote'}`,
-      `Customer: ${customerName.trim() || 'Walk-in / Phone'}`,
-      `Date: ${quoteDate}`,
-    ];
+    const header = [`${quoteName.trim() || 'Window quote'}`, `Customer: ${customerName.trim() || 'Walk-in / Phone'}`, `Date: ${quoteDate}`];
 
     if (quoteLines.length) {
-      return [
-        ...header,
-        ...quoteLines.map((line, index) => `${index + 1}. ${line.item.name || describe(line.item.input)} | ${line.item.quantity} x ${formatCurrency(line.result.price)} = ${formatCurrency(line.total)}`),
-        `Quote total: ${formatCurrency(quoteTotal)}`,
-        quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : '',
-      ]
-        .filter(Boolean)
-        .join('\n');
+      return [...header, ...quoteLines.map((line, index) => `${index + 1}. ${line.item.name || describe(line.item.input)} | ${line.item.quantity} x ${formatCurrency(line.result.price)} = ${formatCurrency(line.total)}`), `Quote total: ${formatCurrency(quoteTotal)}`, quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : ''].filter(Boolean).join('\n');
     }
 
-    return [
-      ...header,
-      `Window: ${describe(input)}`,
-      `Price (${result.unitLabel.toLowerCase()}): ${formatCurrency(result.price)}`,
-      `Qty: ${orderQuantity} | Total: ${formatCurrency(currentTotal)}`,
-      ...extrasList.map((extra) => `${extra.label}: ${formatExtra(extra)}`),
-      quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
+    return [...header, `Window: ${describe(input)}`, `Price (${result.unitLabel.toLowerCase()}): ${formatCurrency(result.price)}`, `Qty: ${orderQuantity} | Total: ${formatCurrency(currentTotal)}`, ...extrasList.map((extra) => `${extra.label}: ${formatExtra(extra)}`), quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : ''].filter(Boolean).join('\n');
   }, [currentTotal, customerName, extrasList, input, orderQuantity, quoteDate, quoteLines, quoteName, quoteNotes, quoteTotal, rates, ratesLabel, result]);
 
   // Put the sheet back to the customer copy once a print finishes, so the next Cmd+P is safe.
@@ -214,6 +173,9 @@ export default function WindowCostingPage() {
     window.addEventListener('afterprint', restore);
     return () => window.removeEventListener('afterprint', restore);
   }, []);
+
+  const outcomes = useMemo(() => winRate(savedCostings), [savedCostings]);
+  const [job, setJob] = useJob();
 
   const selectedCustomer = customers.find((entry) => entry.id === customerId) || null;
 
@@ -363,16 +325,7 @@ export default function WindowCostingPage() {
       return;
     }
 
-    const text = [
-      `INTERNAL — ${quoteName.trim() || 'Window costing'} — do not send to a customer`,
-      `Window: ${describe(input)}`,
-      `Rates: ${ratesLabel}`,
-      `Subtotal: ${formatCurrency(result.subtotal)} | Margin ${formatPercent(result.marginRate)}: ${formatCurrency(result.margin)} | Packing: ${formatCurrency(result.packing)} | Uplift ${formatPercent(result.upliftRate)}: ${formatCurrency(result.uplift)}`,
-      `Price (${result.unitLabel.toLowerCase()}): ${formatCurrency(result.price)}`,
-      result.unpriced.length ? `Not priced (charged as nil): ${result.unpriced.map((entry) => entry.label).join(', ')}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
+    const text = [`INTERNAL — ${quoteName.trim() || 'Window costing'} — do not send to a customer`, `Window: ${describe(input)}`, `Rates: ${ratesLabel}`, `Subtotal: ${formatCurrency(result.subtotal)} | Margin ${formatPercent(result.marginRate)}: ${formatCurrency(result.margin)} | Packing: ${formatCurrency(result.packing)} | Uplift ${formatPercent(result.upliftRate)}: ${formatCurrency(result.uplift)}`, `Price (${result.unitLabel.toLowerCase()}): ${formatCurrency(result.price)}`, result.unpriced.length ? `Not priced (charged as nil): ${result.unpriced.map((entry) => entry.label).join(', ')}` : ''].filter(Boolean).join('\n');
 
     try {
       await navigator.clipboard.writeText(text);
@@ -436,11 +389,17 @@ export default function WindowCostingPage() {
     }
     setStatus({
       tone: costing.ratesUpdatedAt === ratesUpdatedAt ? 'success' : 'warning',
-      message:
-        costing.ratesUpdatedAt === ratesUpdatedAt
-          ? `Loaded "${costing.name}".`
-          : `Loaded "${costing.name}". It was priced on older rates, so the price here may differ from ${formatCurrency(costing.price)}.`,
+      message: costing.ratesUpdatedAt === ratesUpdatedAt ? `Loaded "${costing.name}".` : `Loaded "${costing.name}". It was priced on older rates, so the price here may differ from ${formatCurrency(costing.price)}.`,
     });
+  }
+
+  async function markCosting(id: string, status: QuoteStatus, reason?: string | null) {
+    try {
+      await setQuoteStatus(id, status, reason);
+      await refreshSavedCostings();
+    } catch (markError: any) {
+      setStatus({ tone: 'warning', message: markError?.message || 'Unable to mark the costing.' });
+    }
   }
 
   async function removeSavedCosting(costing: SavedWindowCosting) {
@@ -450,6 +409,26 @@ export default function WindowCostingPage() {
     } catch (deleteError: any) {
       setStatus({ tone: 'warning', message: deleteError?.message || 'Unable to delete the costing.' });
     }
+  }
+
+  function addJobLines() {
+    const lines = quoteLines.length ? quoteLines.filter((line) => line.result.price != null).map((line) => ({ id: jobLineId('window'), kind: 'window' as const, description: line.item.name || describe(line.item.input), quantity: line.item.quantity, unitPrice: line.result.price as number, windowSpec: line.item.input, ratesUpdatedAt })) : result.price == null ? [] : [{ id: jobLineId('window'), kind: 'window' as const, description: windowName.trim() || describe(input), quantity: orderQuantity, unitPrice: result.price, windowSpec: input, ratesUpdatedAt }];
+
+    if (!lines.length) {
+      return;
+    }
+
+    setJob(addToJob(lines, { name: quoteName, customerName: selectedCustomer?.name || customerName, customerId: customerId || null, notes: quoteNotes }));
+    setQuoteItems([]);
+    setStatus({ tone: 'success', message: 'Added to the job. Price awnings or cut glass and they land on the same order.' });
+  }
+
+  function createOrderForJob() {
+    if (!job.lines.length) {
+      return;
+    }
+    persistQuoteToOrderDraft({ kind: 'job', quoteName: job.name || quoteName, customerName: job.customerName || customerName, customerId: job.customerId, quoteDate, quoteNotes: job.notes || quoteNotes, jobLines: job.lines });
+    router.push('/glass/new?fromQuote=1');
   }
 
   function handleCreatePurchaseOrder() {
@@ -507,6 +486,8 @@ export default function WindowCostingPage() {
         <>
           <Card title="QUICK ACTIONS">
             <ActionButton onClick={addToQuote}>Add Window To Quote</ActionButton>
+            <br />
+            <ActionButton onClick={addJobLines}>Add To Job</ActionButton>
             <br />
             <ActionButton onClick={handleCreatePurchaseOrder}>Create Purchase Order</ActionButton>
             <br />
@@ -701,6 +682,27 @@ export default function WindowCostingPage() {
               </Table>
             </Card>
           ) : null}
+
+          <WinRateCard tally={outcomes} quotes={savedCostings} />
+
+          <RateReviewCard
+            asAt={rates.asAt}
+            label={(key) =>
+              ({
+                labourPerHour: 'Labour rate',
+                suppliers: 'Aluminium suppliers',
+                extrusions: 'Extrusions',
+                anodising: 'Anodising and powder coat',
+                perMetre: 'Materials by the metre',
+                each: 'Fixings and fittings',
+                glass: 'Glazing',
+                packingPerSqm: 'Packing',
+                labour: 'Labour minutes',
+                margins: 'Margin and uplift',
+              })[key] || key
+            }
+            action={<ActionButton onClick={() => router.push('/settings/windows')}>Review Window Rates</ActionButton>}
+          />
 
           <Card title="RATES">
             <Text>{ratesSource === 'saved' ? `Using window rates ${ratesLabel}.` : 'Using the default window rates.'}</Text>
@@ -980,11 +982,7 @@ export default function WindowCostingPage() {
               </option>
             ))}
         </select>
-        {selectedCustomer ? (
-          <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text>
-        ) : (
-          <Input label="CUSTOMER NAME" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />
-        )}
+        {selectedCustomer ? <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text> : <Input label="CUSTOMER NAME" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />}
         <br />
         <Input label="QUOTE DATE" type="date" name="quote_date" value={quoteDate} onChange={(event) => setQuoteDate(event.target.value)} />
         <Input label="NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
@@ -1029,6 +1027,8 @@ export default function WindowCostingPage() {
         )}
       </CardDouble>
 
+      <JobPanel job={job} onChange={setJob} onCreateOrder={createOrderForJob} />
+
       <CardDouble title="SAVED COSTINGS">
         {savedCostings.length ? (
           <Table>
@@ -1036,6 +1036,7 @@ export default function WindowCostingPage() {
               <TableColumn style={{ width: '30ch' }}>NAME</TableColumn>
               <TableColumn style={{ width: '20ch' }}>CUSTOMER</TableColumn>
               <TableColumn style={{ width: '14ch' }}>PRICE</TableColumn>
+              <TableColumn style={{ width: '22ch' }}>OUTCOME</TableColumn>
               <TableColumn>ACTIONS</TableColumn>
             </TableRow>
             {savedCostings.map((costing) => (
@@ -1043,6 +1044,9 @@ export default function WindowCostingPage() {
                 <TableColumn>{costing.name}</TableColumn>
                 <TableColumn>{costing.customer || '—'}</TableColumn>
                 <TableColumn>{formatCurrency(costing.price)}</TableColumn>
+                <TableColumn>
+                  <QuoteStatusControl status={costing.status} statusReason={costing.statusReason} disabled={!canSaveCostings} onChange={(next, reason) => markCosting(costing.id, next, reason)} />
+                </TableColumn>
                 <TableColumn>
                   <RowSpaceBetween>
                     <ActionButton onClick={() => loadSavedCosting(costing)}>Load</ActionButton>

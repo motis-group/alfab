@@ -3,7 +3,7 @@
  * (docs/legacy/WINDOWS.12M). Saved overrides live in the window_costing_rates table (row id
  * "default") and are merged over DEFAULT_WINDOW_RATES by mergeWindowRates().
  *
- * Keep this module free of runtime imports: utils/window-costing.spec.ts runs it under plain node.
+ * Keep this module free of runtime imports: utils/window-costing.test.ts runs it under tsx.
  * `null` means the source sheet had no usable price (ERR / N/A); the engine reports such lines as
  * "not priced" instead of failing.
  */

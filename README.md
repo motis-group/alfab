@@ -50,3 +50,19 @@ For the window costing model (legacy Lotus sheet port) and its rates, see:
 For glass quoting, the minimum charge and where glass rates live, see:
 
 - `projects/costing/development/specs/glass-quoting.md`
+
+For the awning costing model (legacy Excel sheet port) and its rates, see:
+
+- `projects/costing/development/specs/awning-costing.md`
+
+For how old a price is and where the three price lists disagree, see:
+
+- `projects/costing/development/specs/pricing-health.md`
+
+For quote outcomes and whether the labour estimates hold up, see:
+
+- `projects/costing/development/specs/feedback-loops.md`
+
+For a job spanning windows, awnings and cut glass, see:
+
+- `projects/costing/development/specs/jobs.md`
