@@ -99,7 +99,7 @@ function unitFor(segments: string[]): string {
       return '';
     case 'anodising':
       if (rest[0] === 'factor') return 'sqm per metre';
-      if (rest[0] === 'trimEtch' || rest[0] === 'trimBlack') return '$ per metre';
+      if (rest[0] === 'trimEtch') return '$ per metre';
       if (leaf === 'etchPerSqm') return '$ per sqm';
       if (leaf === 'etchMin') return '$ minimum';
       if (leaf === 'powderPerM') return '$ per metre';

@@ -210,25 +210,24 @@ These reproduce the sheet and will surprise anyone expecting the obvious formula
 - T5836 without a sill flat gets a labour credit (negative sill-flat minutes).
 - T4633 and AFB037 both use the T4633 extrusion and anodising rates; the T2482 trim angle
   uses the T5574 rate.
-- AFB008 sill flat anodising uses the etch rate for natural anodised and the black trim rate for
-  mill and powder coat. Black is no longer an offered finish, but the rate stays because moving
-  those two to their own rate would change the price.
+- T5836 sill flat (40 x 3) charges the etch trim rate on mill finish. The AFB008 flat charges
+  nothing for mill (decision 3.5, settled). The two disagree; 3.13 asks whether to settle the 5836
+  the same way.
 - The T-section sash & frame anodises both frames at the U6567 factor whichever hopper
   series is chosen.
 - Reinforcement and mullion blocks price mill finish at $0 (the sheet charged etch).
 
 ## Options a window offers
 
-A window type declares the locks, trims and glass groups it takes. The two-section types can narrow
-any of those for one section, through `variantOptions`, because the two sections share a recipe but
-are not the same window on the floor. `windowOptions(cfg, variant)` resolves the pair, and the form,
-the costing and the description all read the resolved value rather than the type's own flag.
+A window type declares the locks, trims and glass groups it takes. `windowOptions(cfg)` fills in the
+defaults for anything left out, and the form, the costing and the description all read it rather
+than the raw config.
 
-The 650 series 037 (T4633 variant 1) is the case that needs it: no trim can be fitted to it, it
-takes no plunger lock, and nothing thicker than 6 mm goes in, while the 500 series 4633 horse float
-slider on the same recipe keeps all three.
+The T4633 recipe is the one that uses all three. Both its sections, the 650 series 037 and the 500
+series 4633 horse float, take no trim and no plunger lock, and only 5 and 6 mm toughened or acrylic
+goes in either.
 
-`applyWindowOptions` puts a costing back inside those limits when the product or the variant
-changes, so the form never holds a lock, trim or glass its own dropdown no longer lists. A costing
+`applyWindowOptions` puts a costing back inside those limits when the product or the type changes,
+so the form never holds a lock, trim or glass its own dropdown no longer lists. A costing
 saved before a window was narrowed still opens and still prices; the sheet warns that the glass or
 the lock does not fit rather than refusing it.

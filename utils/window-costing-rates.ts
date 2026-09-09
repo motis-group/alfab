@@ -93,7 +93,6 @@ export type PerMetreKey = keyof typeof DEFAULT_PER_METRE;
 export type EachKey = keyof typeof DEFAULT_EACH;
 export type AnodCode = keyof typeof DEFAULT_ANOD_FACTOR;
 export type TrimCode = keyof typeof DEFAULT_TRIM_ETCH;
-export type TrimBlackCode = keyof typeof DEFAULT_TRIM_BLACK;
 
 export interface WindowRates {
   state: 'VIC';
@@ -113,7 +112,6 @@ export interface WindowRates {
     factor: Record<AnodCode, number>;
     /** $/m etch anodising already applied to trim / flat sections. */
     trimEtch: Record<TrimCode, number>;
-    trimBlack: Record<TrimBlackCode, number>;
   };
   perMetre: Record<PerMetreKey, number>;
   each: Record<EachKey, number | null>;
@@ -209,7 +207,6 @@ const DEFAULT_ANOD_FACTOR = {
 
 const DEFAULT_TRIM_ETCH = { T5574: 1.8, U6566: 1.725, flat40x3: 1.8, flat80x3: 3.1125 };
 
-const DEFAULT_TRIM_BLACK = { flat40x3: 3.0, flat80x3: 5.1875 };
 
 export const DEFAULT_WINDOW_RATES: WindowRates = {
   state: 'VIC',
@@ -238,7 +235,6 @@ export const DEFAULT_WINDOW_RATES: WindowRates = {
     powderPerM: 7,
     factor: DEFAULT_ANOD_FACTOR,
     trimEtch: DEFAULT_TRIM_ETCH,
-    trimBlack: DEFAULT_TRIM_BLACK,
   },
   perMetre: DEFAULT_PER_METRE,
   each: DEFAULT_EACH,

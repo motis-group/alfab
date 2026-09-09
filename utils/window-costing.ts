@@ -4,7 +4,7 @@
  * this file under plain node). See projects/costing/development/specs/window-costing.md for the model.
  */
 
-import type { AnodCode, EachKey, ExtrusionCode, GlassGroup, GlazingId, LabourTable, PerMetreKey, TrimBlackCode, TrimCode, WindowRates, WindowTypeId } from './window-costing-rates';
+import type { AnodCode, EachKey, ExtrusionCode, GlassGroup, GlazingId, LabourTable, PerMetreKey, TrimCode, WindowRates, WindowTypeId } from './window-costing-rates';
 
 export type { GlassGroup, GlazingId, WindowRates, WindowTypeId } from './window-costing-rates';
 
@@ -171,7 +171,6 @@ interface Ctx {
   pm(key: PerMetreKey): RateRef;
   ea(key: EachKey): RateRef;
   trimEtch(code: TrimCode): RateRef;
-  trimBlack(code: TrimBlackCode): RateRef;
   trimRate(code: TrimCode & ExtrusionCode): RateRef;
   anod(key: string, code: AnodCode, metres: number, opts?: { minMultiplier?: number; noMin?: boolean }): CostLine;
   glassSelected(nonAcrylicOnly: boolean): boolean;
@@ -190,12 +189,6 @@ export interface WindowTypeConfig {
   glassAreaMin: number;
   glassNote: string;
   minGlassMm?: number;
-  /**
-   * Options narrowed for one section of a two-section type. The two sections share a recipe but are
-   * not the same window on the floor, so one can take a trim or a thicker glass that the other
-   * cannot. Anything left out here falls back to the value the type carries.
-   */
-  variantOptions?: Partial<Record<0 | 1, VariantOptions>>;
   packingFlat?: number;
   labourParts: LabourPart[];
   defaults: Partial<WindowCostingInput>;
@@ -245,14 +238,7 @@ export const GLASS_GROUP_LABELS: Record<GlassGroup, string> = {
 
 export const GLASS_GROUP_ORDER: GlassGroup[] = ['ap5-6', 'ap8-12', 'laminate', 'acrylic'];
 
-interface VariantOptions {
-  lockTypes?: LockType[];
-  trimsSupported?: boolean;
-  glassGroups?: GlassGroup[];
-  glassNote?: string;
-}
-
-/** What one window offers, once the type's options are narrowed for the section being priced. */
+/** What a window offers, with the defaults filled in for anything the type leaves out. */
 export interface WindowOptions {
   lockTypes: LockType[];
   trimsSupported: boolean;
@@ -260,13 +246,12 @@ export interface WindowOptions {
   glassNote: string;
 }
 
-export function windowOptions(cfg: WindowTypeConfig, variant: number): WindowOptions {
-  const narrowed = cfg.variantOptions?.[variant === 1 ? 1 : 0];
+export function windowOptions(cfg: WindowTypeConfig): WindowOptions {
   return {
-    lockTypes: narrowed?.lockTypes ?? cfg.lockTypes ?? [],
-    trimsSupported: narrowed?.trimsSupported ?? cfg.trimsSupported,
-    glassGroups: narrowed?.glassGroups ?? cfg.glassGroups ?? GLASS_GROUP_ORDER,
-    glassNote: narrowed?.glassNote ?? cfg.glassNote,
+    lockTypes: cfg.lockTypes ?? [],
+    trimsSupported: cfg.trimsSupported,
+    glassGroups: cfg.glassGroups ?? GLASS_GROUP_ORDER,
+    glassNote: cfg.glassNote,
   };
 }
 
@@ -276,7 +261,7 @@ export function windowOptions(cfg: WindowTypeConfig, variant: number): WindowOpt
  * the form shows a value its own dropdown no longer lists.
  */
 export function applyWindowOptions(input: WindowCostingInput, rates: WindowRates): WindowCostingInput {
-  const opts = windowOptions(WINDOW_TYPES[input.type], input.variant);
+  const opts = windowOptions(WINDOW_TYPES[input.type]);
   const next = { ...input };
   if (opts.lockTypes.length > 0 && !opts.lockTypes.includes(next.lockType)) {
     next.lockType = opts.lockTypes[0];
@@ -496,17 +481,14 @@ const T4633: WindowTypeConfig = {
   label: 'T4633 / AFB037 slider',
   variantLabels: ['T4633', 'AFB037'],
   fields: ['pairs', 'variant', 'wipeBars', 'lockType', 'locks', 'sliderStop'],
-  lockTypes: ['none', 'comb', 'plunger', '600'],
+  // Both sections, the 650 series 037 and the 500 series 4633 horse float, take no trim and no
+  // plunger lock, and nothing thicker than 6 mm goes in either.
+  lockTypes: ['none', 'comb', '600'],
   pairsSupported: true,
-  trimsSupported: true,
+  trimsSupported: false,
+  glassGroups: ['ap5-6', 'acrylic'],
   glassAreaMin: 0.2,
   glassNote: '5 & 6 mm',
-  // Variant 1 is the 650 series 037, the shop's most common slider. No trim can be fitted to it, it
-  // takes no plunger lock, and nothing thicker than 6 mm goes in. Variant 0, the 500 series 4633
-  // horse float slider, shares the recipe but not those limits.
-  variantOptions: {
-    1: { lockTypes: ['none', 'comb', '600'], trimsSupported: false, glassGroups: ['ap5-6', 'acrylic'] },
-  },
   labourParts: ['window', 'trim', 'wipeBars', 'develop', 'sundry'],
   defaults: { lockType: 'none', locks: 0 },
   windowMultiplier: (c) => (c.input.sliderStop ? 1.06 : 1),
@@ -644,9 +626,9 @@ const AFB008: WindowTypeConfig = {
     const locks = count(i.locks);
     const mullionM = bars > 0 ? bars * ((i.mullionKind === 'mullion' ? c.H : c.L) / 1000) : 0;
     const sillM = i.sillFlat ? c.L / 1000 : 0;
-    // The legacy sheet anodised this flat at the black trim rate on every finish but etch, mill
-    // and powder coat included (decision 3.5). Kept as the sheet had it, so the price does not move.
-    const flatAnod = i.finish === 'etch' ? c.trimEtch('flat80x3') : c.trimBlack('flat80x3');
+    // Decision 3.5, settled: the flat follows the finish. The sheet charged the black trim rate on
+    // every finish but natural, so mill and powder coat both carried a rate that never applied.
+    const flatAnod = i.finish === 'mill' ? rateRef(0, null) : i.finish === 'powder' ? rateRef(c.rates.anodising.powderPerM, 'anodising.powderPerM') : c.trimEtch('flat80x3');
     return [
       c.line('frame', v0 ? 'M. AFB008' : 'M. AFB003', c.per, 'm', c.ext(v0 ? 'AFB008' : 'AFB003')),
       c.anod('anod', v0 ? 'AFB008' : 'AFB003', c.per + mullionM),
@@ -879,7 +861,6 @@ function createCtx(input: WindowCostingInput, rates: WindowRates, cfg: WindowTyp
     pm: (key) => rateRef(rates.perMetre[key], `perMetre.${key}`),
     ea: (key) => rateRef(rates.each[key], `each.${key}`),
     trimEtch: (code) => rateRef(rates.anodising.trimEtch[code], `anodising.trimEtch.${code}`),
-    trimBlack: (code) => rateRef(rates.anodising.trimBlack[code], `anodising.trimBlack.${code}`),
     trimRate: (code) => addRates(c.ext(code), c.trimEtch(code)),
     anod: (key, code, metres, opts) => {
       const a = rates.anodising;
@@ -970,7 +951,7 @@ export function costWindow(input: WindowCostingInput, rates: WindowRates): Windo
   const qtyShaped = count(input.qtyShaped);
   const qtyTotal = qtyToSize + qtyShaped;
   const glazingOption = input.glazingId ? rates.glass.options[input.glazingId] : undefined;
-  const opts = windowOptions(cfg, input.variant);
+  const opts = windowOptions(cfg);
   const windowLabel = cfg.variantLabels ? cfg.variantLabels[input.variant] : cfg.label;
 
   if (H <= 0 || L <= 0) {
@@ -1139,7 +1120,7 @@ export function describeWindow(input: WindowCostingInput, rates: WindowRates, na
     `${nonNegative(input.heightMm)} x ${nonNegative(input.lengthMm)} mm`,
     quantity,
     FINISH_LABELS[input.finish],
-    windowOptions(cfg, input.variant).trimsSupported ? TRIM_LABELS[input.trims] : '',
+    windowOptions(cfg).trimsSupported ? TRIM_LABELS[input.trims] : '',
     glazing || 'no glazing',
     cfg.pairsSupported && input.pairs ? 'per pair' : 'per each',
   ]

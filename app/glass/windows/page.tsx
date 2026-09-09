@@ -140,7 +140,7 @@ export default function WindowCostingPage() {
   const [comparison, setComparison] = useState<{ id: string; quoted: number | null; today: number | null; onOriginal: number | null; stamp: string | null } | null>(null);
 
   const cfg = WINDOW_TYPES[input.type];
-  const options = windowOptions(cfg, input.variant);
+  const options = windowOptions(cfg);
   const series = WINDOW_SERIES.find((entry) => entry.id === seriesId) || WINDOW_SERIES[0];
   const seriesOptions = visibleSeries(series.id);
   const product = productForInput(input);

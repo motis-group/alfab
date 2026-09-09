@@ -30,8 +30,8 @@ send the current supplier price list and we enter it.
 | 2.1 | Labour | $85 per hour | Oct 2021 |
 | 2.2 | Capral aluminium | $12 per kg, 20% loading, offcut 10% to 50% per section | 2021 |
 | 2.3 | G. James aluminium | $8 per kg, 33.3% loading, $1 per kg hollow surcharge | none recorded |
-| 2.4 | Anodising (Collins) | etch frames $40 per sqm basis, $10 minimum, section factors from the sheet | Apr 2010 |
-| 2.5 | Powder coat (Bell) | $7 per metre | Mar 2015 |
+| 2.4 | Anodising (Collins). Open. There is no single rate: Collins charge from about $1 to $4.50 a metre depending on the size of the section. Alfab do little anodising now. Nick is sending the invoice from a recent 015 job so a rate can be worked back from it. | etch frames $40 per sqm basis, $10 minimum, section factors from the sheet | Apr 2010 |
+| 2.5 | Powder coat (Bell). Answered: Alfab pay $8 per metre. Costed at $8.50 to leave buffer. | $8.50 per metre, entered in Window Rates | Sept 2026 |
 | 2.6 | Rubber | 1146 $5, 1206 $6, 1249 $2.50, 1256 $3, PU track $5 and $3.50, foam tape $2.50, K30 $4 | Sept 2021 |
 | 2.7 | Plastic wedges, channels, infills | $0.60 to $3 per metre | July 2007 |
 | 2.8 | Fixings and fittings | screws, nuts, locks $8 and $21.50, hinges $10 and $20, heavy stays $100 per pair, bolt sets $30, mullion fittings $25 and $50, wipe bars $25 to $30 per metre | July 2007 |
@@ -50,10 +50,10 @@ The app does what the sheet did. Say "fix" or "keep" for each.
 | # | What the sheet does | Our suggestion |
 | --- | --- | --- |
 | 3.1 | Drops the packing charge when a window has a reo bar, mullion or transom. The bar cost takes its place. | Fix: charge both. |
-| 3.2 | Prices AFB037 with the T4633 extrusion and anodising rates. AFB037 has its own die at 0.564 kg per metre from G. James, $6.92 per metre, against T4633 at $8.24 per metre from Capral. The 650 slider is dearer by about $1.30 for every metre of perimeter. | Fix: use the AFB037 rates. |
+| 3.2 | Prices AFB037 with the T4633 extrusion and anodising rates. AFB037 has its own die at 0.564 kg per metre from G. James, $6.92 per metre, against T4633 at $8.24 per metre from Capral. The 650 slider is dearer by about $1.30 for every metre of perimeter. | Keep. The die is bought from G. James, but Nick wants it costed at the dearer $8.24 on purpose: aluminium follows the London Metal Exchange and moves constantly, so he would rather cost high than low. |
 | 3.3 | U6567 welding labour equals the number of welds, in minutes. The U6567 welding table is not used. | Fix: use the table like the other types. |
 | 3.4 | T8610 trim labour has no size term. Sash & frame development labour has no size term. | Fix: add the size terms from the tables. |
-| 3.5 | AFB008 sill flat (80 x 3) is anodised at the black trim rate for every finish except natural, so mill and powder coat carry it. Still true now that black is not an offered finish. | Fix: follow the finish. Changes the price on those two, so it waits for your say-so. |
+| 3.5 | AFB008 sill flat (80 x 3) was anodised at the black trim rate for every finish except natural, so mill and powder coat carried it. | Fixed: it follows the finish now. Mill carries no anodising, natural the etch trim rate, powder coat the powder rate. Mill drops about $9 on a 900 x 1200, powder coat rises about $3. The black trim rates are out of Window Rates, being the last thing that read them. |
 | 3.6 | T2482 trim angle is priced at the T5574 trim rate. The sheet labels it 25 x 3 angle, and 32 x 3 angle in the extras block. | Confirm the section and price. |
 | 3.7 | T5836 prices the 600 series lock and the plunger lock at the same $21.50. | Confirm. |
 | 3.8 | T-section sash & frame anodises both frames at the U6567 rate, also with a 500 series (T5573) hopper. | Confirm. |
@@ -61,6 +61,7 @@ The app does what the sheet did. Say "fix" or "keep" for each.
 | 3.10 | Black as an extra subtracts the etch cost before the minimum charge on T5573, after it on T2482. | Withdrawn: black as an extra is no longer offered, so nothing subtracts an etch cost. |
 | 3.11 | T4633 with no lock shows an error. The app prices the window without a lock line. | Confirm the app. |
 | 3.12 | T5836 without a sill flat gets a labour credit of 8 minutes plus 10 minutes setup plus 3 minutes per metre. | Confirm. |
+| 3.13 | T5836 sill flat (40 x 3) charges the etch trim rate on mill finish, where the AFB008 flat now charges nothing (3.5). The two flats disagree. | Fix: follow the finish here too, the same way. Moves the price on mill only, so it waits for your say-so. |
 
 ## 4. Sheet rules we kept
 
@@ -103,7 +104,7 @@ costing behind them, and three need a check.
 | 5a.3 | You wrote that 015 and 008 are the same. The dies differ: AFB015 Riviera slider is 1.162 kg per metre, AFB008 1000 slider is 1.258. The sheet never prices AFB015, so a Riviera is quoted off the 008 recipe and its frame comes out about 8 percent heavy. Is a Riviera the 008 section with a Riviera mullion, or the 015 die? |
 | 5a.4 | The 750 series appears nowhere in the sheet. The 003 slider is priced with 1000 series track, clip channel and wipe. Does a 750 window use different parts, or is 750 a newer name for the medium slider? |
 | 5a.5 | 5573 is the fixed window in both the 750 and the 500. Both price identically today. Do they differ in anything the sheet never recorded? |
-| 5a.6 | The 650 series 037 and the 500 series 4633 horse float share the T4633 recipe. Answered for the 037: no trim fits it, it takes no plunger lock, and only 5 and 6 mm toughened or acrylic goes in. Those three now apply to the 037 alone. Does the horse float have the same limits, or does it really take a trim, a plunger and thicker glass? |
+| 5a.6 | The 650 series 037 and the 500 series 4633 horse float share the T4633 recipe. Answered: the horse float has the same three limits as the 037. No trim, no plunger lock, and 5 and 6 mm toughened or acrylic only. Both now carry them. A 4633 quoted with a trim was about 20 percent high. |
 
 A window with more than one version needs more than one menu entry. The 035 is the first: a basic
 hopper and one with gas struts and special glass are different costings, not one costing with an
@@ -112,6 +113,25 @@ option, unless the difference turns out to be a handful of fittings.
 Nick has taken the 8610, the 2482, the T section sash and frame and the 2303/2482 sash and frame off
 the menu: they are not made any more. The recipes and their checks stay, so a costing saved against
 one still opens. He may want the 2482 caravan back for standard sizes, which is one flag to clear.
+
+## 5b. Still coming from Nick
+
+| # | Item |
+| --- | --- |
+| 5b.1 | Write-ups for the 035 hopper and the 023 horse float front. Voice memos are fine, they transcribe. The 035 needs the gas strut and non gas strut versions costed apart. No rush. |
+| 5b.2 | The invoice from a recent 015 job, to work an anodising rate back from (2.4). |
+| 5b.3 | The awnings costing sheet: an Excel file Nick's father wrote in 2021, used for houseboat awnings. Different component tree to the windows, so it is a second calculator beside the window one rather than another window type. |
+| 5b.4 | Rubber and fittings prices (2.6 to 2.8, still on July 2007 and Sept 2021 numbers). Nick can read these off the purchase orders he writes. |
+
+## 5c. Labour minutes
+
+The sheet's labour tables date from Oct 2021 and nobody has timed a window against them. Will is
+having a worker time one from start to finish, so the minutes can be set from a measurement rather
+than from the sheet. The minutes are editable per window type in Window Rates.
+
+Worth doing because the point of the costing is knowing what each step actually costs, down to the
+bolts and the welding, rather than quoting a job and adding a margin on top. Nick has mostly been
+quoting from experience rather than from the sheet.
 
 ## 6. Built without your input
 
