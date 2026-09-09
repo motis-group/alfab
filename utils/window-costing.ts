@@ -4,7 +4,7 @@
  * this file under plain node). See projects/costing/development/specs/window-costing.md for the model.
  */
 
-import type { AnodCode, EachKey, ExtrusionCode, GlassGroup, GlazingId, LabourTable, PerMetreKey, TrimBlackCode, TrimCode, WindowRates, WindowTypeId } from './window-costing-rates';
+import type { AnodCode, EachKey, ExtrusionCode, GlassGroup, GlazingId, LabourTable, PerMetreKey, TrimCode, WindowRates, WindowTypeId } from './window-costing-rates';
 
 export type { GlassGroup, GlazingId, WindowRates, WindowTypeId } from './window-costing-rates';
 
@@ -14,6 +14,7 @@ export type Reinforcement = 'none' | 'reo' | 'mullion';
 export type LockType = 'none' | 'comb' | 'plunger' | '600';
 export type MullionKind = 'transom' | 'mullion';
 export type StayType = 'flat' | 'medium' | 'heavy';
+export type StrutKind = 'none' | 'gas' | 'manual';
 export type WindowField =
   | 'pairs'
   | 'welds'
@@ -30,7 +31,10 @@ export type WindowField =
   | 'stays'
   | 'boltSets'
   | 'hopper'
-  | 'caravanStays';
+  | 'caravanStays'
+  | 'strutKind'
+  | 'struts'
+  | 'handles';
 export type LabourPart = 'window' | 'trim' | 'welding' | 'develop' | 'sundry' | 'mullion' | 'sillFlat' | 'fittings' | 'wipeBars';
 export type LineUnit = 'm' | 'ea' | 'pr' | 'set' | 'min' | 'sqm';
 
@@ -68,6 +72,11 @@ export interface WindowCostingInput {
   mullionCount: number;
   mullionRiviera: boolean;
   hinges: number;
+  /** AFB035: gas struts, Luma manual struts, or none. */
+  strutKind: StrutKind;
+  struts: number;
+  /** AFB035: Vitus handles, which lock the sash shut and pass through the glass. */
+  handles: number;
   stays: number;
   stayType: StayType;
   boltSets: number;
@@ -171,7 +180,6 @@ interface Ctx {
   pm(key: PerMetreKey): RateRef;
   ea(key: EachKey): RateRef;
   trimEtch(code: TrimCode): RateRef;
-  trimBlack(code: TrimBlackCode): RateRef;
   trimRate(code: TrimCode & ExtrusionCode): RateRef;
   anod(key: string, code: AnodCode, metres: number, opts?: { minMultiplier?: number; noMin?: boolean }): CostLine;
   glassSelected(nonAcrylicOnly: boolean): boolean;
@@ -185,6 +193,12 @@ export interface WindowTypeConfig {
   fields: WindowField[];
   pairsSupported: boolean;
   trimsSupported: boolean;
+  /** Glass groups the window takes. Omitted means all of them. */
+  glassGroups?: GlassGroup[];
+  /** Thickest glass the window takes. Omitted means no ceiling. */
+  maxGlassMm?: number;
+  /** Warned on every costing, for a recipe that is not yet standing on its own numbers. */
+  provisionalNote?: string;
   glassAreaMin: number;
   glassNote: string;
   minGlassMm?: number;
@@ -215,6 +229,12 @@ export function readFinish(value: unknown): Finish {
   return value === 'mill' || value === 'powder' || value === 'etch' ? value : 'etch';
 }
 
+export const STRUT_LABELS: Record<StrutKind, string> = {
+  none: 'No struts',
+  gas: 'Gas struts',
+  manual: 'Luma manual struts',
+};
+
 export const TRIM_LABELS: Record<TrimMode, string> = {
   none: 'No trims',
   required: 'Trims required',
@@ -234,6 +254,65 @@ export const GLASS_GROUP_LABELS: Record<GlassGroup, string> = {
   laminate: 'Laminate',
   acrylic: 'Acrylic / polycarbonate',
 };
+
+export const GLASS_GROUP_ORDER: GlassGroup[] = ['ap5-6', 'ap8-12', 'laminate', 'acrylic'];
+
+/** What a window offers, with the defaults filled in for anything the type leaves out. */
+export interface WindowOptions {
+  lockTypes: LockType[];
+  trimsSupported: boolean;
+  glassGroups: GlassGroup[];
+  maxGlassMm: number | null;
+  glassNote: string;
+}
+
+export function windowOptions(cfg: WindowTypeConfig): WindowOptions {
+  return {
+    lockTypes: cfg.lockTypes ?? [],
+    trimsSupported: cfg.trimsSupported,
+    glassGroups: cfg.glassGroups ?? GLASS_GROUP_ORDER,
+    maxGlassMm: cfg.maxGlassMm ?? null,
+    glassNote: cfg.glassNote,
+  };
+}
+
+/**
+ * Whether a glazing goes in this window at all. The group says what kind of glass it takes, the
+ * ceiling how thick. Both the picker and the costing ask this, so the list and the warning agree.
+ * `minGlassMm` is deliberately not here: the sheet blocked thin glass on the U6567 and the app
+ * warns and prices instead (decision 4.4).
+ */
+export function glazingFits(options: WindowOptions, glazing: { group: GlassGroup; mm: number }): boolean {
+  return options.glassGroups.includes(glazing.group) && (options.maxGlassMm == null || glazing.mm <= options.maxGlassMm);
+}
+
+/**
+ * Bring a costing back inside what its window offers, after the product or the variant changed.
+ * Without this a window keeps a lock, a trim or a glass the section it moved to cannot take, and
+ * the form shows a value its own dropdown no longer lists.
+ */
+export function applyWindowOptions(input: WindowCostingInput, rates: WindowRates): WindowCostingInput {
+  const opts = windowOptions(WINDOW_TYPES[input.type]);
+  const next = { ...input };
+  if (opts.lockTypes.length > 0 && !opts.lockTypes.includes(next.lockType)) {
+    next.lockType = opts.lockTypes[0];
+    next.locks = next.lockType === 'none' ? 0 : next.locks;
+  }
+  if (!opts.trimsSupported) {
+    next.trims = 'none';
+  }
+  const fits = (id: GlazingId | null) => {
+    const option = id ? rates.glass.options[id] : undefined;
+    return !option || glazingFits(opts, option);
+  };
+  if (!fits(next.glazingId)) {
+    next.glazingId = null;
+  }
+  if (!fits(next.secondGlazingId)) {
+    next.secondGlazingId = null;
+  }
+  return next;
+}
 
 export const GLAZING_ORDER: GlazingId[] = [
   'ap5_clear',
@@ -433,9 +512,12 @@ const T4633: WindowTypeConfig = {
   label: 'T4633 / AFB037 slider',
   variantLabels: ['T4633', 'AFB037'],
   fields: ['pairs', 'variant', 'wipeBars', 'lockType', 'locks', 'sliderStop'],
-  lockTypes: ['none', 'comb', 'plunger', '600'],
+  // Both sections, the 650 series 037 and the 500 series 4633 horse float, take no trim and no
+  // plunger lock, and nothing thicker than 6 mm goes in either.
+  lockTypes: ['none', 'comb', '600'],
   pairsSupported: true,
-  trimsSupported: true,
+  trimsSupported: false,
+  glassGroups: ['ap5-6', 'acrylic'],
   glassAreaMin: 0.2,
   glassNote: '5 & 6 mm',
   labourParts: ['window', 'trim', 'wipeBars', 'develop', 'sundry'],
@@ -575,9 +657,9 @@ const AFB008: WindowTypeConfig = {
     const locks = count(i.locks);
     const mullionM = bars > 0 ? bars * ((i.mullionKind === 'mullion' ? c.H : c.L) / 1000) : 0;
     const sillM = i.sillFlat ? c.L / 1000 : 0;
-    // The legacy sheet anodised this flat at the black trim rate on every finish but etch, mill
-    // and powder coat included (decision 3.5). Kept as the sheet had it, so the price does not move.
-    const flatAnod = i.finish === 'etch' ? c.trimEtch('flat80x3') : c.trimBlack('flat80x3');
+    // Decision 3.5, settled: the flat follows the finish. The sheet charged the black trim rate on
+    // every finish but natural, so mill and powder coat both carried a rate that never applied.
+    const flatAnod = i.finish === 'mill' ? rateRef(0, null) : i.finish === 'powder' ? rateRef(c.rates.anodising.powderPerM, 'anodising.powderPerM') : c.trimEtch('flat80x3');
     return [
       c.line('frame', v0 ? 'M. AFB008' : 'M. AFB003', c.per, 'm', c.ext(v0 ? 'AFB008' : 'AFB003')),
       c.anod('anod', v0 ? 'AFB008' : 'AFB003', c.per + mullionM),
@@ -632,6 +714,37 @@ const AFB008: WindowTypeConfig = {
       flatSmoothM: (c.H / 1000) * locks,
     };
   },
+};
+
+const AFB035: WindowTypeConfig = {
+  id: 'AFB035',
+  label: 'AFB035 hopper (1000 series)',
+  fields: ['hinges', 'strutKind', 'struts', 'handles'],
+  pairsSupported: false,
+  trimsSupported: false,
+  // Glass only, and nothing over 8 mm. No acrylic goes in an 035.
+  glassGroups: ['ap5-6', 'ap8-12'],
+  maxGlassMm: 8,
+  glassAreaMin: 0.1,
+  glassNote: '5, 6 & 8 mm',
+  labourParts: ['window', 'develop', 'sundry'],
+  defaults: { hinges: 2, strutKind: 'gas', struts: 2, handles: 1 },
+  provisionalNote:
+    'AFB035: the frame is costed on the 015 / AFB008 section and the labour minutes are borrowed from the 1000 slider. Time an 035 and price its fittings before quoting from this.',
+  lines: (c) => {
+    const i = c.input;
+    const struts = i.strutKind === 'none' ? 0 : count(i.struts);
+    return [
+      c.line('frame', 'M. AFB035 (on 015 / AFB008)', c.per, 'm', c.ext('AFB008')),
+      c.anod('anod', 'AFB008', c.per),
+      c.line('hinges', 'STAINLESS STEEL HINGES', count(i.hinges), 'ea', c.ea('hingeStainless')),
+      ...(struts > 0 ? [c.line('struts', i.strutKind === 'gas' ? 'GAS STRUTS' : 'LUMA MANUAL STRUTS', struts, 'ea', c.ea(i.strutKind === 'gas' ? 'strutGas' : 'strutManual'))] : []),
+      c.line('handles', 'VITUS HANDLES', count(i.handles), 'ea', c.ea('handleVitus')),
+    ];
+  },
+  trimExtraLines: () => [],
+  // The Vitus handle passes through the glass, so each one is a hole.
+  glazingQty: (c) => ({ holes: count(c.input.handles), shapes: c.glassSelected(false) ? 1 : 0, flatSmoothM: 0 }),
 };
 
 const TSF: WindowTypeConfig = {
@@ -711,9 +824,9 @@ const SF: WindowTypeConfig = {
   },
 };
 
-export const WINDOW_TYPES: Record<WindowTypeId, WindowTypeConfig> = { T5573, T5836, T4633, T8610, T2482, U6567, AFB008, TSF, SF };
+export const WINDOW_TYPES: Record<WindowTypeId, WindowTypeConfig> = { T5573, T5836, T4633, T8610, T2482, U6567, AFB008, AFB035, TSF, SF };
 
-export const WINDOW_TYPE_ORDER: WindowTypeId[] = ['T5573', 'T5836', 'U6567', 'AFB008', 'T4633', 'T8610', 'T2482', 'TSF', 'SF'];
+export const WINDOW_TYPE_ORDER: WindowTypeId[] = ['T5573', 'T5836', 'U6567', 'AFB008', 'AFB035', 'T4633', 'T8610', 'T2482', 'TSF', 'SF'];
 
 const BASE_INPUT: WindowCostingInput = {
   type: 'T5573',
@@ -748,6 +861,9 @@ const BASE_INPUT: WindowCostingInput = {
   mullionCount: 0,
   mullionRiviera: false,
   hinges: 0,
+  strutKind: 'none',
+  struts: 0,
+  handles: 0,
   stays: 0,
   stayType: 'heavy',
   boltSets: 0,
@@ -810,7 +926,6 @@ function createCtx(input: WindowCostingInput, rates: WindowRates, cfg: WindowTyp
     pm: (key) => rateRef(rates.perMetre[key], `perMetre.${key}`),
     ea: (key) => rateRef(rates.each[key], `each.${key}`),
     trimEtch: (code) => rateRef(rates.anodising.trimEtch[code], `anodising.trimEtch.${code}`),
-    trimBlack: (code) => rateRef(rates.anodising.trimBlack[code], `anodising.trimBlack.${code}`),
     trimRate: (code) => addRates(c.ext(code), c.trimEtch(code)),
     anod: (key, code, metres, opts) => {
       const a = rates.anodising;
@@ -901,6 +1016,8 @@ export function costWindow(input: WindowCostingInput, rates: WindowRates): Windo
   const qtyShaped = count(input.qtyShaped);
   const qtyTotal = qtyToSize + qtyShaped;
   const glazingOption = input.glazingId ? rates.glass.options[input.glazingId] : undefined;
+  const opts = windowOptions(cfg);
+  const windowLabel = cfg.variantLabels ? cfg.variantLabels[input.variant] : cfg.label;
 
   if (H <= 0 || L <= 0) {
     errors.push('Enter the window height and length in mm.');
@@ -917,6 +1034,16 @@ export function costWindow(input: WindowCostingInput, rates: WindowRates): Windo
   if (glazingOption && cfg.minGlassMm && glazingOption.mm < cfg.minGlassMm) {
     warnings.push(`${cfg.label}: minimum ${cfg.minGlassMm} mm glazing (${glazingOption.label} selected).`);
   }
+  if (glazingOption && !glazingFits(opts, glazingOption)) {
+    // Priced anyway, as the sheet would have: a costing saved before the window was narrowed still opens.
+    warnings.push(`${windowLabel}: ${glazingOption.label} does not fit this window.`);
+  }
+  if (input.lockType !== 'none' && opts.lockTypes.length > 0 && !opts.lockTypes.includes(input.lockType)) {
+    warnings.push(`${windowLabel}: ${LOCK_LABELS[input.lockType]} is not fitted to this window.`);
+  }
+  if (cfg.provisionalNote) {
+    warnings.push(cfg.provisionalNote);
+  }
   if (input.mws) {
     warnings.push('Marine Window Service pricing: reduced margin and glass loading.');
   }
@@ -927,7 +1054,7 @@ export function costWindow(input: WindowCostingInput, rates: WindowRates): Windo
   const area = round2((H / 1000) * (areaLengthMm / 1000));
   const glassArea = Math.max(area, cfg.glassAreaMin);
   const square = qtyToSize > qtyShaped;
-  const trimM = cfg.trimsSupported && input.trims === 'required' ? per : 0;
+  const trimM = opts.trimsSupported && input.trims === 'required' ? per : 0;
   const perMin = rates.labourPerHour / 60;
   const marginRate = input.mws && marginDef.marginMws != null ? marginDef.marginMws : marginDef.margin;
   const c = createCtx(input, rates, cfg, { H, L, per, area, glassArea, qty, square, trimM, perMin });
@@ -941,7 +1068,7 @@ export function costWindow(input: WindowCostingInput, rates: WindowRates): Windo
   if (input.develop) {
     m.develop = (qtyToSize > 0 ? t.develop.square / qty : 0) + (qtyShaped > 0 ? (t.develop.offSquare + t.window.perSqm * glassArea * t.develop.areaK) / qty : 0);
   }
-  if (cfg.trimsSupported && input.trims !== 'none' && t.trim) {
+  if (opts.trimsSupported && input.trims !== 'none' && t.trim) {
     const tr = square ? t.trim.square : t.trim.offSquare;
     m.trim = tr.setup / (t.trim.fixedQty ?? qty) + tr.each + glassArea * t.trim.perSqm;
   }
@@ -982,7 +1109,7 @@ export function costWindow(input: WindowCostingInput, rates: WindowRates): Windo
     return { label, lines: extraLines, base: scaledBase, uplift: extraUplift, total: base == null ? null : scaledBase + extraUplift };
   };
 
-  if (cfg.trimsSupported && input.trims === 'extra') {
+  if (opts.trimsSupported && input.trims === 'extra') {
     const extraLines = [...cfg.trimExtraLines(c), c.line('trimLabour', 'MTS. LABOUR', m.trim, 'min', perMin)];
     extras.trims = makeExtra('Add for trims', extraLines, sumLines(extraLines) * (1 + marginRate));
   }
@@ -1061,7 +1188,7 @@ export function describeWindow(input: WindowCostingInput, rates: WindowRates, na
     `${nonNegative(input.heightMm)} x ${nonNegative(input.lengthMm)} mm`,
     quantity,
     FINISH_LABELS[input.finish],
-    TRIM_LABELS[input.trims],
+    windowOptions(cfg).trimsSupported ? TRIM_LABELS[input.trims] : '',
     glazing || 'no glazing',
     cfg.pairsSupported && input.pairs ? 'per pair' : 'per each',
   ]

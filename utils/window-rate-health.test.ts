@@ -13,10 +13,10 @@ test('the default rates carry the sheet gaps as warnings and nothing to fix', ()
   assert.equal(errors, 0, `expected no errors, got ${JSON.stringify(issues.filter((issue) => issue.tone === 'error'))}`);
   assert.deepEqual(
     issues.map((issue) => issue.path).sort(),
-    ['each.keeperSaddle', 'each.staysFlat', 'each.staysMed', 'glass.processing.laminate.cview'],
-    'only the legacy sheet gaps are flagged'
+    ['each.handleVitus', 'each.hingeStainless', 'each.keeperSaddle', 'each.staysFlat', 'each.staysMed', 'each.strutGas', 'each.strutManual', 'glass.processing.laminate.cview'],
+    'the legacy sheet gaps, plus the 035 fittings Nick has still to price'
   );
-  assert.equal(issues.length, 4);
+  assert.equal(issues.length, 8);
 });
 
 test('a blank Marine Window Service margin is the normal case, not a gap', () => {
