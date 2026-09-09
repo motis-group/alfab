@@ -13,10 +13,10 @@ test('the default rates carry the sheet gaps as warnings and nothing to fix', ()
   assert.equal(errors, 0, `expected no errors, got ${JSON.stringify(issues.filter((issue) => issue.tone === 'error'))}`);
   assert.deepEqual(
     issues.map((issue) => issue.path).sort(),
-    ['anodising.blackPerSqm', 'each.keeperSaddle', 'each.staysFlat', 'each.staysMed', 'glass.processing.laminate.cview'],
-    'only the legacy sheet gaps are flagged'
+    ['each.handleVitus', 'each.hingeStainless', 'each.keeperSaddle', 'each.staysFlat', 'each.staysMed', 'each.strutGas', 'each.strutManual', 'glass.processing.laminate.cview'],
+    'the legacy sheet gaps, plus the 035 fittings Nick has still to price'
   );
-  assert.equal(issues.length, 5);
+  assert.equal(issues.length, 8);
 });
 
 test('a blank Marine Window Service margin is the normal case, not a gap', () => {
@@ -79,8 +79,8 @@ test('a saved document cannot blank a rate that has a price', () => {
   assert.equal(mergeWindowRates({ margins: { T5573: { margin: null } } }).margins.T5573.margin, DEFAULT_WINDOW_RATES.margins.T5573.margin);
 
   // A rate the sheet never priced stays blank, and an entered price is kept.
-  assert.equal(mergeWindowRates({ anodising: { blackPerSqm: null } }).anodising.blackPerSqm, null);
-  assert.equal(mergeWindowRates({ anodising: { blackPerSqm: 55 } }).anodising.blackPerSqm, 55);
+  assert.equal(mergeWindowRates({ each: { keeperSaddle: null } }).each.keeperSaddle, null);
+  assert.equal(mergeWindowRates({ each: { keeperSaddle: 12 } }).each.keeperSaddle, 12);
   assert.equal(mergeWindowRates({ labourPerHour: 95 }).labourPerHour, 95);
 });
 
