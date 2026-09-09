@@ -55,7 +55,7 @@ import { SavedWindowCosting, deleteWindowCosting, listWindowCostings, saveWindow
 
 const navigationItems = APP_NAVIGATION_ITEMS;
 const GLASS_GROUPS: GlassGroup[] = ['ap5-6', 'ap8-12', 'laminate', 'acrylic'];
-const FINISH_ORDER: Finish[] = ['mill', 'etch', 'blackExtra', 'black', 'powder'];
+const FINISH_ORDER: Finish[] = ['mill', 'etch', 'powder'];
 const TRIM_ORDER: TrimMode[] = ['none', 'required', 'extra'];
 const BATCH_SIZES = [1, 2, 5, 10];
 const LABOUR_LABELS: Record<LabourPart, string> = {
@@ -152,7 +152,7 @@ export default function WindowCostingPage() {
   // order line and the price come from the same number.
   const orderQuantity = Math.max(1, Math.floor(input.qtyToSize) + Math.floor(input.qtyShaped));
   const currentTotal = result.price == null ? null : result.price * orderQuantity;
-  const extrasList = [result.extras.trims, result.extras.blackAnodising, result.extras.secondGlazing].filter(Boolean) as CostExtra[];
+  const extrasList = [result.extras.trims, result.extras.secondGlazing].filter(Boolean) as CostExtra[];
   const ratesLabel = ratesSource === 'saved' ? formatStamp(ratesUpdatedAt) : 'code defaults';
 
   const quoteLines = useMemo(

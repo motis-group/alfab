@@ -8,7 +8,7 @@ import type { AnodCode, EachKey, ExtrusionCode, GlassGroup, GlazingId, LabourTab
 
 export type { GlassGroup, GlazingId, WindowRates, WindowTypeId } from './window-costing-rates';
 
-export type Finish = 'mill' | 'etch' | 'black' | 'blackExtra' | 'powder';
+export type Finish = 'mill' | 'etch' | 'powder';
 export type TrimMode = 'none' | 'required' | 'extra';
 export type Reinforcement = 'none' | 'reo' | 'mullion';
 export type LockType = 'none' | 'comb' | 'plunger' | '600';
@@ -133,7 +133,7 @@ export interface WindowCostResult {
   upliftRate: number;
   uplift: number;
   price: number | null;
-  extras: { trims?: CostExtra; blackAnodising?: CostExtra; secondGlazing?: CostExtra };
+  extras: { trims?: CostExtra; secondGlazing?: CostExtra };
   unpriced: UnpricedRate[];
   warnings: string[];
   errors: string[];
@@ -145,13 +145,6 @@ interface GlazingQuantities {
   shapes: number;
   flatSmoothM: number;
   flatGroundM: number;
-}
-
-interface AnodRef {
-  line: CostLine;
-  code: string;
-  metres: number;
-  minMultiplier: number;
 }
 
 function rateRef(value: number | null | undefined, path: string | null): RateRef {
@@ -173,7 +166,6 @@ interface Ctx {
   trimM: number;
   perMin: number;
   unpriced: UnpricedRate[];
-  anodLines: AnodRef[];
   line(key: string, label: string, qty: number, unit: LineUnit, rate: RateRef | number | null, cost?: number): CostLine;
   ext(code: ExtrusionCode): RateRef;
   pm(key: PerMetreKey): RateRef;
@@ -210,11 +202,18 @@ export interface WindowTypeConfig {
 
 export const FINISH_LABELS: Record<Finish, string> = {
   mill: 'Mill finish',
-  etch: 'Etch anodised (natural)',
-  black: 'Black anodised',
-  blackExtra: 'Etch, black anodising as extra',
+  etch: 'Natural anodised (etch)',
   powder: 'Powder coated',
 };
+
+/**
+ * The finish held on a saved costing, which is stored as free JSON and may predate a finish being
+ * retired. Black anodised and black-as-an-extra were both dropped; a costing that names one reopens
+ * as natural anodised, the finish its price was worked from. Its anodising line reprices.
+ */
+export function readFinish(value: unknown): Finish {
+  return value === 'mill' || value === 'powder' || value === 'etch' ? value : 'etch';
+}
 
 export const TRIM_LABELS: Record<TrimMode, string> = {
   none: 'No trims',
@@ -367,7 +366,7 @@ const T5836: WindowTypeConfig = {
   lines: (c) => {
     const i = c.input;
     const sillM = i.sillFlat ? c.L / 1000 : 0;
-    const anodFlat = i.finish === 'black' ? c.trimBlack('flat40x3') : i.finish === 'powder' ? rateRef(c.rates.anodising.powderPerM, 'anodising.powderPerM') : c.trimEtch('flat40x3');
+    const anodFlat = i.finish === 'powder' ? rateRef(c.rates.anodising.powderPerM, 'anodising.powderPerM') : c.trimEtch('flat40x3');
     return [
       c.line('frame', 'M. T5836', c.per, 'm', c.ext('T5836')),
       c.anod('anod', 'T5836', c.per),
@@ -576,6 +575,8 @@ const AFB008: WindowTypeConfig = {
     const locks = count(i.locks);
     const mullionM = bars > 0 ? bars * ((i.mullionKind === 'mullion' ? c.H : c.L) / 1000) : 0;
     const sillM = i.sillFlat ? c.L / 1000 : 0;
+    // The legacy sheet anodised this flat at the black trim rate on every finish but etch, mill
+    // and powder coat included (decision 3.5). Kept as the sheet had it, so the price does not move.
     const flatAnod = i.finish === 'etch' ? c.trimEtch('flat80x3') : c.trimBlack('flat80x3');
     return [
       c.line('frame', v0 ? 'M. AFB008' : 'M. AFB003', c.per, 'm', c.ext(v0 ? 'AFB008' : 'AFB003')),
@@ -789,7 +790,6 @@ export function switchWindowType(current: WindowCostingInput, type: WindowTypeId
 
 function createCtx(input: WindowCostingInput, rates: WindowRates, cfg: WindowTypeConfig, dims: Pick<Ctx, 'H' | 'L' | 'per' | 'area' | 'glassArea' | 'qty' | 'square' | 'trimM' | 'perMin'>): Ctx {
   const unpriced: UnpricedRate[] = [];
-  const anodLines: AnodRef[] = [];
   const c: Ctx = {
     input,
     rates,
@@ -797,7 +797,6 @@ function createCtx(input: WindowCostingInput, rates: WindowRates, cfg: WindowTyp
     t: rates.labour[input.type],
     ...dims,
     unpriced,
-    anodLines,
     line: (key, label, qty, unit, rate, cost) => {
       const ref: RateRef = typeof rate === 'number' || rate === null ? { value: rate, path: null } : rate;
       const resolvedQty = Number.isFinite(qty) ? qty : 0;
@@ -830,18 +829,12 @@ function createCtx(input: WindowCostingInput, rates: WindowRates, cfg: WindowTyp
         label = `POWDER COATED (${code})`;
         rate = rateRef(a.powderPerM, 'anodising.powderPerM');
         cost = m * (rate.value ?? 0);
-      } else if (finish === 'black') {
-        label = `M. BLACK ANOD (${code})`;
-        rate = rateRef(a.blackPerSqm == null || factor == null ? null : a.blackPerSqm * factor, a.blackPerSqm == null ? 'anodising.blackPerSqm' : `anodising.factor.${code}`);
-        cost = rate.value == null ? 0 : opts?.noMin ? m * rate.value : Math.max(a.blackMin * minMultiplier, m * rate.value);
       } else {
         label = `M. ETCH ANOD (${code})`;
         rate = rateRef(factor == null ? null : a.etchPerSqm * factor, `anodising.factor.${code}`);
         cost = rate.value == null ? 0 : opts?.noMin ? m * rate.value : Math.max(a.etchMin * minMultiplier, m * rate.value);
       }
-      const line = c.line(key, label, m, 'm', rate, cost);
-      anodLines.push({ line, code, metres: m, minMultiplier: opts?.noMin ? 0 : minMultiplier });
-      return line;
+      return c.line(key, label, m, 'm', rate, cost);
     },
     glassSelected: (nonAcrylicOnly) => {
       const option = input.glazingId ? rates.glass.options[input.glazingId] : undefined;
@@ -992,25 +985,6 @@ export function costWindow(input: WindowCostingInput, rates: WindowRates): Windo
   if (cfg.trimsSupported && input.trims === 'extra') {
     const extraLines = [...cfg.trimExtraLines(c), c.line('trimLabour', 'MTS. LABOUR', m.trim, 'min', perMin)];
     extras.trims = makeExtra('Add for trims', extraLines, sumLines(extraLines) * (1 + marginRate));
-  }
-
-  if (input.finish === 'blackExtra') {
-    const a = rates.anodising;
-    const blackLines: CostLine[] = [];
-    let priced = true;
-    let base = 0;
-    for (const ref of c.anodLines) {
-      const factor = typeof a.factor[ref.code] === 'number' ? a.factor[ref.code] : null;
-      const blackValue = a.blackPerSqm == null || factor == null ? null : a.blackPerSqm * factor;
-      const blackRate = rateRef(blackValue, a.blackPerSqm == null ? 'anodising.blackPerSqm' : `anodising.factor.${ref.code}`);
-      const blackCost = blackValue == null ? 0 : ref.minMultiplier > 0 ? Math.max(a.blackMin * ref.minMultiplier, ref.metres * blackValue) : ref.metres * blackValue;
-      if (blackValue == null) {
-        priced = false;
-      }
-      blackLines.push(c.line(`black-${ref.line.key}`, `M. BLACK ANOD (${ref.code})`, ref.metres, 'm', blackRate, blackCost));
-      base += (blackCost - ref.line.cost) * (1 + marginRate);
-    }
-    extras.blackAnodising = makeExtra('Add for black anodising', blackLines, priced ? base : null);
   }
 
   if (glazingOption && input.secondGlazingId && input.secondGlazingId !== input.glazingId && rates.glass.options[input.secondGlazingId]) {

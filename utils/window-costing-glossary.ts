@@ -126,14 +126,9 @@ export const WINDOW_COSTING_GLOSSARY: Record<GlossaryGroup, GlossaryEntry[]> = {
       where: 'Finish and labour card.',
     },
     {
-      term: 'Etch anodised',
-      definition: 'The standard anodised finish, charged per metre of frame with a minimum charge for each window.',
+      term: 'Natural anodised',
+      definition: 'The standard anodised finish, etched, charged per metre of frame with a minimum charge for each window.',
       where: 'Finish and labour card.',
-    },
-    {
-      term: 'Black anodising as an extra',
-      definition: 'The window is quoted etched, and the difference to black is shown separately so the customer can decide. The difference is priced with the margin and the uplift on it.',
-      where: 'Add for card.',
     },
     {
       term: 'Trims required, or as an extra',
