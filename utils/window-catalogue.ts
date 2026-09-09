@@ -42,7 +42,7 @@ export const WINDOW_SERIES: WindowSeries[] = [
     products: [
       { id: '1000-008', code: '015/008', name: 'Slider', type: 'AFB008', variant: 0, note: 'Priced on the AFB008 section. Confirm the 015 Riviera slider costs the same, since its section is lighter.' },
       { id: '1000-6567', code: '6567', name: 'Fixed', type: 'U6567' },
-      { id: '1000-035', code: '035', name: 'Hopper', type: null, note: 'No costing has ever existed for the 035: quotes were estimated off another window. It also comes in more than one version, a basic hopper and one with gas struts and special glass, which will not cost the same. Nick is writing up what goes into each.' },
+      { id: '1000-035', code: '035', name: 'Hopper', type: 'AFB035', note: 'Costed on Nick\'s description, not on the legacy sheet, which never priced an 035. The frame runs on the 015 / AFB008 section and the labour is borrowed from the 1000 slider. The stainless hinge, the struts and the Vitus handle have no price yet. Gas struts, manual struts and no struts are one costing with an option, not three windows.' },
     ],
   },
   {

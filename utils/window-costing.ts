@@ -14,6 +14,7 @@ export type Reinforcement = 'none' | 'reo' | 'mullion';
 export type LockType = 'none' | 'comb' | 'plunger' | '600';
 export type MullionKind = 'transom' | 'mullion';
 export type StayType = 'flat' | 'medium' | 'heavy';
+export type StrutKind = 'none' | 'gas' | 'manual';
 export type WindowField =
   | 'pairs'
   | 'welds'
@@ -30,7 +31,10 @@ export type WindowField =
   | 'stays'
   | 'boltSets'
   | 'hopper'
-  | 'caravanStays';
+  | 'caravanStays'
+  | 'strutKind'
+  | 'struts'
+  | 'handles';
 export type LabourPart = 'window' | 'trim' | 'welding' | 'develop' | 'sundry' | 'mullion' | 'sillFlat' | 'fittings' | 'wipeBars';
 export type LineUnit = 'm' | 'ea' | 'pr' | 'set' | 'min' | 'sqm';
 
@@ -68,6 +72,11 @@ export interface WindowCostingInput {
   mullionCount: number;
   mullionRiviera: boolean;
   hinges: number;
+  /** AFB035: gas struts, Luma manual struts, or none. */
+  strutKind: StrutKind;
+  struts: number;
+  /** AFB035: Vitus handles, which lock the sash shut and pass through the glass. */
+  handles: number;
   stays: number;
   stayType: StayType;
   boltSets: number;
@@ -186,6 +195,10 @@ export interface WindowTypeConfig {
   trimsSupported: boolean;
   /** Glass groups the window takes. Omitted means all of them. */
   glassGroups?: GlassGroup[];
+  /** Thickest glass the window takes. Omitted means no ceiling. */
+  maxGlassMm?: number;
+  /** Warned on every costing, for a recipe that is not yet standing on its own numbers. */
+  provisionalNote?: string;
   glassAreaMin: number;
   glassNote: string;
   minGlassMm?: number;
@@ -216,6 +229,12 @@ export function readFinish(value: unknown): Finish {
   return value === 'mill' || value === 'powder' || value === 'etch' ? value : 'etch';
 }
 
+export const STRUT_LABELS: Record<StrutKind, string> = {
+  none: 'No struts',
+  gas: 'Gas struts',
+  manual: 'Luma manual struts',
+};
+
 export const TRIM_LABELS: Record<TrimMode, string> = {
   none: 'No trims',
   required: 'Trims required',
@@ -243,6 +262,7 @@ export interface WindowOptions {
   lockTypes: LockType[];
   trimsSupported: boolean;
   glassGroups: GlassGroup[];
+  maxGlassMm: number | null;
   glassNote: string;
 }
 
@@ -251,8 +271,19 @@ export function windowOptions(cfg: WindowTypeConfig): WindowOptions {
     lockTypes: cfg.lockTypes ?? [],
     trimsSupported: cfg.trimsSupported,
     glassGroups: cfg.glassGroups ?? GLASS_GROUP_ORDER,
+    maxGlassMm: cfg.maxGlassMm ?? null,
     glassNote: cfg.glassNote,
   };
+}
+
+/**
+ * Whether a glazing goes in this window at all. The group says what kind of glass it takes, the
+ * ceiling how thick. Both the picker and the costing ask this, so the list and the warning agree.
+ * `minGlassMm` is deliberately not here: the sheet blocked thin glass on the U6567 and the app
+ * warns and prices instead (decision 4.4).
+ */
+export function glazingFits(options: WindowOptions, glazing: { group: GlassGroup; mm: number }): boolean {
+  return options.glassGroups.includes(glazing.group) && (options.maxGlassMm == null || glazing.mm <= options.maxGlassMm);
 }
 
 /**
@@ -272,7 +303,7 @@ export function applyWindowOptions(input: WindowCostingInput, rates: WindowRates
   }
   const fits = (id: GlazingId | null) => {
     const option = id ? rates.glass.options[id] : undefined;
-    return !option || opts.glassGroups.includes(option.group);
+    return !option || glazingFits(opts, option);
   };
   if (!fits(next.glazingId)) {
     next.glazingId = null;
@@ -685,6 +716,37 @@ const AFB008: WindowTypeConfig = {
   },
 };
 
+const AFB035: WindowTypeConfig = {
+  id: 'AFB035',
+  label: 'AFB035 hopper (1000 series)',
+  fields: ['hinges', 'strutKind', 'struts', 'handles'],
+  pairsSupported: false,
+  trimsSupported: false,
+  // Glass only, and nothing over 8 mm. No acrylic goes in an 035.
+  glassGroups: ['ap5-6', 'ap8-12'],
+  maxGlassMm: 8,
+  glassAreaMin: 0.1,
+  glassNote: '5, 6 & 8 mm',
+  labourParts: ['window', 'develop', 'sundry'],
+  defaults: { hinges: 2, strutKind: 'gas', struts: 2, handles: 1 },
+  provisionalNote:
+    'AFB035: the frame is costed on the 015 / AFB008 section and the labour minutes are borrowed from the 1000 slider. Time an 035 and price its fittings before quoting from this.',
+  lines: (c) => {
+    const i = c.input;
+    const struts = i.strutKind === 'none' ? 0 : count(i.struts);
+    return [
+      c.line('frame', 'M. AFB035 (on 015 / AFB008)', c.per, 'm', c.ext('AFB008')),
+      c.anod('anod', 'AFB008', c.per),
+      c.line('hinges', 'STAINLESS STEEL HINGES', count(i.hinges), 'ea', c.ea('hingeStainless')),
+      ...(struts > 0 ? [c.line('struts', i.strutKind === 'gas' ? 'GAS STRUTS' : 'LUMA MANUAL STRUTS', struts, 'ea', c.ea(i.strutKind === 'gas' ? 'strutGas' : 'strutManual'))] : []),
+      c.line('handles', 'VITUS HANDLES', count(i.handles), 'ea', c.ea('handleVitus')),
+    ];
+  },
+  trimExtraLines: () => [],
+  // The Vitus handle passes through the glass, so each one is a hole.
+  glazingQty: (c) => ({ holes: count(c.input.handles), shapes: c.glassSelected(false) ? 1 : 0, flatSmoothM: 0 }),
+};
+
 const TSF: WindowTypeConfig = {
   id: 'TSF',
   label: 'T-section sash & frame',
@@ -762,9 +824,9 @@ const SF: WindowTypeConfig = {
   },
 };
 
-export const WINDOW_TYPES: Record<WindowTypeId, WindowTypeConfig> = { T5573, T5836, T4633, T8610, T2482, U6567, AFB008, TSF, SF };
+export const WINDOW_TYPES: Record<WindowTypeId, WindowTypeConfig> = { T5573, T5836, T4633, T8610, T2482, U6567, AFB008, AFB035, TSF, SF };
 
-export const WINDOW_TYPE_ORDER: WindowTypeId[] = ['T5573', 'T5836', 'U6567', 'AFB008', 'T4633', 'T8610', 'T2482', 'TSF', 'SF'];
+export const WINDOW_TYPE_ORDER: WindowTypeId[] = ['T5573', 'T5836', 'U6567', 'AFB008', 'AFB035', 'T4633', 'T8610', 'T2482', 'TSF', 'SF'];
 
 const BASE_INPUT: WindowCostingInput = {
   type: 'T5573',
@@ -799,6 +861,9 @@ const BASE_INPUT: WindowCostingInput = {
   mullionCount: 0,
   mullionRiviera: false,
   hinges: 0,
+  strutKind: 'none',
+  struts: 0,
+  handles: 0,
   stays: 0,
   stayType: 'heavy',
   boltSets: 0,
@@ -969,12 +1034,15 @@ export function costWindow(input: WindowCostingInput, rates: WindowRates): Windo
   if (glazingOption && cfg.minGlassMm && glazingOption.mm < cfg.minGlassMm) {
     warnings.push(`${cfg.label}: minimum ${cfg.minGlassMm} mm glazing (${glazingOption.label} selected).`);
   }
-  if (glazingOption && !opts.glassGroups.includes(glazingOption.group)) {
+  if (glazingOption && !glazingFits(opts, glazingOption)) {
     // Priced anyway, as the sheet would have: a costing saved before the window was narrowed still opens.
     warnings.push(`${windowLabel}: ${glazingOption.label} does not fit this window.`);
   }
   if (input.lockType !== 'none' && opts.lockTypes.length > 0 && !opts.lockTypes.includes(input.lockType)) {
     warnings.push(`${windowLabel}: ${LOCK_LABELS[input.lockType]} is not fitted to this window.`);
+  }
+  if (cfg.provisionalNote) {
+    warnings.push(cfg.provisionalNote);
   }
   if (input.mws) {
     warnings.push('Marine Window Service pricing: reduced margin and glass loading.');

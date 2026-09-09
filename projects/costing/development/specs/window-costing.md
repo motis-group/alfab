@@ -227,7 +227,20 @@ The T4633 recipe is the one that uses all three. Both its sections, the 650 seri
 series 4633 horse float, take no trim and no plunger lock, and only 5 and 6 mm toughened or acrylic
 goes in either.
 
+A window can also cap the glass thickness with `maxGlassMm`. `glazingFits` is the single rule the
+picker and the costing both ask, so the list and the warning always agree. The AFB035 is the case
+that needs it: 5, 6 and 8 mm toughened, but not the 10 and 12 in the same group, and no acrylic.
+`minGlassMm` is deliberately outside that rule, because the U6567 warns and prices rather than
+blocking (decision 4.4).
+
 `applyWindowOptions` puts a costing back inside those limits when the product or the type changes,
-so the form never holds a lock, trim or glass its own dropdown no longer lists. A costing
+so the form never holds a lock, trim or glass its own dropdown no longer lists.
+
+## Recipes not taken from the sheet
+
+The AFB035 hopper is the first recipe built from what the workshop says rather than from the Lotus
+sheet, which never priced one. Its frame runs on the 015 / AFB008 section and its labour minutes are
+borrowed from the 1000 slider, so it carries a `provisionalNote`: a warning on every costing naming
+what it is standing on. Take the note off once an 035 has been timed and its fittings priced. A costing
 saved before a window was narrowed still opens and still prices; the sheet warns that the glass or
 the lock does not fit rather than refusing it.

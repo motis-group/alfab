@@ -8,7 +8,7 @@
  * "not priced" instead of failing.
  */
 
-export type WindowTypeId = 'T5573' | 'T5836' | 'T4633' | 'T8610' | 'T2482' | 'U6567' | 'AFB008' | 'TSF' | 'SF';
+export type WindowTypeId = 'T5573' | 'T5836' | 'T4633' | 'T8610' | 'T2482' | 'U6567' | 'AFB008' | 'AFB035' | 'TSF' | 'SF';
 
 export type GlassGroup = 'ap5-6' | 'ap8-12' | 'laminate' | 'acrylic';
 
@@ -184,6 +184,10 @@ const DEFAULT_EACH = {
     staysFlat: null,
     staysMed: null,
     staysHeavy: 100,
+    hingeStainless: null,
+    strutGas: null,
+    strutManual: null,
+    handleVitus: null,
     staysRestrictor: 35,
     sboltWoodstock: 30,
     sboltParkes: 30,
@@ -325,6 +329,10 @@ export const DEFAULT_WINDOW_RATES: WindowRates = {
       sillFlat: { setup: 20, each: 20 },
       mullionBar: { setup: 25, each: 45 },
     },
+    AFB035: {
+      develop: { square: 20, offSquare: 37, areaK: 0.2 },
+      window: { square: { setup: 20, each: 105 }, offSquare: { setup: 40, each: 120 }, perSqm: 35 },
+    },
     TSF: {
       develop: { square: 5, offSquare: 15, areaK: 0.6 },
       window: { square: { setup: 25, each: 92 }, offSquare: { setup: 28, each: 92 }, perSqm: 40 },
@@ -348,6 +356,7 @@ export const DEFAULT_WINDOW_RATES: WindowRates = {
     T2482: { margin: 0.4, marginMws: null, uplift: 0.075 },
     U6567: { margin: 0.4, marginMws: null, uplift: 0.075 },
     AFB008: { margin: 0.4, marginMws: null, uplift: 0.075 },
+    AFB035: { margin: 0.4, marginMws: null, uplift: 0.075 },
     TSF: { margin: 0.4, marginMws: null, uplift: 0.075 },
     SF: { margin: 0.35, marginMws: 0.225, uplift: 0.075 },
   },

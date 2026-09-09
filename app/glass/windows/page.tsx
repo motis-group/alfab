@@ -35,7 +35,9 @@ import {
   LockType,
   MullionKind,
   Reinforcement,
+  STRUT_LABELS,
   StayType,
+  StrutKind,
   TRIM_LABELS,
   TrimMode,
   WINDOW_TYPES,
@@ -43,6 +45,7 @@ import {
   WindowTypeId,
   applyWindowOptions,
   costWindow,
+  glazingFits,
   costWindowBatches,
   createWindowInput,
   describeWindow,
@@ -57,6 +60,7 @@ import { SavedWindowCosting, deleteWindowCosting, listWindowCostings, saveWindow
 const navigationItems = APP_NAVIGATION_ITEMS;
 const FINISH_ORDER: Finish[] = ['mill', 'etch', 'powder'];
 const TRIM_ORDER: TrimMode[] = ['none', 'required', 'extra'];
+const STRUT_ORDER: StrutKind[] = ['none', 'gas', 'manual'];
 const BATCH_SIZES = [1, 2, 5, 10];
 const LABOUR_LABELS: Record<LabourPart, string> = {
   window: 'Window',
@@ -862,7 +866,38 @@ export default function WindowCostingPage() {
           </>
         ) : null}
 
-        {cfg.fields.includes('hinges') ? <Input label="NYLON PIVOT HINGES" type="number" name="window_hinges" value={String(input.hinges)} onChange={(event) => updateNumber('hinges', event.target.value)} min="0" /> : null}
+        {cfg.fields.includes('hinges') ? (
+          <Input
+            label={cfg.id === 'AFB035' ? 'STAINLESS STEEL HINGES' : 'NYLON PIVOT HINGES'}
+            type="number"
+            name="window_hinges"
+            value={String(input.hinges)}
+            onChange={(event) => updateNumber('hinges', event.target.value)}
+            min="0"
+          />
+        ) : null}
+
+        {cfg.fields.includes('strutKind') ? (
+          <>
+            <Text>STRUTS</Text>
+            <select value={input.strutKind} onChange={(event) => update({ strutKind: event.target.value as StrutKind })}>
+              {STRUT_ORDER.map((kind) => (
+                <option key={kind} value={kind}>
+                  {STRUT_LABELS[kind]}
+                </option>
+              ))}
+            </select>
+            <br />
+          </>
+        ) : null}
+
+        {cfg.fields.includes('struts') && input.strutKind !== 'none' ? (
+          <Input label="NUMBER OF STRUTS" type="number" name="window_struts" value={String(input.struts)} onChange={(event) => updateNumber('struts', event.target.value)} min="0" />
+        ) : null}
+
+        {cfg.fields.includes('handles') ? (
+          <Input label="VITUS HANDLES" type="number" name="window_handles" value={String(input.handles)} onChange={(event) => updateNumber('handles', event.target.value)} min="0" />
+        ) : null}
 
         {cfg.fields.includes('stays') ? (
           <>
@@ -924,7 +959,7 @@ export default function WindowCostingPage() {
           <option value="">Select glazing...</option>
           {options.glassGroups.map((group) => (
             <optgroup key={group} label={GLASS_GROUP_LABELS[group]}>
-              {GLAZING_ORDER.filter((id) => rates.glass.options[id].group === group).map((id) => (
+              {GLAZING_ORDER.filter((id) => rates.glass.options[id].group === group && glazingFits(options, rates.glass.options[id])).map((id) => (
                 <option key={id} value={id}>
                   {rates.glass.options[id].label}
                 </option>
@@ -937,7 +972,7 @@ export default function WindowCostingPage() {
         <Text>SECOND CHOICE GLAZING (PRICED AS AN EXTRA)</Text>
         <select value={input.secondGlazingId || ''} onChange={(event) => update({ secondGlazingId: (event.target.value || null) as GlazingId | null })}>
           <option value="">None</option>
-          {GLAZING_ORDER.filter((id) => options.glassGroups.includes(rates.glass.options[id].group)).map((id) => (
+          {GLAZING_ORDER.filter((id) => glazingFits(options, rates.glass.options[id])).map((id) => (
             <option key={id} value={id}>
               {rates.glass.options[id].label}
             </option>

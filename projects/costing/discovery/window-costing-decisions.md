@@ -94,12 +94,12 @@ Say "keep" or tell us the rule.
 
 ## 5a. The window menu
 
-The picker now lists a series, then the window in it, from your handwritten list. Two entries have no
-costing behind them, and three need a check.
+The picker now lists a series, then the window in it, from your handwritten list. One entry still has
+no costing behind it, and three need a check.
 
 | # | Question |
 | --- | --- |
-| 5a.1 | 035 hopper, 1000 series. Answered: no costing has ever existed, and quotes were estimated off another window. It also comes in more than one version, a basic hopper and one with gas struts and special glass. Nick is writing up the make-up of each and will send it. Until then the 035 stays on the menu and cannot be picked. |
+| 5a.1 | 035 hopper, 1000 series. Answered and built: the 035 now costs. Frame on the 015 / AFB008 section, stainless steel hinges, no struts or gas struts or Luma manual struts, Vitus handles that pass through the glass so each one is a hole, and 5, 6 or 8 mm toughened only, no acrylic. Struts turned out to be an option on one costing rather than separate windows. Still needed: prices for the stainless hinge, the gas strut, the manual strut and the Vitus handle, and real labour minutes. Until then it warns on every costing that the frame and the labour are borrowed. |
 | 5a.2 | 023 fixed horse float front, 500 series. Answered: no costing has ever existed, and quotes were estimated off another window. Nick is writing up the extrusion cost, the materials and the labour. Until then the 023 stays on the menu and cannot be picked. |
 | 5a.3 | You wrote that 015 and 008 are the same. The dies differ: AFB015 Riviera slider is 1.162 kg per metre, AFB008 1000 slider is 1.258. The sheet never prices AFB015, so a Riviera is quoted off the 008 recipe and its frame comes out about 8 percent heavy. Is a Riviera the 008 section with a Riviera mullion, or the 015 die? |
 | 5a.4 | The 750 series appears nowhere in the sheet. The 003 slider is priced with 1000 series track, clip channel and wipe. Does a 750 window use different parts, or is 750 a newer name for the medium slider? |
@@ -118,7 +118,9 @@ one still opens. He may want the 2482 caravan back for standard sizes, which is 
 
 | # | Item |
 | --- | --- |
-| 5b.1 | Write-ups for the 035 hopper and the 023 horse float front. Voice memos are fine, they transcribe. The 035 needs the gas strut and non gas strut versions costed apart. No rush. |
+| 5b.1 | Write-up for the 023 horse float front. Voice memos are fine, they transcribe. No rush. The 035 is done. |
+| 5b.5 | Prices for the four 035 fittings, off the old invoices: stainless steel hinge, gas strut, Luma manual strut, Vitus handle. They are in Window Rates under Per item, blank, so entering them is all that is left. |
+| 5b.6 | Whether the 035 needs a glazing rubber, sealant or edge work. Nick listed the frame, the hinges, the struts and the handle; nothing was invented beyond that, so anything sealing the glass is missing. |
 | 5b.2 | The invoice from a recent 015 job, to work an anodising rate back from (2.4). |
 | 5b.3 | The awnings costing sheet: an Excel file Nick's father wrote in 2021, used for houseboat awnings. Different component tree to the windows, so it is a second calculator beside the window one rather than another window type. |
 | 5b.4 | Rubber and fittings prices (2.6 to 2.8, still on July 2007 and Sept 2021 numbers). Nick can read these off the purchase orders he writes. |

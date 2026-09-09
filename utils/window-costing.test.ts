@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { DEFAULT_WINDOW_RATES, mergeWindowRates } from './window-costing-rates';
-import { GLASS_GROUP_ORDER, GLAZING_ORDER, WINDOW_TYPE_ORDER, WINDOW_TYPES, WindowTypeId, applyWindowOptions, costWindow, costWindowBatches, createWindowInput, describeWindow, switchWindowType, windowOptions } from './window-costing';
+import { GLASS_GROUP_ORDER, GLAZING_ORDER, WINDOW_TYPE_ORDER, WINDOW_TYPES, WindowTypeId, applyWindowOptions, costWindow, costWindowBatches, createWindowInput, describeWindow, glazingFits, switchWindowType, windowOptions } from './window-costing';
 
 const rates = DEFAULT_WINDOW_RATES;
 
@@ -271,4 +271,49 @@ test('the AFB008 sill flat follows the finish (decision 3.5)', () => {
   assert.ok((sill('mill')?.rate ?? 0) < (sill('etch')?.rate ?? 0), 'mill is the cheapest of the three');
   near((sill('powder')?.rate ?? 0) - (sill('mill')?.rate ?? 0), rates.anodising.powderPerM, 'powder coat adds the powder rate');
   near((sill('etch')?.rate ?? 0) - (sill('mill')?.rate ?? 0), rates.anodising.trimEtch.flat80x3, 'natural adds the etch trim rate');
+});
+
+test('the 035 hopper prices on Nick\'s description, and says what it is standing on', () => {
+  const result = costWindow(createWindowInput('AFB035', { heightMm: 900, lengthMm: 600, glazingId: 'ap6_clear' }), rates);
+  assert.ok(result.price != null && result.price > 0, 'it prices');
+  assert.deepEqual(result.errors, [], 'and without errors');
+  assert.ok(result.warnings.some((w) => w.includes('borrowed')), 'the borrowed labour is warned about on every costing');
+
+  // The fittings Nick has still to price show as not priced rather than quietly costing nothing.
+  for (const path of ['each.hingeStainless', 'each.strutGas', 'each.handleVitus']) {
+    assert.ok(result.unpriced.some((entry) => entry.path === path), `${path} reported as not priced`);
+  }
+});
+
+test('the 035 takes 5, 6 and 8 mm glass, and nothing else', () => {
+  const opts = windowOptions(WINDOW_TYPES.AFB035);
+  const fits = (id: (typeof GLAZING_ORDER)[number]) => glazingFits(opts, rates.glass.options[id]);
+
+  assert.ok(fits('ap5_clear') && fits('ap6_clear') && fits('ap8_clear'), '5, 6 and 8 mm toughened go in');
+  assert.ok(!fits('ap10_clear') && !fits('ap12_clear'), 'nothing thicker than 8 mm');
+  assert.ok(!fits('acr5_clear') && !fits('poly6_clear'), 'no acrylic or polycarb');
+  assert.ok(!fits('lam638_clear'), 'no laminate');
+
+  // Picking one it cannot take is warned about, and switching onto the 035 drops it.
+  assert.ok(costWindow(createWindowInput('AFB035', { glazingId: 'ap12_clear' }), rates).warnings.some((w) => w.includes('does not fit')));
+  assert.equal(applyWindowOptions(createWindowInput('AFB035', { glazingId: 'acr5_clear' }), rates).glazingId, null);
+});
+
+test('the 035 struts are one costing with an option, and each handle is a hole in the glass', () => {
+  const base = { heightMm: 900, lengthMm: 600, glazingId: 'ap6_clear' as const, hinges: 2, handles: 1 };
+  const priced = mergeWindowRates({ each: { hingeStainless: 40, strutGas: 55, strutManual: 30, handleVitus: 25 } });
+
+  const gas = costWindow(createWindowInput('AFB035', { ...base, strutKind: 'gas', struts: 2 }), priced);
+  const manual = costWindow(createWindowInput('AFB035', { ...base, strutKind: 'manual', struts: 2 }), priced);
+  const none = costWindow(createWindowInput('AFB035', { ...base, strutKind: 'none', struts: 2 }), priced);
+
+  near(gas.lines.find((l) => l.key === 'struts')?.cost, 110, 'two gas struts');
+  near(manual.lines.find((l) => l.key === 'struts')?.cost, 60, 'two manual struts');
+  assert.ok(!none.lines.some((l) => l.key === 'struts'), 'no strut line when there are none');
+  assert.ok((gas.price ?? 0) > (manual.price ?? 0) && (manual.price ?? 0) > (none.price ?? 0), 'gas dearest, none cheapest');
+
+  // The Vitus handle passes through the glass.
+  const twoHandles = costWindow(createWindowInput('AFB035', { ...base, handles: 2 }), priced);
+  const oneHandle = costWindow(createWindowInput('AFB035', { ...base, handles: 1 }), priced);
+  assert.ok((twoHandles.price ?? 0) > (oneHandle.price ?? 0), 'a second handle costs a handle and a hole');
 });
