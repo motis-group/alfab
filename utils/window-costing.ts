@@ -185,9 +185,17 @@ export interface WindowTypeConfig {
   fields: WindowField[];
   pairsSupported: boolean;
   trimsSupported: boolean;
+  /** Glass groups the window takes. Omitted means all of them. */
+  glassGroups?: GlassGroup[];
   glassAreaMin: number;
   glassNote: string;
   minGlassMm?: number;
+  /**
+   * Options narrowed for one section of a two-section type. The two sections share a recipe but are
+   * not the same window on the floor, so one can take a trim or a thicker glass that the other
+   * cannot. Anything left out here falls back to the value the type carries.
+   */
+  variantOptions?: Partial<Record<0 | 1, VariantOptions>>;
   packingFlat?: number;
   labourParts: LabourPart[];
   defaults: Partial<WindowCostingInput>;
@@ -234,6 +242,61 @@ export const GLASS_GROUP_LABELS: Record<GlassGroup, string> = {
   laminate: 'Laminate',
   acrylic: 'Acrylic / polycarbonate',
 };
+
+export const GLASS_GROUP_ORDER: GlassGroup[] = ['ap5-6', 'ap8-12', 'laminate', 'acrylic'];
+
+interface VariantOptions {
+  lockTypes?: LockType[];
+  trimsSupported?: boolean;
+  glassGroups?: GlassGroup[];
+  glassNote?: string;
+}
+
+/** What one window offers, once the type's options are narrowed for the section being priced. */
+export interface WindowOptions {
+  lockTypes: LockType[];
+  trimsSupported: boolean;
+  glassGroups: GlassGroup[];
+  glassNote: string;
+}
+
+export function windowOptions(cfg: WindowTypeConfig, variant: number): WindowOptions {
+  const narrowed = cfg.variantOptions?.[variant === 1 ? 1 : 0];
+  return {
+    lockTypes: narrowed?.lockTypes ?? cfg.lockTypes ?? [],
+    trimsSupported: narrowed?.trimsSupported ?? cfg.trimsSupported,
+    glassGroups: narrowed?.glassGroups ?? cfg.glassGroups ?? GLASS_GROUP_ORDER,
+    glassNote: narrowed?.glassNote ?? cfg.glassNote,
+  };
+}
+
+/**
+ * Bring a costing back inside what its window offers, after the product or the variant changed.
+ * Without this a window keeps a lock, a trim or a glass the section it moved to cannot take, and
+ * the form shows a value its own dropdown no longer lists.
+ */
+export function applyWindowOptions(input: WindowCostingInput, rates: WindowRates): WindowCostingInput {
+  const opts = windowOptions(WINDOW_TYPES[input.type], input.variant);
+  const next = { ...input };
+  if (opts.lockTypes.length > 0 && !opts.lockTypes.includes(next.lockType)) {
+    next.lockType = opts.lockTypes[0];
+    next.locks = next.lockType === 'none' ? 0 : next.locks;
+  }
+  if (!opts.trimsSupported) {
+    next.trims = 'none';
+  }
+  const fits = (id: GlazingId | null) => {
+    const option = id ? rates.glass.options[id] : undefined;
+    return !option || opts.glassGroups.includes(option.group);
+  };
+  if (!fits(next.glazingId)) {
+    next.glazingId = null;
+  }
+  if (!fits(next.secondGlazingId)) {
+    next.secondGlazingId = null;
+  }
+  return next;
+}
 
 export const GLAZING_ORDER: GlazingId[] = [
   'ap5_clear',
@@ -438,6 +501,12 @@ const T4633: WindowTypeConfig = {
   trimsSupported: true,
   glassAreaMin: 0.2,
   glassNote: '5 & 6 mm',
+  // Variant 1 is the 650 series 037, the shop's most common slider. No trim can be fitted to it, it
+  // takes no plunger lock, and nothing thicker than 6 mm goes in. Variant 0, the 500 series 4633
+  // horse float slider, shares the recipe but not those limits.
+  variantOptions: {
+    1: { lockTypes: ['none', 'comb', '600'], trimsSupported: false, glassGroups: ['ap5-6', 'acrylic'] },
+  },
   labourParts: ['window', 'trim', 'wipeBars', 'develop', 'sundry'],
   defaults: { lockType: 'none', locks: 0 },
   windowMultiplier: (c) => (c.input.sliderStop ? 1.06 : 1),
@@ -901,6 +970,8 @@ export function costWindow(input: WindowCostingInput, rates: WindowRates): Windo
   const qtyShaped = count(input.qtyShaped);
   const qtyTotal = qtyToSize + qtyShaped;
   const glazingOption = input.glazingId ? rates.glass.options[input.glazingId] : undefined;
+  const opts = windowOptions(cfg, input.variant);
+  const windowLabel = cfg.variantLabels ? cfg.variantLabels[input.variant] : cfg.label;
 
   if (H <= 0 || L <= 0) {
     errors.push('Enter the window height and length in mm.');
@@ -917,6 +988,13 @@ export function costWindow(input: WindowCostingInput, rates: WindowRates): Windo
   if (glazingOption && cfg.minGlassMm && glazingOption.mm < cfg.minGlassMm) {
     warnings.push(`${cfg.label}: minimum ${cfg.minGlassMm} mm glazing (${glazingOption.label} selected).`);
   }
+  if (glazingOption && !opts.glassGroups.includes(glazingOption.group)) {
+    // Priced anyway, as the sheet would have: a costing saved before the window was narrowed still opens.
+    warnings.push(`${windowLabel}: ${glazingOption.label} does not fit this window.`);
+  }
+  if (input.lockType !== 'none' && opts.lockTypes.length > 0 && !opts.lockTypes.includes(input.lockType)) {
+    warnings.push(`${windowLabel}: ${LOCK_LABELS[input.lockType]} is not fitted to this window.`);
+  }
   if (input.mws) {
     warnings.push('Marine Window Service pricing: reduced margin and glass loading.');
   }
@@ -927,7 +1005,7 @@ export function costWindow(input: WindowCostingInput, rates: WindowRates): Windo
   const area = round2((H / 1000) * (areaLengthMm / 1000));
   const glassArea = Math.max(area, cfg.glassAreaMin);
   const square = qtyToSize > qtyShaped;
-  const trimM = cfg.trimsSupported && input.trims === 'required' ? per : 0;
+  const trimM = opts.trimsSupported && input.trims === 'required' ? per : 0;
   const perMin = rates.labourPerHour / 60;
   const marginRate = input.mws && marginDef.marginMws != null ? marginDef.marginMws : marginDef.margin;
   const c = createCtx(input, rates, cfg, { H, L, per, area, glassArea, qty, square, trimM, perMin });
@@ -941,7 +1019,7 @@ export function costWindow(input: WindowCostingInput, rates: WindowRates): Windo
   if (input.develop) {
     m.develop = (qtyToSize > 0 ? t.develop.square / qty : 0) + (qtyShaped > 0 ? (t.develop.offSquare + t.window.perSqm * glassArea * t.develop.areaK) / qty : 0);
   }
-  if (cfg.trimsSupported && input.trims !== 'none' && t.trim) {
+  if (opts.trimsSupported && input.trims !== 'none' && t.trim) {
     const tr = square ? t.trim.square : t.trim.offSquare;
     m.trim = tr.setup / (t.trim.fixedQty ?? qty) + tr.each + glassArea * t.trim.perSqm;
   }
@@ -982,7 +1060,7 @@ export function costWindow(input: WindowCostingInput, rates: WindowRates): Windo
     return { label, lines: extraLines, base: scaledBase, uplift: extraUplift, total: base == null ? null : scaledBase + extraUplift };
   };
 
-  if (cfg.trimsSupported && input.trims === 'extra') {
+  if (opts.trimsSupported && input.trims === 'extra') {
     const extraLines = [...cfg.trimExtraLines(c), c.line('trimLabour', 'MTS. LABOUR', m.trim, 'min', perMin)];
     extras.trims = makeExtra('Add for trims', extraLines, sumLines(extraLines) * (1 + marginRate));
   }
@@ -1061,7 +1139,7 @@ export function describeWindow(input: WindowCostingInput, rates: WindowRates, na
     `${nonNegative(input.heightMm)} x ${nonNegative(input.lengthMm)} mm`,
     quantity,
     FINISH_LABELS[input.finish],
-    TRIM_LABELS[input.trims],
+    windowOptions(cfg, input.variant).trimsSupported ? TRIM_LABELS[input.trims] : '',
     glazing || 'no glazing',
     cfg.pairsSupported && input.pairs ? 'per pair' : 'per each',
   ]

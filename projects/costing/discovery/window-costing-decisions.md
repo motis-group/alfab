@@ -103,6 +103,7 @@ costing behind them, and three need a check.
 | 5a.3 | You wrote that 015 and 008 are the same. The dies differ: AFB015 Riviera slider is 1.162 kg per metre, AFB008 1000 slider is 1.258. The sheet never prices AFB015, so a Riviera is quoted off the 008 recipe and its frame comes out about 8 percent heavy. Is a Riviera the 008 section with a Riviera mullion, or the 015 die? |
 | 5a.4 | The 750 series appears nowhere in the sheet. The 003 slider is priced with 1000 series track, clip channel and wipe. Does a 750 window use different parts, or is 750 a newer name for the medium slider? |
 | 5a.5 | 5573 is the fixed window in both the 750 and the 500. Both price identically today. Do they differ in anything the sheet never recorded? |
+| 5a.6 | The 650 series 037 and the 500 series 4633 horse float share the T4633 recipe. Answered for the 037: no trim fits it, it takes no plunger lock, and only 5 and 6 mm toughened or acrylic goes in. Those three now apply to the 037 alone. Does the horse float have the same limits, or does it really take a trim, a plunger and thicker glass? |
 
 A window with more than one version needs more than one menu entry. The 035 is the first: a basic
 hopper and one with gas struts and special glass are different costings, not one costing with an

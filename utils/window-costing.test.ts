@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { DEFAULT_WINDOW_RATES, mergeWindowRates } from './window-costing-rates';
-import { GLAZING_ORDER, WINDOW_TYPE_ORDER, WindowTypeId, costWindow, costWindowBatches, createWindowInput, describeWindow, switchWindowType } from './window-costing';
+import { GLASS_GROUP_ORDER, GLAZING_ORDER, WINDOW_TYPE_ORDER, WINDOW_TYPES, WindowTypeId, applyWindowOptions, costWindow, costWindowBatches, createWindowInput, describeWindow, switchWindowType, windowOptions } from './window-costing';
 
 const rates = DEFAULT_WINDOW_RATES;
 
@@ -215,4 +215,59 @@ test('a batch shares its setup minutes, so ten cost less than ten singles', () =
   const tenSingles = (single.price as number) * 10;
   assert.ok(runOfTen < tenSingles, 'a run of ten is dearer priced one at a time');
   near(batch.minutes.window, 20 / 10 + 40 + 1.0 * 30, 'setup divided across the batch');
+});
+
+test('the 650 series 037 takes no trim, no plunger lock and nothing thicker than 6 mm', () => {
+  const cfg = WINDOW_TYPES.T4633;
+  const the037 = windowOptions(cfg, 1);
+  const horseFloat = windowOptions(cfg, 0);
+
+  assert.deepEqual(the037.lockTypes, ['none', 'comb', '600'], 'no plunger on the 037');
+  assert.equal(the037.trimsSupported, false, 'no trim fits the 037');
+  assert.deepEqual(the037.glassGroups, ['ap5-6', 'acrylic'], '5 and 6 mm toughened or acrylic only');
+
+  // The 500 series 4633 horse float shares the recipe and keeps everything it had.
+  assert.deepEqual(horseFloat.lockTypes, ['none', 'comb', 'plunger', '600'], 'horse float keeps the plunger');
+  assert.equal(horseFloat.trimsSupported, true, 'horse float keeps its trim');
+  assert.deepEqual(horseFloat.glassGroups, GLASS_GROUP_ORDER, 'horse float keeps every glass');
+});
+
+test('a trim asked for on the 037 is neither charged nor worked', () => {
+  const trimmed = costWindow(createWindowInput('T4633', { variant: 1, trims: 'required' }), rates);
+  const none = costWindow(createWindowInput('T4633', { variant: 1, trims: 'none' }), rates);
+  assert.equal(trimmed.price, none.price, 'the trim setting cannot change the 037 price');
+  assert.ok(!trimmed.lines.some((line) => line.key === 'trim'), 'no trim line');
+  assert.equal(costWindow(createWindowInput('T4633', { variant: 1, trims: 'extra' }), rates).extras.trims, undefined, 'no add-for-trims card');
+  assert.ok(!describeWindow(createWindowInput('T4633', { variant: 1, trims: 'required' }), rates).includes('Trims'), 'the description drops the trim');
+
+  // The horse float on the same recipe still prices its trim.
+  const v0 = costWindow(createWindowInput('T4633', { variant: 0, trims: 'required' }), rates);
+  assert.ok(v0.lines.some((line) => line.key === 'trim'), 'horse float still gets a trim line');
+  assert.ok((v0.price ?? 0) > (costWindow(createWindowInput('T4633', { variant: 0, trims: 'none' }), rates).price ?? 0), 'and pays for it');
+});
+
+test('moving a costing onto the 037 drops what the window cannot take', () => {
+  const before = createWindowInput('T4633', { variant: 0, lockType: 'plunger', locks: 2, trims: 'required', glazingId: 'ap10_clear', secondGlazingId: 'lam638_clear' });
+  const after = applyWindowOptions({ ...before, variant: 1 }, rates);
+
+  assert.equal(after.lockType, 'none', 'the plunger goes');
+  assert.equal(after.locks, 0, 'and its count with it');
+  assert.equal(after.trims, 'none');
+  assert.equal(after.glazingId, null, '10 mm does not fit');
+  assert.equal(after.secondGlazingId, null, 'nor does laminate as the second choice');
+
+  // A glass the window does take is left alone, as is the horse float it came from.
+  assert.equal(applyWindowOptions({ ...before, variant: 1, glazingId: 'ap6_clear' }, rates).glazingId, 'ap6_clear');
+  assert.deepEqual(applyWindowOptions(before, rates), before, 'the horse float is untouched');
+});
+
+test('a saved 037 costing with glass that no longer fits still prices, with a warning', () => {
+  const result = costWindow(createWindowInput('T4633', { variant: 1, glazingId: 'ap10_clear' }), rates);
+  assert.ok(result.price != null && result.price > 0, 'it still prices');
+  assert.ok(result.warnings.some((warning) => warning.includes('does not fit')), 'and says the glass does not fit');
+  assert.equal(costWindow(createWindowInput('T4633', { variant: 1, glazingId: 'ap6_clear' }), rates).warnings.length, 0, 'no warning on glass that fits');
+
+  const plunger = costWindow(createWindowInput('T4633', { variant: 1, lockType: 'plunger', locks: 1 }), rates);
+  assert.ok(plunger.warnings.some((warning) => warning.includes('not fitted')), 'and the same for a lock it does not take');
+  assert.equal(costWindow(createWindowInput('T4633', { variant: 0, lockType: 'plunger', locks: 1 }), rates).warnings.length, 0, 'the horse float takes it without complaint');
 });

@@ -52,7 +52,7 @@ and a purchase order line read as a series and a window rather than an extrusion
 
 Shared by every window type: height and length (mm), quantity made to size (square) and
 quantity shaped (off square), finish (mill, natural anodised, powder coat), trims (none,
-required, as an extra), development labour on/off, sundry labour minutes,
+required, as an extra, on the types that take a trim), development labour on/off, sundry labour minutes,
 Marine Window Service flag, glazing material, optional second-choice glazing, and for most
 types the glazing extras (holes, c/view holes, flat-smooth metres, flat-ground metres for
 laminate).
@@ -216,3 +216,19 @@ These reproduce the sheet and will surprise anyone expecting the obvious formula
 - The T-section sash & frame anodises both frames at the U6567 factor whichever hopper
   series is chosen.
 - Reinforcement and mullion blocks price mill finish at $0 (the sheet charged etch).
+
+## Options a window offers
+
+A window type declares the locks, trims and glass groups it takes. The two-section types can narrow
+any of those for one section, through `variantOptions`, because the two sections share a recipe but
+are not the same window on the floor. `windowOptions(cfg, variant)` resolves the pair, and the form,
+the costing and the description all read the resolved value rather than the type's own flag.
+
+The 650 series 037 (T4633 variant 1) is the case that needs it: no trim can be fitted to it, it
+takes no plunger lock, and nothing thicker than 6 mm goes in, while the 500 series 4633 horse float
+slider on the same recipe keeps all three.
+
+`applyWindowOptions` puts a costing back inside those limits when the product or the variant
+changes, so the form never holds a lock, trim or glass its own dropdown no longer lists. A costing
+saved before a window was narrowed still opens and still prices; the sheet warns that the glass or
+the lock does not fit rather than refusing it.

@@ -56,7 +56,7 @@ export const WINDOW_SERIES: WindowSeries[] = [
   {
     id: '650',
     name: '650 Series',
-    products: [{ id: '650-037', code: '037', name: 'Slider', type: 'T4633', variant: 1, note: 'The sheet priced the 037 frame at the T4633 rate, not the lighter AFB037 die. Confirm which is bought.' }],
+    products: [{ id: '650-037', code: '037', name: 'Slider', type: 'T4633', variant: 1, note: 'The shop\'s most common slider. No trim fits it, it takes no plunger lock, and nothing thicker than 6 mm goes in. The sheet priced the 037 frame at the T4633 rate, not the lighter AFB037 die. Confirm which is bought.' }],
   },
   {
     id: '500',
