@@ -90,11 +90,6 @@ test('every window type prices at its defaults', () => {
 });
 
 test('source gaps surface as not priced, and each names its rate field', () => {
-  const black = costWindow(createWindowInput('T5573', { finish: 'black' }), rates);
-  assert.ok(black.unpriced.some((entry) => entry.label.includes('BLACK')), 'black anodising');
-  assert.equal(black.unpriced[0].path, 'anodising.blackPerSqm', 'black anodising rate field');
-  assert.equal(costWindow(createWindowInput('T5573', { finish: 'blackExtra' }), rates).extras.blackAnodising?.total, null, 'black as extra');
-
   const sf = costWindow(createWindowInput('SF'), rates);
   assert.ok(sf.unpriced.some((entry) => entry.label.includes('KEEPERS') && entry.path === 'each.keeperSaddle'), 'S&F keepers');
 
@@ -182,12 +177,12 @@ test('switching type keeps shared fields and resets type-specific ones', () => {
 test('rates merge overlays numeric leaves only', () => {
   assert.deepEqual(mergeWindowRates({}), rates, 'empty merge equals defaults');
   assert.deepEqual(mergeWindowRates(null), rates, 'null merge equals defaults');
-  const merged = mergeWindowRates({ labourPerHour: 90, anodising: { blackPerSqm: 55 }, bogus: 1, extrusions: { T5573: { kgPerM: 'x' } } });
+  const merged = mergeWindowRates({ labourPerHour: 90, anodising: { etchMin: 12 }, bogus: 1, extrusions: { T5573: { kgPerM: 'x' } } });
   assert.equal(merged.labourPerHour, 90);
-  assert.equal(merged.anodising.blackPerSqm, 55);
+  assert.equal(merged.anodising.etchMin, 12);
   assert.equal((merged as { bogus?: unknown }).bogus, undefined);
   assert.deepEqual(merged.extrusions.T5573, rates.extrusions.T5573, 'invalid leaf keeps default');
-  assert.deepEqual({ ...merged, labourPerHour: 85, anodising: { ...merged.anodising, blackPerSqm: null } }, rates, 'merge changes only given keys');
+  assert.deepEqual({ ...merged, labourPerHour: 85, anodising: { ...merged.anodising, etchMin: 10 } }, rates, 'merge changes only given keys');
 });
 
 test('rates merge keeps the as-at dates and takes saved ones', () => {
@@ -197,13 +192,14 @@ test('rates merge keeps the as-at dates and takes saved ones', () => {
 });
 
 test('a rate entered for a source gap prices the line', () => {
-  const withBlack = mergeWindowRates({ anodising: { blackPerSqm: 55 } });
-  const result = costWindow(createWindowInput('T5573', { finish: 'black' }), withBlack);
-  assert.deepEqual(result.unpriced, [], 'nothing unpriced once the rate exists');
-  near(result.lines.find((line) => line.key === 'anod')?.cost, 4 * 55 * 0.159, 'black anodising line');
+  const gap = costWindow(createWindowInput('SF'), rates);
+  assert.ok(gap.unpriced.some((entry) => entry.path === 'each.keeperSaddle'), 'the keeper is a gap by default');
 
-  const asExtra = costWindow(createWindowInput('T5573', { finish: 'blackExtra' }), withBlack);
-  assert.ok((asExtra.extras.blackAnodising?.total ?? 0) > 0, 'black as an extra is priced');
+  const withKeeper = mergeWindowRates({ each: { keeperSaddle: 12 } });
+  const result = costWindow(createWindowInput('SF'), withKeeper);
+  assert.ok(!result.unpriced.some((entry) => entry.path === 'each.keeperSaddle'), 'not a gap once the rate exists');
+  const line = result.lines.find((entry) => entry.ratePath === 'each.keeperSaddle');
+  near(line?.cost, (line?.qty ?? 0) * 12, 'keeper line priced at the entered rate');
 });
 
 test('a batch shares its setup minutes, so ten cost less than ten singles', () => {

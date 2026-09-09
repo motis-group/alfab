@@ -12,7 +12,7 @@ These lines show as "not priced" and cost $0 until a number exists.
 
 | # | Item | Used by | Section in Window Rates |
 | --- | --- | --- | --- |
-| 1.1 | Black anodising, $ per sqm basis (Collins) | Black finish, black as an extra, T5836 and AFB008 sill flats | Anodising > black Per Sqm |
+| 1.1 | Black anodising, $ per sqm basis (Collins). Answered: not needed. Black costs extra and is no longer quoted, so the finish is mill, natural anodised or powder coat. | Nothing. The black finish and black as an extra are both gone. | Removed from Window Rates, with the black minimum. |
 | 1.2 | Stays 015-03 flat, per pair | T-section sash & frame | Per item > stays Flat |
 | 1.3 | Stays 015-07 medium, per pair | T-section sash & frame | Per item > stays Med |
 | 1.4 | Keeper saddle, each | Sash & frame Parkes bolt sets | Per item > keeper Saddle |
@@ -53,12 +53,12 @@ The app does what the sheet did. Say "fix" or "keep" for each.
 | 3.2 | Prices AFB037 with the T4633 extrusion and anodising rates. AFB037 has its own die at 0.564 kg per metre from G. James, $6.92 per metre, against T4633 at $8.24 per metre from Capral. The 650 slider is dearer by about $1.30 for every metre of perimeter. | Fix: use the AFB037 rates. |
 | 3.3 | U6567 welding labour equals the number of welds, in minutes. The U6567 welding table is not used. | Fix: use the table like the other types. |
 | 3.4 | T8610 trim labour has no size term. Sash & frame development labour has no size term. | Fix: add the size terms from the tables. |
-| 3.5 | AFB008 sill flat (80 x 3) is anodised at the black rate for every finish except etch, including mill and powder coat. | Fix: follow the finish. |
+| 3.5 | AFB008 sill flat (80 x 3) is anodised at the black trim rate for every finish except natural, so mill and powder coat carry it. Still true now that black is not an offered finish. | Fix: follow the finish. Changes the price on those two, so it waits for your say-so. |
 | 3.6 | T2482 trim angle is priced at the T5574 trim rate. The sheet labels it 25 x 3 angle, and 32 x 3 angle in the extras block. | Confirm the section and price. |
 | 3.7 | T5836 prices the 600 series lock and the plunger lock at the same $21.50. | Confirm. |
 | 3.8 | T-section sash & frame anodises both frames at the U6567 rate, also with a 500 series (T5573) hopper. | Confirm. |
 | 3.9 | Charges etch anodising on reo bars and mullions even for mill finish. The app charges nothing for mill. | Confirm the app. |
-| 3.10 | Black as an extra subtracts the etch cost before the minimum charge on T5573, after it on T2482. The app subtracts the charged etch line. | Confirm the app. |
+| 3.10 | Black as an extra subtracts the etch cost before the minimum charge on T5573, after it on T2482. | Withdrawn: black as an extra is no longer offered, so nothing subtracts an etch cost. |
 | 3.11 | T4633 with no lock shows an error. The app prices the window without a lock line. | Confirm the app. |
 | 3.12 | T5836 without a sill flat gets a labour credit of 8 minutes plus 10 minutes setup plus 3 minutes per metre. | Confirm. |
 

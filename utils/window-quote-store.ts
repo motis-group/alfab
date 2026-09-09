@@ -1,5 +1,5 @@
 import { createClient } from '@utils/db-client';
-import { CostLine, WindowCostingInput, WindowCostResult } from '@utils/window-costing';
+import { CostLine, WindowCostingInput, WindowCostResult, readFinish } from '@utils/window-costing';
 
 const TABLE = 'quotes';
 
@@ -51,13 +51,14 @@ function toSavedCosting(row: QuoteRow): SavedWindowCosting | null {
   }
   const cost = asObject(row.cost) || {};
   const price = typeof cost.price === 'number' ? cost.price : null;
+  const input = specification.input as WindowCostingInput;
 
   return {
     id: row.id,
     name: row.name || 'Window costing',
     customer: row.client || '',
     date: row.date || '',
-    input: specification.input as WindowCostingInput,
+    input: { ...input, finish: readFinish(input.finish) },
     price,
     unitLabel: typeof cost.unitLabel === 'string' ? cost.unitLabel : 'Per Each',
     lines: Array.isArray(cost.lines) ? (cost.lines as CostLine[]) : [],

@@ -43,7 +43,7 @@ const SECTION_TITLES: Record<string, string> = {
 
 const SECTION_NOTES: Record<string, string> = {
   extrusions: 'Price per metre = kg per metre x supplier $ per kg x (1 + loading) x (1 + offcut). Bar stock is priced per bar.',
-  anodising: 'Price per metre = etch or black $ per square metre x the section factor. The minimum charge applies per window.',
+  anodising: 'Price per metre = etch $ per square metre x the section factor. The minimum charge applies per window.',
   glass: 'A loaded price carries the glass loading (20%, or 15% under Marine Window Service). Blank means not priced.',
   labour: 'Minutes per window: setup is divided by the batch quantity, then per each, then the area factor times the glass area.',
   margins: 'Fractions, so 0.4 is 40%.',
@@ -100,8 +100,8 @@ function unitFor(segments: string[]): string {
     case 'anodising':
       if (rest[0] === 'factor') return 'sqm per metre';
       if (rest[0] === 'trimEtch' || rest[0] === 'trimBlack') return '$ per metre';
-      if (leaf === 'etchPerSqm' || leaf === 'blackPerSqm') return '$ per sqm';
-      if (leaf === 'etchMin' || leaf === 'blackMin') return '$ minimum';
+      if (leaf === 'etchPerSqm') return '$ per sqm';
+      if (leaf === 'etchMin') return '$ minimum';
       if (leaf === 'powderPerM') return '$ per metre';
       return '';
     case 'perMetre':

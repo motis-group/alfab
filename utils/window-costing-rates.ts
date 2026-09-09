@@ -108,9 +108,7 @@ export interface WindowRates {
   anodising: {
     /** Collins etch (20um) frames, $/sqm basis; per-metre rate = etchPerSqm * factor[code]. */
     etchPerSqm: number;
-    blackPerSqm: number | null;
     etchMin: number;
-    blackMin: number;
     powderPerM: number;
     factor: Record<AnodCode, number>;
     /** $/m etch anodising already applied to trim / flat sections. */
@@ -236,9 +234,7 @@ export const DEFAULT_WINDOW_RATES: WindowRates = {
   extrusions: DEFAULT_EXTRUSIONS,
   anodising: {
     etchPerSqm: 40,
-    blackPerSqm: null,
     etchMin: 10,
-    blackMin: 10.44,
     powderPerM: 7,
     factor: DEFAULT_ANOD_FACTOR,
     trimEtch: DEFAULT_TRIM_ETCH,
