@@ -1,9 +1,11 @@
 import { GlassSpecification, describeGlassSpecification } from '@utils/calculations';
 import { WindowCostingInput } from '@utils/window-costing';
+import { AwningCostingInput } from '@utils/awning-costing';
+import { JobLine, normalizeJob } from '@utils/job-basket';
 
 const QUOTE_TO_ORDER_STORAGE_KEY = 'adhocQuoteToPurchaseOrderDraft';
 
-export type QuoteToOrderDraftKind = 'glass' | 'window';
+export type QuoteToOrderDraftKind = 'glass' | 'window' | 'awning' | 'job';
 
 /** One window costing on its way to a purchase order line. A quote can carry several. */
 export interface WindowQuoteLine {
@@ -11,6 +13,16 @@ export interface WindowQuoteLine {
   quantity: number;
   unitPrice: number;
   windowSpec: WindowCostingInput;
+  /** Stamp of the rates the price was calculated on. */
+  ratesUpdatedAt: string | null;
+}
+
+/** One awning costing on its way to a purchase order line. A quote can carry several. */
+export interface AwningQuoteLine {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  awningSpec: AwningCostingInput;
   /** Stamp of the rates the price was calculated on. */
   ratesUpdatedAt: string | null;
 }
@@ -41,9 +53,13 @@ export interface QuoteToOrderDraft {
   glassLines: GlassQuoteLine[];
   /** Window costings, one per purchase order line. Empty for glass quotes. */
   windowLines: WindowQuoteLine[];
+  /** Awning costings, one per purchase order line. Empty for every other kind. */
+  awningLines: AwningQuoteLine[];
+  /** A job spanning more than one product type. One order line per entry, whatever its kind. */
+  jobLines: JobLine[];
 }
 
-export type QuoteToOrderDraftInput = Omit<QuoteToOrderDraft, 'kind' | 'spec' | 'glassLines' | 'windowLines' | 'quantity' | 'unitPrice' | 'customerId' | 'markupPercent'> & {
+export type QuoteToOrderDraftInput = Omit<QuoteToOrderDraft, 'kind' | 'spec' | 'glassLines' | 'windowLines' | 'awningLines' | 'jobLines' | 'quantity' | 'unitPrice' | 'customerId' | 'markupPercent'> & {
   kind?: QuoteToOrderDraftKind;
   customerId?: string | null;
   /** Legacy single-piece markup. Each line carries its own. */
@@ -51,6 +67,8 @@ export type QuoteToOrderDraftInput = Omit<QuoteToOrderDraft, 'kind' | 'spec' | '
   spec?: GlassSpecification | null;
   glassLines?: GlassQuoteLine[];
   windowLines?: WindowQuoteLine[];
+  awningLines?: AwningQuoteLine[];
+  jobLines?: JobLine[];
   quantity?: number;
   unitPrice?: number;
 };
@@ -103,6 +121,33 @@ function normalizeWindowLines(value: unknown): WindowQuoteLine[] {
     });
 }
 
+function isAwningCostingInput(value: unknown): value is AwningCostingInput {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const spec = value as Record<string, unknown>;
+  return typeof spec.heightMm === 'number' && typeof spec.widthMm === 'number' && typeof spec.qty === 'number';
+}
+
+function normalizeAwningLines(value: unknown): AwningQuoteLine[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((line) => line && typeof line === 'object' && isAwningCostingInput((line as Record<string, unknown>).awningSpec))
+    .map((line) => {
+      const entry = line as Record<string, unknown>;
+      return {
+        description: typeof entry.description === 'string' ? entry.description.trim() : '',
+        quantity: Math.max(1, normalizeNumber(entry.quantity, 1)),
+        unitPrice: Math.max(0, normalizeNumber(entry.unitPrice, 0)),
+        awningSpec: { ...(entry.awningSpec as AwningCostingInput) },
+        ratesUpdatedAt: typeof entry.ratesUpdatedAt === 'string' ? entry.ratesUpdatedAt : null,
+      };
+    });
+}
+
 function normalizeGlassLines(value: unknown): GlassQuoteLine[] {
   if (!Array.isArray(value)) {
     return [];
@@ -133,14 +178,25 @@ function isQuoteToOrderDraft(value: unknown): value is QuoteToOrderDraft {
     return false;
   }
 
-  return draft.kind === 'window' ? normalizeWindowLines(draft.windowLines).length > 0 : normalizeGlassLines(draft.glassLines).length > 0 || isGlassSpecification(draft.spec);
+  if (draft.kind === 'window') {
+    return normalizeWindowLines(draft.windowLines).length > 0;
+  }
+  if (draft.kind === 'awning') {
+    return normalizeAwningLines(draft.awningLines).length > 0;
+  }
+  if (draft.kind === 'job') {
+    return normalizeJob({ lines: draft.jobLines }).lines.length > 0;
+  }
+  return normalizeGlassLines(draft.glassLines).length > 0 || isGlassSpecification(draft.spec);
 }
 
 function normalizeDraft(draft: QuoteToOrderDraftInput | QuoteToOrderDraft): QuoteToOrderDraft {
-  const kind: QuoteToOrderDraftKind = draft.kind === 'window' ? 'window' : 'glass';
+  const kind: QuoteToOrderDraftKind = draft.kind === 'window' || draft.kind === 'awning' || draft.kind === 'job' ? draft.kind : 'glass';
   const windowLines = kind === 'window' ? normalizeWindowLines(draft.windowLines) : [];
+  const awningLines = kind === 'awning' ? normalizeAwningLines(draft.awningLines) : [];
   const glassLines = kind === 'glass' ? normalizeGlassLines(draft.glassLines) : [];
-  const firstLine = windowLines[0] || glassLines[0];
+  const jobLines = kind === 'job' ? normalizeJob({ lines: draft.jobLines }).lines : [];
+  const firstLine = windowLines[0] || awningLines[0] || glassLines[0] || jobLines[0];
 
   return {
     kind,
@@ -155,6 +211,8 @@ function normalizeDraft(draft: QuoteToOrderDraftInput | QuoteToOrderDraft): Quot
     spec: kind === 'glass' && draft.spec ? { ...draft.spec } : null,
     glassLines,
     windowLines,
+    awningLines,
+    jobLines,
   };
 }
 
@@ -190,7 +248,6 @@ export function consumeQuoteToOrderDraft(): QuoteToOrderDraft | null {
   }
 }
 
-
 /** Line description for one glass piece: the quote name or the piece's own name, then the spec. */
 export function buildGlassLineDescription(quoteName: string, line: GlassQuoteLine): string {
   const title = line.description.trim() || quoteName.trim();
@@ -201,4 +258,14 @@ export function buildGlassLineDescription(quoteName: string, line: GlassQuoteLin
 /** Line description for a window costing: the quote name, then the window's own summary. */
 export function buildWindowLineDescription(quoteName: string, line: WindowQuoteLine): string {
   return [quoteName.trim(), line.description.trim()].filter(Boolean).join(' | ') || 'Window Costing Item';
+}
+
+/** Line description for one item on a mixed job: the job name, then the item's own summary. */
+export function buildJobLineDescription(quoteName: string, line: JobLine): string {
+  return [quoteName.trim(), line.description.trim()].filter(Boolean).join(' | ') || 'Job Item';
+}
+
+/** Line description for an awning costing: the quote name, then the awning's own summary. */
+export function buildAwningLineDescription(quoteName: string, line: AwningQuoteLine): string {
+  return [quoteName.trim(), line.description.trim()].filter(Boolean).join(' | ') || 'Awning Costing Item';
 }

@@ -1,18 +1,17 @@
 import { createClient } from '@utils/db-client';
 import { QuoteStatus, readQuoteStatus } from '@utils/quote-status';
-import { CostLine, WindowCostingInput, WindowCostResult, readFinish } from '@utils/window-costing';
+import { AwningCostingInput, AwningCostResult, CostLine } from '@utils/awning-costing';
 
 const TABLE = 'quotes';
 
-/** Saved window costing. Doubles as a per-customer template: load it to price the same window again. */
-export interface SavedWindowCosting {
+/** Saved awning costing. Doubles as a per-customer template: load it to price the same awning again. */
+export interface SavedAwningCosting {
   id: string;
   name: string;
   customer: string;
   date: string;
-  input: WindowCostingInput;
+  input: AwningCostingInput;
   price: number | null;
-  unitLabel: string;
   /** The priced lines as they stood when the costing was saved, so reopening shows what was quoted. */
   lines: CostLine[];
   glazing: CostLine[];
@@ -49,24 +48,21 @@ function asObject(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' ? (value as Record<string, unknown>) : null;
 }
 
-/** Window costings share the quotes table with the glass calculator, so rows carry a kind. */
-function toSavedCosting(row: QuoteRow): SavedWindowCosting | null {
+/** Awning costings share the quotes table with the glass and window calculators, so rows carry a kind. */
+function toSavedCosting(row: QuoteRow): SavedAwningCosting | null {
   const specification = asObject(row.specification);
-  if (!specification || specification.kind !== 'window' || !specification.input) {
+  if (!specification || specification.kind !== 'awning' || !specification.input) {
     return null;
   }
   const cost = asObject(row.cost) || {};
-  const price = typeof cost.price === 'number' ? cost.price : null;
-  const input = specification.input as WindowCostingInput;
 
   return {
     id: row.id,
-    name: row.name || 'Window costing',
+    name: row.name || 'Awning costing',
     customer: row.client || '',
     date: row.date || '',
-    input: { ...input, finish: readFinish(input.finish) },
-    price,
-    unitLabel: typeof cost.unitLabel === 'string' ? cost.unitLabel : 'Per Each',
+    input: specification.input as AwningCostingInput,
+    price: typeof cost.price === 'number' ? cost.price : null,
     lines: Array.isArray(cost.lines) ? (cost.lines as CostLine[]) : [],
     glazing: Array.isArray(cost.glazing) ? (cost.glazing as CostLine[]) : [],
     status: readQuoteStatus(row.status),
@@ -75,32 +71,29 @@ function toSavedCosting(row: QuoteRow): SavedWindowCosting | null {
   };
 }
 
-export async function listWindowCostings(): Promise<SavedWindowCosting[]> {
+export async function listAwningCostings(): Promise<SavedAwningCosting[]> {
   const db = createClient();
   const { data, error } = await db.from(TABLE).select('*').order('date', { ascending: false });
   if (error) {
     throw new Error(error.message);
   }
-  return ((data as QuoteRow[]) || []).map(toSavedCosting).filter(Boolean) as SavedWindowCosting[];
+  return ((data as QuoteRow[]) || []).map(toSavedCosting).filter(Boolean) as SavedAwningCosting[];
 }
 
-export async function saveWindowCosting(costing: { name: string; customer: string; input: WindowCostingInput; result: WindowCostResult; ratesUpdatedAt: string | null }): Promise<void> {
+export async function saveAwningCosting(costing: { name: string; customer: string; input: AwningCostingInput; result: AwningCostResult; ratesUpdatedAt: string | null }): Promise<void> {
   const db = createClient();
   const { error } = await db.from(TABLE).insert({
-    name: costing.name.trim() || 'Window costing',
+    name: costing.name.trim() || 'Awning costing',
     client: costing.customer.trim() || 'No Client',
     specification: {
-      kind: 'window',
+      kind: 'awning',
       input: costing.input,
       ratesUpdatedAt: costing.ratesUpdatedAt,
     },
     cost: {
       price: costing.result.price,
-      unitLabel: costing.result.unitLabel,
       subtotal: costing.result.subtotal,
       margin: costing.result.margin,
-      packing: costing.result.packing,
-      uplift: costing.result.uplift,
       lines: costing.result.lines,
       glazing: costing.result.glazing,
     },
@@ -111,7 +104,7 @@ export async function saveWindowCosting(costing: { name: string; customer: strin
   }
 }
 
-export async function deleteWindowCosting(id: string): Promise<void> {
+export async function deleteAwningCosting(id: string): Promise<void> {
   const db = createClient();
   const { error } = await db.from(TABLE).delete().eq('id', id);
   if (error) {

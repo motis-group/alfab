@@ -45,7 +45,10 @@ overwrites a price: it would read as zero and quote the job short.
 The rates are company-wide. Before, they lived in each estimator's browser, so two people quoting
 the same job could give different numbers and nobody could tell whose were right.
 
-## Known gap
+## Three glass price lists
 
-The window rates hold their own glass prices for glazing a window, and they are not the same
-numbers as these. Nothing tells either editor when the two drift apart.
+The window and awning rates hold their own glass prices, and they are not the same numbers as these.
+**Settings → Price Drift** reports where they disagree and by how much; see
+[pricing-health.md](pricing-health.md). Whether a gap is an error is still open: these prices are a
+base a per-piece markup is applied to, while the window costing's feed a window that carries margin
+and uplift afterwards.

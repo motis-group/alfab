@@ -16,6 +16,7 @@ import Table from '@components/Table';
 import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
+import { RateAgeBadge, RateReviewCard } from '@components/RateAgeNotice';
 
 import { usePricing } from '@components/PricingProvider';
 import { APP_ACCOUNT_SECTION_ITEMS } from '@utils/app-navigation';
@@ -30,12 +31,14 @@ export default function PricingSettings() {
   const [basePrices, setBasePrices] = useState(pricingData.basePrices);
   const [edgeworkPrices, setEdgeworkPrices] = useState(pricingData.edgeworkPrices);
   const [otherPrices, setOtherPrices] = useState(pricingData.otherPrices);
+  const [asAt, setAsAt] = useState(pricingData.asAt);
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
     setBasePrices(pricingData.basePrices);
     setEdgeworkPrices(pricingData.edgeworkPrices);
     setOtherPrices(pricingData.otherPrices);
+    setAsAt(pricingData.asAt);
     setHasChanges(false);
   }, [pricingData]);
 
@@ -63,6 +66,11 @@ export default function PricingSettings() {
     setHasChanges(true);
   };
 
+  const updateAsAt = (field: keyof typeof asAt, value: string) => {
+    setAsAt((prev) => ({ ...prev, [field]: value }));
+    setHasChanges(true);
+  };
+
   const updateOtherPrice = (field: keyof typeof otherPrices, value: string) => {
     const numValue = parseFloat(value) || 0;
     setOtherPrices((prev) => ({
@@ -74,7 +82,7 @@ export default function PricingSettings() {
 
   const handleSave = async () => {
     try {
-      await updatePricingData({ basePrices, edgeworkPrices, otherPrices });
+      await updatePricingData({ basePrices, edgeworkPrices, otherPrices, asAt });
       setHasChanges(false);
       setStatus({ tone: 'success', message: 'Glass rates saved for everyone. The rates they replaced are kept.' });
     } catch (saveError: any) {
@@ -126,6 +134,8 @@ export default function PricingSettings() {
             </Card>
           )}
 
+          <RateReviewCard asAt={asAt} label={(key) => (key === 'basePrices' ? 'Base glass prices' : key === 'edgeworkPrices' ? 'Edgework' : 'Holes, shaping and services')} />
+
           <Card title="THESE RATES">
             <Text>{source === 'saved' && updatedAt ? `Company glass rates, saved ${new Date(updatedAt).toLocaleString()}.` : 'No saved glass rates yet, so the defaults are in use.'}</Text>
             <Text>They apply to everyone, not only this computer.</Text>
@@ -162,6 +172,8 @@ export default function PricingSettings() {
     >
       <CardDouble title="BASE GLASS PRICES ($ per m²)">
         <Text>Configure the base price per square meter for each glass type and thickness combination.</Text>
+        <Input label="THESE PRICES LAST KNOWN GOOD" name="asat_base" value={asAt.basePrices} onChange={(event) => updateAsAt('basePrices', event.target.value)} placeholder="unknown" />
+        <RateAgeBadge text={asAt.basePrices} />
         <br />
 
         <Table>
@@ -191,6 +203,8 @@ export default function PricingSettings() {
 
       <CardDouble title="EDGEWORK PRICES ($ per meter)">
         <Text>Configure the edgework pricing per linear meter based on thickness ranges.</Text>
+        <Input label="THESE PRICES LAST KNOWN GOOD" name="asat_edgework" value={asAt.edgeworkPrices} onChange={(event) => updateAsAt('edgeworkPrices', event.target.value)} placeholder="unknown" />
+        <RateAgeBadge text={asAt.edgeworkPrices} />
         <br />
 
         <Table>
@@ -218,6 +232,8 @@ export default function PricingSettings() {
 
       <CardDouble title="OTHER PRICING">
         <Text>Configure additional service and feature pricing.</Text>
+        <Input label="THESE PRICES LAST KNOWN GOOD" name="asat_other" value={asAt.otherPrices} onChange={(event) => updateAsAt('otherPrices', event.target.value)} placeholder="unknown" />
+        <RateAgeBadge text={asAt.otherPrices} />
         <br />
 
         <div
@@ -268,9 +284,7 @@ export default function PricingSettings() {
             <Text>
               <strong>MINIMUM CHARGE</strong>
             </Text>
-            <Text style={{ opacity: 0.7 }}>
-              A small piece costs the same to handle, cut and invoice as a big one, but area alone prices it at a few dollars. These two set the floor. Leave them at 0 to charge exact area, which is what the calculator did before.
-            </Text>
+            <Text style={{ opacity: 0.7 }}>A small piece costs the same to handle, cut and invoice as a big one, but area alone prices it at a few dollars. These two set the floor. Leave them at 0 to charge exact area, which is what the calculator did before.</Text>
             <Input label="Minimum Charge Per Piece ($)" type="number" name="min_charge" value={otherPrices.minCharge.toString()} onChange={(event) => updateOtherPrice('minCharge', event.target.value)} step="0.01" min="0" />
             <Input label="Minimum Area Charged (m²)" type="number" name="min_area" value={otherPrices.minAreaSqm.toString()} onChange={(event) => updateOtherPrice('minAreaSqm', event.target.value)} step="0.01" min="0" />
             {!otherPrices.minCharge && !otherPrices.minAreaSqm ? (

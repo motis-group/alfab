@@ -1,9 +1,10 @@
 import { GlassSpecification } from '@utils/calculations';
 import { WindowCostingInput } from '@utils/window-costing';
+import { AwningCostingInput } from '@utils/awning-costing';
 
 export type UserRole = 'superadmin' | 'admin' | 'standard' | 'readonly';
 export type OrderStatus = 'open' | 'in_production' | 'fulfilled' | 'cancelled';
-export type PricingSource = 'existing_config' | 'adhoc_calculator' | 'window_calculator';
+export type PricingSource = 'existing_config' | 'adhoc_calculator' | 'window_calculator' | 'awning_calculator';
 
 export interface Customer {
   id: string;
@@ -65,6 +66,8 @@ export interface PurchaseOrderLine {
   quantity_fulfilled?: number | null;
   unit_price_at_order?: number | null;
   line_notes?: string | null;
+  /** Minutes the line really took, for the whole line. Null until somebody records it. */
+  actual_minutes?: number | string | null;
 }
 
 export interface CustomerProductNotes {
@@ -85,6 +88,9 @@ export interface LineNotesPayload {
   windowSpecification?: WindowCostingInput | null;
   /** Stamp of the window rates the line was priced on, so the price can be reproduced. */
   windowRatesUpdatedAt?: string | null;
+  awningSpecification?: AwningCostingInput | null;
+  /** Stamp of the awning rates the line was priced on, so the price can be reproduced. */
+  awningRatesUpdatedAt?: string | null;
   markupPercent?: number | null;
   productLabel?: string | null;
 }
@@ -195,7 +201,7 @@ export function parseLineNotes(rawValue: string | null | undefined): ParsedLineN
   }
 
   const pricingSource = (parsed as any).pricingSource;
-  const validPricingSource: PricingSource | undefined = pricingSource === 'existing_config' || pricingSource === 'adhoc_calculator' || pricingSource === 'window_calculator' ? pricingSource : undefined;
+  const validPricingSource: PricingSource | undefined = pricingSource === 'existing_config' || pricingSource === 'adhoc_calculator' || pricingSource === 'window_calculator' || pricingSource === 'awning_calculator' ? pricingSource : undefined;
 
   return {
     note: typeof parsed.note === 'string' ? parsed.note : '',
@@ -204,6 +210,8 @@ export function parseLineNotes(rawValue: string | null | undefined): ParsedLineN
     adhocSpecification: typeof (parsed as any).adhocSpecification === 'object' ? ((parsed as any).adhocSpecification as GlassSpecification) : null,
     windowSpecification: (parsed as any).windowSpecification && typeof (parsed as any).windowSpecification === 'object' ? ((parsed as any).windowSpecification as WindowCostingInput) : null,
     windowRatesUpdatedAt: typeof (parsed as any).windowRatesUpdatedAt === 'string' ? (parsed as any).windowRatesUpdatedAt : null,
+    awningSpecification: (parsed as any).awningSpecification && typeof (parsed as any).awningSpecification === 'object' ? ((parsed as any).awningSpecification as AwningCostingInput) : null,
+    awningRatesUpdatedAt: typeof (parsed as any).awningRatesUpdatedAt === 'string' ? (parsed as any).awningRatesUpdatedAt : null,
     markupPercent: toNumber((parsed as any).markupPercent),
     productLabel: typeof (parsed as any).productLabel === 'string' ? (parsed as any).productLabel : null,
     isJson: true,
@@ -218,6 +226,8 @@ export function serializeLineNotes(input: LineNotesPayload): string {
     adhocSpecification: input.adhocSpecification ?? null,
     windowSpecification: input.windowSpecification ?? null,
     windowRatesUpdatedAt: input.windowRatesUpdatedAt ?? null,
+    awningSpecification: input.awningSpecification ?? null,
+    awningRatesUpdatedAt: input.awningRatesUpdatedAt ?? null,
     markupPercent: toNumber(input.markupPercent),
     productLabel: input.productLabel || null,
   });

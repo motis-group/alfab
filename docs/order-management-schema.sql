@@ -9,8 +9,34 @@ create table if not exists quotes (
   client text not null default 'No Client',
   specification jsonb not null,
   cost jsonb not null,
-  date timestamptz not null default now()
+  date timestamptz not null default now(),
+  -- Whether the quote turned into work. Without it there is no win rate, no follow-up list, and no
+  -- way to tell whether the margin is set too high or too low.
+  status text not null default 'open' check (status in ('open', 'won', 'lost', 'expired')),
+  status_reason text,
+  status_changed_at timestamptz
 );
+
+do $$
+begin
+  alter table quotes add column if not exists status text;
+  alter table quotes add column if not exists status_reason text;
+  alter table quotes add column if not exists status_changed_at timestamptz;
+
+  update quotes
+  set status = 'open'
+  where status is null
+    or status not in ('open', 'won', 'lost', 'expired');
+
+  alter table quotes alter column status set default 'open';
+  alter table quotes alter column status set not null;
+
+  alter table quotes drop constraint if exists quotes_status_check;
+  alter table quotes add constraint quotes_status_check check (status in ('open', 'won', 'lost', 'expired'));
+exception
+  when undefined_table then
+    null;
+end $$;
 
 create table if not exists users (
   id uuid primary key default gen_random_uuid(),
@@ -231,8 +257,20 @@ create table if not exists purchase_order_lines (
   quantity_ordered integer not null check (quantity_ordered > 0),
   quantity_fulfilled integer not null default 0 check (quantity_fulfilled >= 0),
   unit_price_at_order numeric(12,2),
-  line_notes text
+  line_notes text,
+  -- Minutes the line actually took, for the whole line rather than per unit. Without it the labour
+  -- estimates age with nothing to correct them: an awning is costed at 330 minutes on a 2020 guess
+  -- and nobody can say whether that is true.
+  actual_minutes numeric(10,2)
 );
+
+do $$
+begin
+  alter table purchase_order_lines add column if not exists actual_minutes numeric(10,2);
+exception
+  when undefined_table then
+    null;
+end $$;
 
 create index if not exists idx_auth_sessions_user_id on auth_sessions(user_id);
 create index if not exists idx_auth_sessions_expires_at on auth_sessions(expires_at);
@@ -294,5 +332,21 @@ create table if not exists glass_costing_rates (
 drop trigger if exists trg_glass_costing_rates_updated_at on glass_costing_rates;
 create trigger trg_glass_costing_rates_updated_at
 before update on glass_costing_rates
+for each row
+execute function set_updated_at();
+
+-- Awning costing rates: one JSON document (row id 'default'), edited from /settings/awnings and
+-- merged over the code defaults in utils/awning-costing-rates.ts. Same shape as the window and
+-- glass rate tables, so the same archive-on-save behaviour applies.
+create table if not exists awning_costing_rates (
+  id text primary key default 'default',
+  rates jsonb not null,
+  updated_by uuid references users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists trg_awning_costing_rates_updated_at on awning_costing_rates;
+create trigger trg_awning_costing_rates_updated_at
+before update on awning_costing_rates
 for each row
 execute function set_updated_at();

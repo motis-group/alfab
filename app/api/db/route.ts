@@ -212,12 +212,13 @@ function requiredPermission(table: string, action: Operation): AppPermission {
 
 // Tables keyed by a text id the client chooses, rather than a generated uuid. Inserts into these
 // may set "id"; everywhere else it stays server-generated.
-const NATURAL_KEY_TABLES = new Set(['window_costing_rates', 'glass_costing_rates']);
+const NATURAL_KEY_TABLES = new Set(['window_costing_rates', 'glass_costing_rates', 'awning_costing_rates']);
 
 const AUDITED_TABLES: Record<string, { createdBy: boolean }> = {
   purchase_orders: { createdBy: true },
   window_costing_rates: { createdBy: false },
   glass_costing_rates: { createdBy: false },
+  awning_costing_rates: { createdBy: false },
 };
 
 function applyServerAuditColumns(table: string, action: Operation, rows: Array<Record<string, unknown>>, sessionUserId: string): void {

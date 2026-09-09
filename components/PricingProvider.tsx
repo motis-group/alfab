@@ -21,10 +21,22 @@ export interface PricingData {
     /** The smallest area a piece is charged at, in square metres. 0 charges the exact area. */
     minAreaSqm: number;
   };
+  /**
+   * When each group of prices was last known good, as free text. Read by utils/rate-age.ts, which
+   * grades it so a price nobody has checked for years says so instead of quoting silently.
+   */
+  asAt: Record<'basePrices' | 'edgeworkPrices' | 'otherPrices', string>;
 }
 
 // Default pricing data
 export const defaultPricingData: PricingData = {
+  // The legacy calculator recorded no dates against these prices. "unknown" is reported as needing a
+  // check rather than treated as current.
+  asAt: {
+    basePrices: 'unknown',
+    edgeworkPrices: 'unknown',
+    otherPrices: 'unknown',
+  },
   basePrices: {
     Clear: {
       4: 83.96,

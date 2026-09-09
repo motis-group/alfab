@@ -1,21 +1,5 @@
 import { PricingData, defaultPricingData } from '@components/PricingProvider';
-import { createClient } from '@utils/db-client';
-
-const TABLE = 'glass_costing_rates';
-const CURRENT_ID = 'default';
-
-/** Archive rows keep the rates that were current before a save, so an old price can be recalculated. */
-function versionId(updatedAt: string): string {
-  return `v-${updatedAt}`;
-}
-
-export interface LoadedGlassRates {
-  rates: PricingData;
-  source: 'saved' | 'default';
-  /** Stamp of the rates in use, for showing where a price came from. */
-  updatedAt: string | null;
-  error: string | null;
-}
+import { LoadedRates, createRatesStore } from '@utils/rates-store';
 
 /**
  * Overlay a saved document on the defaults. Numbers only, and a blank is never kept: a missing glass
@@ -36,6 +20,13 @@ export function mergeGlassRates(saved: unknown): PricingData {
         }
         continue;
       }
+      // The as-at dates are text. Without this they would never survive a save.
+      if (typeof current === 'string') {
+        if (typeof value === 'string') {
+          target[key] = value;
+        }
+        continue;
+      }
       if (current && typeof current === 'object' && value && typeof value === 'object') {
         merge(current as Record<string, unknown>, value as Record<string, unknown>);
       }
@@ -46,74 +37,10 @@ export function mergeGlassRates(saved: unknown): PricingData {
   return base;
 }
 
-export async function loadGlassRates(): Promise<LoadedGlassRates> {
-  const db = createClient();
-  const { data, error } = await db.from(TABLE).select('rates, updated_at').eq('id', CURRENT_ID).maybeSingle();
-  if (error) {
-    return { rates: mergeGlassRates(null), source: 'default', updatedAt: null, error: error.message };
-  }
-  if (!data || !data.rates) {
-    return { rates: mergeGlassRates(null), source: 'default', updatedAt: null, error: null };
-  }
-  return { rates: mergeGlassRates(data.rates), source: 'saved', updatedAt: data.updated_at || null, error: null };
-}
+const store = createRatesStore<PricingData>('glass_costing_rates', mergeGlassRates);
 
-/** Save the rates, keeping the replaced document as an archive row. */
-export async function saveGlassRates(rates: PricingData, expectedUpdatedAt?: string | null): Promise<void> {
-  const db = createClient();
-  const { data: current, error: readError } = await db.from(TABLE).select('rates, updated_at').eq('id', CURRENT_ID).maybeSingle();
-  if (readError) {
-    throw new Error(readError.message);
-  }
+export type LoadedGlassRates = LoadedRates<PricingData>;
 
-  // Somebody else saved while this page was open. Overwriting would drop their prices with nothing
-  // to show it happened.
-  // ponytail: read-then-compare, not a conditional update. The gateway takes only eq filters and a
-  // shop this size does not have two people in the rates editor at the same second.
-  if (expectedUpdatedAt !== undefined && (current?.updated_at || null) !== (expectedUpdatedAt || null)) {
-    throw new Error('These rates were saved by someone else while this page was open. Reload to see their changes, then make yours again.');
-  }
-
-  if (current?.updated_at && current.rates) {
-    const { error: archiveError } = await db.from(TABLE).insert({ id: versionId(current.updated_at), rates: current.rates });
-    // A duplicate means this version is already archived, which is fine. Anything else is not.
-    if (archiveError && !archiveError.message.includes('duplicate key')) {
-      throw new Error(archiveError.message);
-    }
-  }
-
-  if (current) {
-    const { error: updateError } = await db.from(TABLE).update({ rates }).eq('id', CURRENT_ID);
-    if (updateError) {
-      throw new Error(updateError.message);
-    }
-    return;
-  }
-
-  const { error: insertError } = await db.from(TABLE).insert({ id: CURRENT_ID, rates });
-  if (insertError) {
-    throw new Error(insertError.message);
-  }
-}
-
-/** Go back to the code defaults, keeping the document being dropped as an archive row. */
-export async function resetGlassRates(): Promise<void> {
-  const db = createClient();
-  const { data: current, error: readError } = await db.from(TABLE).select('rates, updated_at').eq('id', CURRENT_ID).maybeSingle();
-  if (readError) {
-    throw new Error(readError.message);
-  }
-
-  if (current?.updated_at && current.rates) {
-    const { error: archiveError } = await db.from(TABLE).insert({ id: versionId(current.updated_at), rates: current.rates });
-    // A duplicate means this version is already archived, which is fine. Anything else is not.
-    if (archiveError && !archiveError.message.includes('duplicate key')) {
-      throw new Error(archiveError.message);
-    }
-  }
-
-  const { error } = await db.from(TABLE).delete().eq('id', CURRENT_ID);
-  if (error) {
-    throw new Error(error.message);
-  }
-}
+export const loadGlassRates = () => store.load();
+export const saveGlassRates = (rates: PricingData, expectedUpdatedAt?: string | null) => store.save(rates, expectedUpdatedAt);
+export const resetGlassRates = () => store.reset();

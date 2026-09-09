@@ -17,12 +17,17 @@ import Table from '@components/Table';
 import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
+import { RateReviewCard } from '@components/RateAgeNotice';
+import QuoteStatusControl, { WinRateCard } from '@components/QuoteStatusControl';
+import { QuoteStatus, setQuoteStatus, winRate } from '@utils/quote-status';
 
 import { usePricing } from '@components/PricingProvider';
 import { GlassSpecification, calculateCost, describeGlassSpecification, getAvailableGlassTypes, getAvailableThicknesses, getEffectiveArea, getEffectivePerimeter, usesMeasuredGeometry } from '@utils/calculations';
 import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import { Customer, UserRole, formatCurrency, todayISODate } from '@utils/order-management';
 import { GlassQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
+import JobPanel, { useJob } from '@components/JobPanel';
+import { addToJob, jobLineId } from '@utils/job-basket';
 import { SavedGlassQuote, deleteGlassQuote, listGlassQuotes, saveGlassQuote } from '@utils/glass-quote-store';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
@@ -130,6 +135,7 @@ export default function AdhocQuotePage() {
   }, [pricingData, quoteItems]);
 
   const quoteTotal = quoteLines.reduce((sum, line) => sum + line.total, 0);
+  const [job, setJob] = useJob();
 
   const quoteSummary = useMemo(() => {
     if (calculation.error) {
@@ -139,31 +145,13 @@ export default function AdhocQuotePage() {
     const header = [`Quote: ${quoteName.trim() || 'Ad Hoc Quote'}`, `Customer: ${customerName.trim() || 'Walk-in / Phone'}`, `Date: ${quoteDate}`];
 
     if (quoteLines.length) {
-      return [
-        ...header,
-        ...quoteLines.map((line, index) => `${index + 1}. ${line.item.name || describeGlassSpecification(line.item.spec)} | ${line.item.quantity} x ${formatCurrency(line.unitPrice)} = ${formatCurrency(line.total)}`),
-        `Quote total: ${formatCurrency(quoteTotal)}`,
-        quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : '',
-      ]
-        .filter(Boolean)
-        .join('\n');
+      return [...header, ...quoteLines.map((line, index) => `${index + 1}. ${line.item.name || describeGlassSpecification(line.item.spec)} | ${line.item.quantity} x ${formatCurrency(line.unitPrice)} = ${formatCurrency(line.total)}`), `Quote total: ${formatCurrency(quoteTotal)}`, quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : ''].filter(Boolean).join('\n');
     }
 
-    return [
-      ...header,
-      `Spec: ${describeGlassSpecification(spec)}`,
-      spec.cadOutline ? `CAD: ${spec.cadOutline.fileName} | ${spec.cadOutline.shapeLabel} | ${spec.cadOutline.areaSqM.toFixed(3)} m² | ${spec.cadOutline.perimeterM.toFixed(2)} m edge${usesMeasuredGeometry(spec) ? ' (priced on measured outline)' : ''}` : '',
-      `Qty: ${Math.max(1, quantity)}`,
-      `Unit Price: ${formatCurrency(calculation.unitPrice)}`,
-      `Total: ${formatCurrency(calculation.totalPrice)}`,
-      quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
+    return [...header, `Spec: ${describeGlassSpecification(spec)}`, spec.cadOutline ? `CAD: ${spec.cadOutline.fileName} | ${spec.cadOutline.shapeLabel} | ${spec.cadOutline.areaSqM.toFixed(3)} m² | ${spec.cadOutline.perimeterM.toFixed(2)} m edge${usesMeasuredGeometry(spec) ? ' (priced on measured outline)' : ''}` : '', `Qty: ${Math.max(1, quantity)}`, `Unit Price: ${formatCurrency(calculation.unitPrice)}`, `Total: ${formatCurrency(calculation.totalPrice)}`, quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : ''].filter(Boolean).join('\n');
   }, [calculation.error, calculation.totalPrice, calculation.unitPrice, customerName, quantity, quoteDate, quoteLines, quoteName, quoteNotes, quoteTotal, spec]);
 
   useEffect(() => {
-
     (async () => {
       setIsLoading(true);
       setError(null);
@@ -304,10 +292,17 @@ export default function AdhocQuotePage() {
     const moved = (quote.ratesUpdatedAt || null) !== (updatedAt || null);
     setStatus({
       tone: moved ? 'warning' : 'success',
-      message: moved
-        ? 'Loaded at the prices it was quoted at. The glass rates have changed since, so a fresh price would differ.'
-        : 'Loaded at the prices it was quoted at.',
+      message: moved ? 'Loaded at the prices it was quoted at. The glass rates have changed since, so a fresh price would differ.' : 'Loaded at the prices it was quoted at.',
     });
+  }
+
+  async function markQuote(id: string, status: QuoteStatus, reason?: string | null) {
+    try {
+      await setQuoteStatus(id, status, reason);
+      setSavedQuotes(await listGlassQuotes());
+    } catch (markError: any) {
+      setStatus({ tone: 'error', message: markError?.message || 'Unable to mark the quote.' });
+    }
   }
 
   async function handleDeleteSavedQuote(id: string) {
@@ -330,6 +325,26 @@ export default function AdhocQuotePage() {
     } catch {
       setCopyState('Clipboard copy failed.');
     }
+  }
+
+  function addJobLines() {
+    const lines = quoteLines.length ? quoteLines.filter((line) => !line.error).map((line) => ({ id: jobLineId('glass'), kind: 'glass' as const, description: line.item.name || 'Glass piece', quantity: Math.max(1, line.item.quantity), unitPrice: line.unitPrice, spec: line.item.spec, markupPercent: line.item.markupPercent })) : calculation.error ? [] : [{ id: jobLineId('glass'), kind: 'glass' as const, description: 'Glass piece', quantity: Math.max(1, quantity), unitPrice: calculation.unitPrice, spec, markupPercent }];
+
+    if (!lines.length) {
+      return;
+    }
+
+    setJob(addToJob(lines, { name: quoteName, customerName: selectedCustomer?.name || customerName, customerId: customerId || null, notes: quoteNotes }));
+    setQuoteItems([]);
+    setStatus({ tone: 'success', message: 'Added to the job. Price windows or awnings and they land on the same order.' });
+  }
+
+  function createOrderForJob() {
+    if (!job.lines.length) {
+      return;
+    }
+    persistQuoteToOrderDraft({ kind: 'job', quoteName: job.name || quoteName, customerName: job.customerName || customerName, customerId: job.customerId, quoteDate, quoteNotes: job.notes || quoteNotes, jobLines: job.lines });
+    router.push('/glass/new?fromQuote=1');
   }
 
   function handleCreatePurchaseOrder() {
@@ -377,6 +392,8 @@ export default function AdhocQuotePage() {
         <>
           <Card title="QUICK ACTIONS">
             <ActionButton onClick={addToQuote}>Add To Quote</ActionButton>
+            <br />
+            <ActionButton onClick={addJobLines}>Add To Job</ActionButton>
             <br />
             <ActionButton onClick={handleCreatePurchaseOrder}>Create Purchase Order</ActionButton>
             <br />
@@ -443,6 +460,10 @@ export default function AdhocQuotePage() {
               </>
             ) : null}
           </Card>
+
+          <WinRateCard tally={winRate(savedQuotes.map((quote) => ({ status: quote.status, price: quote.total })))} quotes={savedQuotes} />
+
+          <RateReviewCard asAt={pricingData.asAt} label={(key) => (key === 'basePrices' ? 'Base glass prices' : key === 'edgeworkPrices' ? 'Edgework' : 'Holes, shaping and services')} action={<ActionButton onClick={() => router.push('/settings')}>Review Glass Rates</ActionButton>} />
 
           <Card title="PRICE BREAKDOWN">
             {calculation.error ? (
@@ -558,44 +579,17 @@ export default function AdhocQuotePage() {
               </option>
             ))}
         </select>
-        {selectedCustomer ? (
-          <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text>
-        ) : (
-          <Input label="CUSTOMER NAME" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />
-        )}
+        {selectedCustomer ? <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text> : <Input label="CUSTOMER NAME" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />}
         <br />
         <Input label="QUOTE DATE" type="date" name="quote_date" value={quoteDate} onChange={(event) => setQuoteDate(event.target.value)} />
-        <Input
-          label="QUANTITY"
-          type="number"
-          name="quote_quantity"
-          value={String(quantity)}
-          onChange={(event) => setQuantity(Math.max(1, numberOrFallback(event.target.value, 1)))}
-          min="1"
-        />
-        <Input
-          label="MARKUP (%)"
-          type="number"
-          name="quote_markup"
-          value={String(markupPercent)}
-          onChange={(event) => setMarkupPercent(Math.max(0, numberOrFallback(event.target.value, 0)))}
-          min="0"
-        />
+        <Input label="QUANTITY" type="number" name="quote_quantity" value={String(quantity)} onChange={(event) => setQuantity(Math.max(1, numberOrFallback(event.target.value, 1)))} min="1" />
+        <Input label="MARKUP (%)" type="number" name="quote_markup" value={String(markupPercent)} onChange={(event) => setMarkupPercent(Math.max(0, numberOrFallback(event.target.value, 0)))} min="0" />
 
         <label>
           <input type="checkbox" checked={useRecommendedPrice} onChange={(event) => setUseRecommendedPrice(event.target.checked)} /> Use recommended unit price
         </label>
 
-        {!useRecommendedPrice && (
-          <Input
-            label="MANUAL UNIT PRICE ($)"
-            type="number"
-            name="manual_unit_price"
-            value={String(manualUnitPrice)}
-            onChange={(event) => setManualUnitPrice(Math.max(0, numberOrFallback(event.target.value, 0)))}
-            min="0"
-          />
-        )}
+        {!useRecommendedPrice && <Input label="MANUAL UNIT PRICE ($)" type="number" name="manual_unit_price" value={String(manualUnitPrice)} onChange={(event) => setManualUnitPrice(Math.max(0, numberOrFallback(event.target.value, 0)))} min="0" />}
 
         <Input label="QUOTE NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
         <Input label="THIS PIECE IS FOR (OPTIONAL)" name="item_name" value={itemName} onChange={(event) => setItemName(event.target.value)} placeholder="Front window, side panel..." />
@@ -656,6 +650,8 @@ export default function AdhocQuotePage() {
         )}
       </CardDouble>
 
+      <JobPanel job={job} onChange={setJob} onCreateOrder={createOrderForJob} />
+
       <CardDouble title={`SAVED QUOTES (${savedQuotes.length})`}>
         {savedQuotes.length ? (
           <Table>
@@ -665,6 +661,7 @@ export default function AdhocQuotePage() {
               <TableColumn style={{ width: '13ch' }}>DATE</TableColumn>
               <TableColumn style={{ width: '8ch' }}>PIECES</TableColumn>
               <TableColumn style={{ width: '12ch' }}>TOTAL</TableColumn>
+              <TableColumn style={{ width: '22ch' }}>OUTCOME</TableColumn>
               <TableColumn>ACTIONS</TableColumn>
             </TableRow>
             {savedQuotes.map((quote) => (
@@ -674,6 +671,9 @@ export default function AdhocQuotePage() {
                 <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
                 <TableColumn>{quote.items.length}</TableColumn>
                 <TableColumn>{formatCurrency(quote.total)}</TableColumn>
+                <TableColumn>
+                  <QuoteStatusControl status={quote.status} statusReason={quote.statusReason} onChange={(next, reason) => markQuote(quote.id, next, reason)} />
+                </TableColumn>
                 <TableColumn>
                   <RowSpaceBetween>
                     <ActionButton onClick={() => loadSavedQuote(quote)}>Load</ActionButton>

@@ -18,6 +18,8 @@ Three questions, three directories.
 | `discovery/` | **The problem.** Read-mostly reference material. |
 | `discovery/brds/` | Requirements and signed scope. Binary documents keep a `.md` twin. |
 | `discovery/window-costing-decisions.md` | Open questions the Lotus sheet left behind, waiting on Nick. |
+| `discovery/awning-costing-decisions.md` | The same for the Excel awning sheet. |
+| `discovery/pricing-currency-decisions.md` | Whether the prices themselves are still right. Ages, list disagreements, what margin means. |
 | `discovery/findings/` | Dated write-ups (`<topic>_YYYY-MM-DD.md`): source analysis, verification runs. |
 | `development/` | **The build.** |
 | `development/tasks/` | One directory per task; pipeline-stage artefacts. See `tasks/README.md`. |

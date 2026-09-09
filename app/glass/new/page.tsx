@@ -21,25 +21,12 @@ import { usePricing } from '@components/PricingProvider';
 import JobSheet from '@components/JobSheet';
 import { CostBreakdown, GlassSpecification, calculateCost, describeGlassSpecification, getAvailableGlassTypes, getAvailableThicknesses } from '@utils/calculations';
 import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
-import {
-  Customer,
-  CustomerProduct,
-  ORDER_STATUS_OPTIONS,
-  OrderStatus,
-  ParsedLineNotes,
-  PricingSource,
-  PurchaseOrder,
-  PurchaseOrderLine,
-  UserRole,
-  formatCurrency,
-  parseCustomerProductNotes,
-  parseLineNotes,
-  serializeLineNotes,
-  statusLabel,
-  todayISODate,
-} from '@utils/order-management';
-import { QuoteToOrderDraft, buildGlassLineDescription, buildWindowLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
+import { Customer, CustomerProduct, ORDER_STATUS_OPTIONS, OrderStatus, ParsedLineNotes, PricingSource, PurchaseOrder, PurchaseOrderLine, UserRole, formatCurrency, parseCustomerProductNotes, parseLineNotes, serializeLineNotes, statusLabel, todayISODate } from '@utils/order-management';
+import { QuoteToOrderDraft, buildAwningLineDescription, buildGlassLineDescription, buildJobLineDescription, buildWindowLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
 import { WindowCostingInput, describeWindow } from '@utils/window-costing';
+import { AwningCostingInput, describeAwning } from '@utils/awning-costing';
+import { AwningRates, mergeAwningRates } from '@utils/awning-costing-rates';
+import { loadAwningRates } from '@utils/awning-costing-store';
 import { productFullName } from '@utils/window-catalogue';
 import { WindowRates, mergeWindowRates } from '@utils/window-costing-rates';
 import { loadWindowRates } from '@utils/window-costing-store';
@@ -91,6 +78,10 @@ interface LineDraft {
   adhocSpec: GlassSpecification;
   windowSpec: WindowCostingInput | null;
   windowRatesUpdatedAt: string | null;
+  awningSpec: AwningCostingInput | null;
+  awningRatesUpdatedAt: string | null;
+  /** Minutes the line really took, for the whole line. Empty until the job is done. */
+  actualMinutes: number | null;
   markupPercent: number;
 }
 
@@ -107,6 +98,9 @@ function createLineDraft(partial?: Partial<LineDraft>): LineDraft {
     adhocSpec: partial?.adhocSpec || { ...defaultAdhocSpec },
     windowSpec: partial?.windowSpec ?? null,
     windowRatesUpdatedAt: partial?.windowRatesUpdatedAt ?? null,
+    awningSpec: partial?.awningSpec ?? null,
+    awningRatesUpdatedAt: partial?.awningRatesUpdatedAt ?? null,
+    actualMinutes: partial?.actualMinutes ?? null,
     markupPercent: partial?.markupPercent ?? 20,
   };
 }
@@ -139,6 +133,7 @@ export default function NewPurchaseOrderPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   // Only to spell a window line out on the job sheet. Prices on the line are the ones already saved.
   const [windowRates, setWindowRates] = useState<WindowRates>(() => mergeWindowRates(null));
+  const [awningRates, setAwningRates] = useState<AwningRates>(() => mergeAwningRates(null));
   const [customerProducts, setCustomerProducts] = useState<CustomerProduct[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -196,6 +191,7 @@ export default function NewPurchaseOrderPage() {
     setCustomers(loadedCustomers);
     setCustomerProducts(loadedCustomerProducts);
     setWindowRates((await loadWindowRates()).rates);
+    setAwningRates((await loadAwningRates()).rates);
 
     return {
       customers: loadedCustomers,
@@ -245,6 +241,9 @@ export default function NewPurchaseOrderPage() {
         adhocSpec: parsedNotes.adhocSpecification || { ...defaultAdhocSpec },
         windowSpec: parsedNotes.windowSpecification || null,
         windowRatesUpdatedAt: parsedNotes.windowRatesUpdatedAt || null,
+        awningSpec: parsedNotes.awningSpecification || null,
+        awningRatesUpdatedAt: parsedNotes.awningRatesUpdatedAt || null,
+        actualMinutes: Number.isFinite(Number(line.actual_minutes)) && Number(line.actual_minutes) > 0 ? Number(line.actual_minutes) : null,
         markupPercent: parsedNotes.markupPercent ?? 20,
       });
     });
@@ -264,7 +263,6 @@ export default function NewPurchaseOrderPage() {
   }
 
   useEffect(() => {
-
     (async () => {
       setIsLoading(true);
       setFormError(null);
@@ -374,53 +372,73 @@ export default function NewPurchaseOrderPage() {
 
   function applyQuoteDraft(quoteDraft: QuoteToOrderDraft, availableCustomers: Customer[]) {
     const normalizedQuoteCustomer = normalizeCustomerLookupName(quoteDraft.customerName);
-    const matchedCustomers = normalizedQuoteCustomer
-      ? availableCustomers.filter((customer) => customer.is_active !== false && normalizeCustomerLookupName(customer.name) === normalizedQuoteCustomer)
-      : [];
+    const matchedCustomers = normalizedQuoteCustomer ? availableCustomers.filter((customer) => customer.is_active !== false && normalizeCustomerLookupName(customer.name) === normalizedQuoteCustomer) : [];
     // The quote already knows which customer it was written against; the name match is the fallback
     // for a walk-in typed by hand.
     const matchedCustomerId = quoteDraft.customerId || (matchedCustomers.length === 1 ? matchedCustomers[0].id : '');
 
     // Both kinds of quote carry one line per priced item.
-    const glassLines = quoteDraft.glassLines.length
-      ? quoteDraft.glassLines
-      : quoteDraft.spec
-        ? [{ description: '', quantity: quoteDraft.quantity, unitPrice: quoteDraft.unitPrice, markupPercent: quoteDraft.markupPercent, spec: quoteDraft.spec }]
-        : [];
+    const glassLines = quoteDraft.glassLines.length ? quoteDraft.glassLines : quoteDraft.spec ? [{ description: '', quantity: quoteDraft.quantity, unitPrice: quoteDraft.unitPrice, markupPercent: quoteDraft.markupPercent, spec: quoteDraft.spec }] : [];
+
+    const awningDraftLines = quoteDraft.awningLines.map((line) =>
+      createLineDraft({
+        pricingSource: 'awning_calculator',
+        quantityOrdered: line.quantity,
+        unitPriceAtOrder: line.unitPrice,
+        lineNote: buildAwningLineDescription(quoteDraft.quoteName, line),
+        awningSpec: line.awningSpec,
+        awningRatesUpdatedAt: line.ratesUpdatedAt,
+      })
+    );
+
+    // A job carries more than one product type, so each entry picks its own pricing source.
+    const jobDraftLines = quoteDraft.jobLines.map((line) =>
+      createLineDraft({
+        pricingSource: line.kind === 'window' ? 'window_calculator' : line.kind === 'awning' ? 'awning_calculator' : 'adhoc_calculator',
+        quantityOrdered: line.quantity,
+        unitPriceAtOrder: line.unitPrice,
+        lineNote: buildJobLineDescription(quoteDraft.quoteName, line),
+        windowSpec: line.kind === 'window' ? line.windowSpec : null,
+        windowRatesUpdatedAt: line.kind === 'window' ? line.ratesUpdatedAt : null,
+        awningSpec: line.kind === 'awning' ? line.awningSpec : null,
+        awningRatesUpdatedAt: line.kind === 'awning' ? line.ratesUpdatedAt : null,
+        adhocSpec: line.kind === 'glass' ? { ...line.spec } : undefined,
+        markupPercent: line.kind === 'glass' ? line.markupPercent : undefined,
+      })
+    );
 
     const draftLines =
-      quoteDraft.kind === 'window'
-        ? quoteDraft.windowLines.map((line) =>
-            createLineDraft({
-              pricingSource: 'window_calculator',
-              quantityOrdered: line.quantity,
-              unitPriceAtOrder: line.unitPrice,
-              lineNote: buildWindowLineDescription(quoteDraft.quoteName, line),
-              windowSpec: line.windowSpec,
-              windowRatesUpdatedAt: line.ratesUpdatedAt,
-            })
-          )
-        : glassLines.map((line) =>
-            createLineDraft({
-              pricingSource: 'adhoc_calculator',
-              quantityOrdered: line.quantity,
-              unitPriceAtOrder: line.unitPrice,
-              lineNote: buildGlassLineDescription(quoteDraft.quoteName, line),
-              adhocSpec: { ...line.spec },
-              markupPercent: line.markupPercent,
-            })
-          );
+      quoteDraft.kind === 'job'
+        ? jobDraftLines
+        : quoteDraft.kind === 'awning'
+          ? awningDraftLines
+          : quoteDraft.kind === 'window'
+            ? quoteDraft.windowLines.map((line) =>
+                createLineDraft({
+                  pricingSource: 'window_calculator',
+                  quantityOrdered: line.quantity,
+                  unitPriceAtOrder: line.unitPrice,
+                  lineNote: buildWindowLineDescription(quoteDraft.quoteName, line),
+                  windowSpec: line.windowSpec,
+                  windowRatesUpdatedAt: line.ratesUpdatedAt,
+                })
+              )
+            : glassLines.map((line) =>
+                createLineDraft({
+                  pricingSource: 'adhoc_calculator',
+                  quantityOrdered: line.quantity,
+                  unitPriceAtOrder: line.unitPrice,
+                  lineNote: buildGlassLineDescription(quoteDraft.quoteName, line),
+                  adhocSpec: { ...line.spec },
+                  markupPercent: line.markupPercent,
+                })
+              );
 
     if (!draftLines.length) {
       return;
     }
 
-    const draftNotes = [
-      quoteDraft.quoteNotes.trim(),
-      quoteDraft.customerName.trim() && !matchedCustomerId ? `Calculator customer: ${quoteDraft.customerName.trim()}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n');
+    const draftNotes = [quoteDraft.quoteNotes.trim(), quoteDraft.customerName.trim() && !matchedCustomerId ? `Calculator customer: ${quoteDraft.customerName.trim()}` : ''].filter(Boolean).join('\n');
 
     setOrderForm((prev) => ({
       ...prev,
@@ -548,13 +566,15 @@ export default function NewPurchaseOrderPage() {
         const selectedLabel = selectedCustomerProduct?.name || selectedCustomerProduct?.customer_part_ref || 'Customer Product';
         const isAdhoc = line.pricingSource === 'adhoc_calculator';
         const isWindow = line.pricingSource === 'window_calculator';
+        const isAwning = line.pricingSource === 'awning_calculator';
 
         return {
           purchase_order_id: orderId,
-          product_id: isAdhoc || isWindow ? null : selectedCustomerProduct?.product_id || null,
+          product_id: isAdhoc || isWindow || isAwning ? null : selectedCustomerProduct?.product_id || null,
           quantity_ordered: Math.max(1, Number(line.quantityOrdered) || 1),
           quantity_fulfilled: Math.max(0, Number(line.quantityFulfilled) || 0),
           unit_price_at_order: Number(line.unitPriceAtOrder) || 0,
+          actual_minutes: line.actualMinutes,
           line_notes: serializeLineNotes({
             note: line.lineNote,
             pricingSource: line.pricingSource,
@@ -562,8 +582,10 @@ export default function NewPurchaseOrderPage() {
             adhocSpecification: isAdhoc ? line.adhocSpec : null,
             windowSpecification: isWindow ? line.windowSpec : null,
             windowRatesUpdatedAt: isWindow ? line.windowRatesUpdatedAt : null,
+            awningSpecification: isAwning ? line.awningSpec : null,
+            awningRatesUpdatedAt: isAwning ? line.awningRatesUpdatedAt : null,
             markupPercent: isAdhoc ? line.markupPercent : null,
-            productLabel: isAdhoc ? line.lineNote.trim() || 'Ad Hoc Item' : isWindow ? line.lineNote.trim() || 'Window Costing Item' : selectedLabel,
+            productLabel: isAdhoc ? line.lineNote.trim() || 'Ad Hoc Item' : isWindow ? line.lineNote.trim() || 'Window Costing Item' : isAwning ? line.lineNote.trim() || 'Awning Costing Item' : selectedLabel,
           }),
         };
       };
@@ -572,7 +594,10 @@ export default function NewPurchaseOrderPage() {
       const newLines = lineDrafts.filter((line) => !line.id || !loadedLineIds.includes(line.id));
 
       for (const line of existingLines) {
-        const { error: updateLineError } = await db.from(TABLE_PURCHASE_ORDER_LINES).update(buildLinePayload(line)).eq('id', line.id as string);
+        const { error: updateLineError } = await db
+          .from(TABLE_PURCHASE_ORDER_LINES)
+          .update(buildLinePayload(line))
+          .eq('id', line.id as string);
         if (updateLineError) throw updateLineError;
       }
 
@@ -645,21 +670,18 @@ export default function NewPurchaseOrderPage() {
     const selectedCustomerProduct = customerProducts.find((entry) => entry.id === line.customerProductId);
     const isAdhoc = line.pricingSource === 'adhoc_calculator';
     const isWindow = line.pricingSource === 'window_calculator';
+    const isAwning = line.pricingSource === 'awning_calculator';
 
     return {
       id: line.localId,
       index: index + 1,
-      type: isWindow ? 'Window Costing' : isAdhoc ? 'Ad Hoc' : 'Customer Product',
-      item: isWindow ? line.lineNote || 'Window costing item' : isAdhoc ? line.lineNote || 'Ad hoc item' : selectedCustomerProduct?.name || selectedCustomerProduct?.customer_part_ref || 'Select product...',
+      type: isWindow ? 'Window Costing' : isAwning ? 'Awning Costing' : isAdhoc ? 'Ad Hoc' : 'Customer Product',
+      item: isWindow ? line.lineNote || 'Window costing item' : isAwning ? line.lineNote || 'Awning costing item' : isAdhoc ? line.lineNote || 'Ad hoc item' : selectedCustomerProduct?.name || selectedCustomerProduct?.customer_part_ref || 'Select product...',
       qty: line.quantityOrdered,
       unitPrice: line.unitPriceAtOrder,
       total: line.quantityOrdered * line.unitPriceAtOrder,
       // What the floor has to make. Without it the job sheet says "Ad hoc item" and nothing else.
-      spec: isWindow && line.windowSpec
-        ? describeWindow(line.windowSpec, windowRates, productFullName(line.windowSpec.productId ?? null))
-        : isAdhoc && line.adhocSpec
-          ? describeGlassSpecification(line.adhocSpec)
-          : customerProductSpec(selectedCustomerProduct),
+      spec: isWindow && line.windowSpec ? describeWindow(line.windowSpec, windowRates, productFullName(line.windowSpec.productId ?? null)) : isAwning && line.awningSpec ? describeAwning(line.awningSpec, awningRates) : isAdhoc && line.adhocSpec ? describeGlassSpecification(line.adhocSpec) : customerProductSpec(selectedCustomerProduct),
       note: line.lineNote,
     };
   });
@@ -787,11 +809,7 @@ export default function NewPurchaseOrderPage() {
             </option>
           ))}
         </select>
-        {selectedCustomer ? (
-          <Text style={{ opacity: 0.7 }}>
-            {[selectedCustomer.contact_name, selectedCustomer.phone, selectedCustomer.delivery_address].filter(Boolean).join(' · ') || 'No phone or delivery address on this customer yet.'}
-          </Text>
-        ) : null}
+        {selectedCustomer ? <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone, selectedCustomer.delivery_address].filter(Boolean).join(' · ') || 'No phone or delivery address on this customer yet.'}</Text> : null}
         <br />
 
         <Input label="PO NUMBER" name="po_number" value={orderForm.poNumber} onChange={(event) => setOrderForm((prev) => ({ ...prev, poNumber: event.target.value }))} disabled={!canEditOrders || isLoading} />
@@ -1258,28 +1276,49 @@ export default function NewPurchaseOrderPage() {
               </>
             )}
 
+            {(activeLine.pricingSource === 'awning_calculator' || activeLine.pricingSource === 'window_calculator') && (
+              <>
+                <br />
+                <Text>ACTUAL TIME</Text>
+                <Text style={{ opacity: 0.7 }}>Minutes this line really took, for the whole line. Fill it in when the job is done: it is what tells the rates page whether the labour estimate is true.</Text>
+                <Input
+                  label="ACTUAL MINUTES"
+                  type="number"
+                  name="actual_minutes"
+                  value={activeLine.actualMinutes == null ? '' : String(activeLine.actualMinutes)}
+                  onChange={(event) => {
+                    const raw = event.target.value.trim();
+                    const parsed = Number(raw);
+                    updateLineDraft(activeLine.localId, (line) => ({ ...line, actualMinutes: raw === '' || !Number.isFinite(parsed) || parsed <= 0 ? null : parsed }));
+                  }}
+                  min="0"
+                  placeholder="not recorded"
+                />
+              </>
+            )}
+
+            {activeLine.pricingSource === 'awning_calculator' && (
+              <>
+                <br />
+                <Text>AWNING COSTING</Text>
+                <Text>{activeLine.awningSpec ? 'Priced on the Awning Costing page; the unit price above is the costing price.' : 'No awning costing attached. Price the awning on the Awning Costing page and create the order from there.'}</Text>
+                {activeLine.awningRatesUpdatedAt ? <Text>Priced on the awning rates saved {new Date(activeLine.awningRatesUpdatedAt).toLocaleString()}.</Text> : null}
+                <ActionButton onClick={() => router.push('/glass/awnings')}>Open Awning Costing</ActionButton>
+              </>
+            )}
+
             {activeLine.pricingSource === 'window_calculator' && (
               <>
                 <br />
                 <Text>WINDOW COSTING</Text>
-                <Text>
-                  {activeLine.windowSpec
-                    ? 'Priced on the Window Costing page; the unit price above is the costing price.'
-                    : 'No window costing attached. Price the window on the Window Costing page and create the order from there.'}
-                </Text>
+                <Text>{activeLine.windowSpec ? 'Priced on the Window Costing page; the unit price above is the costing price.' : 'No window costing attached. Price the window on the Window Costing page and create the order from there.'}</Text>
                 {activeLine.windowRatesUpdatedAt ? <Text>Priced on the window rates saved {new Date(activeLine.windowRatesUpdatedAt).toLocaleString()}.</Text> : null}
                 <ActionButton onClick={() => router.push('/glass/windows')}>Open Window Costing</ActionButton>
               </>
             )}
 
             <br />
-            <Input
-              label={activeLine.pricingSource === 'adhoc_calculator' ? 'AD HOC DESCRIPTION' : activeLine.pricingSource === 'window_calculator' ? 'WINDOW DESCRIPTION' : 'LINE NOTES'}
-              name={`line_notes_${activeLine.localId}`}
-              value={activeLine.lineNote}
-              onChange={(event) => updateLineDraft(activeLine.localId, (current) => ({ ...current, lineNote: event.target.value }))}
-              disabled={!canEditOrders}
-            />
+            <Input label={activeLine.pricingSource === 'adhoc_calculator' ? 'AD HOC DESCRIPTION' : activeLine.pricingSource === 'window_calculator' ? 'WINDOW DESCRIPTION' : activeLine.pricingSource === 'awning_calculator' ? 'AWNING DESCRIPTION' : 'LINE NOTES'} name={`line_notes_${activeLine.localId}`} value={activeLine.lineNote} onChange={(event) => updateLineDraft(activeLine.localId, (current) => ({ ...current, lineNote: event.target.value }))} disabled={!canEditOrders} />
 
             <br />
             <RowSpaceBetween>
