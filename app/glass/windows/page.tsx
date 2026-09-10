@@ -17,13 +17,8 @@ import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 import WindowCostingGlossary from '@components/WindowCostingGlossary';
-import { RateReviewCard } from '@components/RateAgeNotice';
 import WindowCostingSheet, { WindowCostingSheetWindow } from '@components/WindowCostingSheet';
 
-import QuoteStatusControl, { WinRateCard } from '@components/QuoteStatusControl';
-import { QuoteStatus, setQuoteStatus, winRate } from '@utils/quote-status';
-import JobPanel, { useJob } from '@components/JobPanel';
-import { addToJob, jobLineId } from '@utils/job-basket';
 import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import { Customer, UserRole, formatCurrency, todayISODate } from '@utils/order-management';
 import { createClient } from '@utils/db-client';
@@ -61,7 +56,7 @@ import {
 import { WINDOW_SERIES, WindowProduct, findProduct, productFullName, productLabel, productForInput, seriesOfProduct, visibleSeries } from '@utils/window-catalogue';
 import { DEFAULT_WINDOW_RATES, GlazingId, WindowRates, mergeWindowRates } from '@utils/window-costing-rates';
 import { loadWindowRates, loadWindowRatesVersion } from '@utils/window-costing-store';
-import { SavedWindowCosting, deleteWindowCosting, listWindowCostings, saveWindowCosting } from '@utils/window-quote-store';
+import { saveWindowCosting } from '@utils/window-quote-store';
 
 const navigationItems = APP_NAVIGATION_ITEMS;
 const FINISH_ORDER: Finish[] = ['mill', 'etch', 'powder'];
@@ -143,7 +138,6 @@ export default function WindowCostingPage() {
   const [quoteDate, setQuoteDate] = useState(todayISODate());
   const [quoteNotes, setQuoteNotes] = useState('');
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
-  const [savedCostings, setSavedCostings] = useState<SavedWindowCosting[]>([]);
   // Customer by default, so a browser Cmd+P prints the safe document. The internal button raises it
   // for one print and `afterprint` puts it back.
   const [sheetAudience, setSheetAudience] = useState<'internal' | 'customer'>('customer');
@@ -204,18 +198,8 @@ export default function WindowCostingPage() {
     return () => window.removeEventListener('afterprint', restore);
   }, []);
 
-  const outcomes = useMemo(() => winRate(savedCostings), [savedCostings]);
-  const [job, setJob] = useJob();
 
   const selectedCustomer = customers.find((entry) => entry.id === customerId) || null;
-
-  const refreshSavedCostings = useCallback(async () => {
-    try {
-      setSavedCostings(await listWindowCostings());
-    } catch (loadError: any) {
-      setStatus({ tone: 'warning', message: loadError?.message || 'Unable to load saved costings.' });
-    }
-  }, []);
 
   useEffect(() => {
     (async () => {
@@ -241,14 +225,13 @@ export default function WindowCostingPage() {
         setRatesUpdatedAt(loaded.updatedAt);
         setRatesError(loaded.error);
 
-        await refreshSavedCostings();
       } catch (loadError: any) {
         setError(loadError?.message || 'Unable to load window costing.');
       } finally {
         setIsLoading(false);
       }
     })();
-  }, [refreshSavedCostings, router]);
+  }, [router]);
 
   function selectProduct(next: WindowProduct) {
     if (!next.type) {
@@ -386,79 +369,10 @@ export default function WindowCostingPage() {
         result,
         ratesUpdatedAt,
       });
-      await refreshSavedCostings();
       setStatus({ tone: 'success', message: 'Costing saved. Load it again from Saved costings.' });
     } catch (saveError: any) {
       setStatus({ tone: 'warning', message: saveError?.message || 'Unable to save the costing.' });
     }
-  }
-
-  /** What was quoted, what it costs today, and what it recomputes to on the rates that priced it. */
-  async function compareCosting(costing: SavedWindowCosting) {
-    // No stamp means it was priced on the code defaults, which are still reproducible.
-    const original = costing.ratesUpdatedAt ? await loadWindowRatesVersion(costing.ratesUpdatedAt).catch(() => null) : mergeWindowRates(null);
-    setComparison({
-      id: costing.id,
-      quoted: costing.price,
-      today: costWindow(costing.input, rates).price,
-      onOriginal: original ? costWindow(costing.input, original).price : null,
-      stamp: costing.ratesUpdatedAt,
-    });
-  }
-
-  function loadSavedCosting(costing: SavedWindowCosting) {
-    setInput({ ...costing.input });
-    const savedSeries = seriesOfProduct(costing.input.productId ?? null) || (productForInput(costing.input) ? seriesOfProduct(productForInput(costing.input)!.id) : null);
-    if (savedSeries) {
-      setSeriesId(savedSeries.id);
-    }
-    setMetreDrafts({});
-    setWindowName(costing.name);
-    if (costing.customer) {
-      setCustomerName(costing.customer);
-    }
-    setStatus({
-      tone: costing.ratesUpdatedAt === ratesUpdatedAt ? 'success' : 'warning',
-      message: costing.ratesUpdatedAt === ratesUpdatedAt ? `Loaded "${costing.name}".` : `Loaded "${costing.name}". Priced on older rates; quoted at ${formatCurrency(costing.price)}.`,
-    });
-  }
-
-  async function markCosting(id: string, status: QuoteStatus, reason?: string | null) {
-    try {
-      await setQuoteStatus(id, status, reason);
-      await refreshSavedCostings();
-    } catch (markError: any) {
-      setStatus({ tone: 'warning', message: markError?.message || 'Unable to mark the costing.' });
-    }
-  }
-
-  async function removeSavedCosting(costing: SavedWindowCosting) {
-    try {
-      await deleteWindowCosting(costing.id);
-      await refreshSavedCostings();
-    } catch (deleteError: any) {
-      setStatus({ tone: 'warning', message: deleteError?.message || 'Unable to delete the costing.' });
-    }
-  }
-
-  function addJobLines() {
-    const lines = quoteLines.length ? quoteLines.filter((line) => line.result.price != null).map((line) => ({ id: jobLineId('window'), kind: 'window' as const, description: line.item.name || describe(line.item.input), quantity: line.item.quantity, unitPrice: line.result.price as number, windowSpec: line.item.input, ratesUpdatedAt })) : result.price == null ? [] : [{ id: jobLineId('window'), kind: 'window' as const, description: windowName.trim() || describe(input), quantity: orderQuantity, unitPrice: result.price, windowSpec: input, ratesUpdatedAt }];
-
-    if (!lines.length) {
-      return;
-    }
-
-    setJob(addToJob(lines, { name: quoteName, customerName: selectedCustomer?.name || customerName, customerId: customerId || null, notes: quoteNotes }));
-    setQuoteItems([]);
-    setStatus({ tone: 'success', message: 'Added to the job.' });
-  }
-
-  function createOrderForJob() {
-    if (!job.lines.length) {
-      return;
-    }
-    persistQuoteToOrderDraft({ kind: 'job', quoteName: job.name || quoteName, customerName: job.customerName || customerName, customerId: job.customerId, quoteDate, quoteNotes: job.notes || quoteNotes, jobLines: job.lines });
-    router.push('/glass/new?fromQuote=1');
   }
 
   function handleCreatePurchaseOrder() {
@@ -716,11 +630,6 @@ export default function WindowCostingPage() {
                 ),
               },
               {
-                id: 'quotes',
-                label: 'Quotes',
-                content: <WinRateCard tally={outcomes} quotes={savedCostings} />,
-              },
-              {
                 id: 'rates',
                 label: 'Rates',
                 content: (
@@ -741,24 +650,6 @@ export default function WindowCostingPage() {
             ]}
           />
 
-          <RateReviewCard
-            asAt={rates.asAt}
-            label={(key) =>
-              ({
-                labourPerHour: 'Labour rate',
-                suppliers: 'Aluminium suppliers',
-                extrusions: 'Extrusions',
-                anodising: 'Anodising and powder coat',
-                perMetre: 'Materials by the metre',
-                each: 'Fixings and fittings',
-                glass: 'Glazing',
-                packingPerSqm: 'Packing',
-                labour: 'Labour minutes',
-                margins: 'Margin and uplift',
-              })[key] || key
-            }
-            action={<ActionButton onClick={() => router.push('/settings/windows')}>Review Window Rates</ActionButton>}
-          />
 
         </>
       }
@@ -767,7 +658,6 @@ export default function WindowCostingPage() {
           body: 'Add',
           items: [
             { icon: '⊹', children: 'Add Window To Quote', onClick: addToQuote },
-            { icon: '⊹', children: 'Add To Job', onClick: addJobLines },
             { icon: '⊹', children: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
           ],
         },
@@ -1121,67 +1011,6 @@ export default function WindowCostingPage() {
         ) : (
           <Text>No windows on this quote.</Text>
         )}
-      </CardDouble>
-
-      <JobPanel job={job} onChange={setJob} onCreateOrder={createOrderForJob} />
-
-      <CardDouble title={`SAVED COSTINGS (${savedCostings.length})`}>
-        {savedCostings.length ? (
-          <Table>
-            <TableRow>
-              <TableColumn style={{ width: '30ch' }}>NAME</TableColumn>
-              <TableColumn style={{ width: '20ch' }}>CUSTOMER</TableColumn>
-              <TableColumn style={{ width: '14ch' }}>PRICE</TableColumn>
-              <TableColumn style={{ width: '22ch' }}>OUTCOME</TableColumn>
-              <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
-            </TableRow>
-            {savedCostings.map((costing) => (
-              <TableRow key={costing.id}>
-                <TableColumn>{costing.name}</TableColumn>
-                <TableColumn>{costing.customer || '—'}</TableColumn>
-                <TableColumn>{formatCurrency(costing.price)}</TableColumn>
-                <TableColumn>
-                  <QuoteStatusControl status={costing.status} statusReason={costing.statusReason} disabled={!canSaveCostings} onChange={(next, reason) => markCosting(costing.id, next, reason)} />
-                </TableColumn>
-                <TableColumn>
-                  <RowSpaceBetween>
-                    <ActionButton onClick={() => loadSavedCosting(costing)}>Load</ActionButton>
-                    <ActionButton onClick={() => compareCosting(costing)}>Compare</ActionButton>
-                    <ActionButton onClick={canSaveCostings ? () => removeSavedCosting(costing) : undefined}>Delete</ActionButton>
-                  </RowSpaceBetween>
-                </TableColumn>
-              </TableRow>
-            ))}
-          </Table>
-        ) : (
-          <Text>No saved costings.</Text>
-        )}
-
-        {comparison ? (
-          <>
-            <br />
-            <Text>
-              <strong>{savedCostings.find((costing) => costing.id === comparison.id)?.name}</strong>
-            </Text>
-            <RowSpaceBetween>
-              <Text>QUOTED</Text>
-              <Text>{formatCurrency(comparison.quoted)}</Text>
-            </RowSpaceBetween>
-            <RowSpaceBetween>
-              <Text>ON TODAY&apos;S RATES</Text>
-              <Text>{formatCurrency(comparison.today)}</Text>
-            </RowSpaceBetween>
-            <RowSpaceBetween>
-              <Text>ON THE RATES THAT PRICED IT</Text>
-              <Text>{comparison.onOriginal == null ? 'those rates are not kept' : formatCurrency(comparison.onOriginal)}</Text>
-            </RowSpaceBetween>
-            {comparison.onOriginal != null && comparison.quoted != null && Math.abs(comparison.onOriginal - comparison.quoted) > 0.01 ? (
-              <Text>
-                <span className="status-warning">Recalculated price differs from the quoted price: the costing changed, not only the rates.</span>
-              </Text>
-            ) : null}
-          </>
-        ) : null}
       </CardDouble>
 
       <CardDouble title="WHAT THESE TERMS MEAN">
