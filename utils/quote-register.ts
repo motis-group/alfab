@@ -1,8 +1,10 @@
 import { QuoteStatus } from '@utils/quote-status';
 import { SavedAwningCosting, listAwningCostings } from '@utils/awning-quote-store';
 import { SavedGlassQuote, listGlassQuotes } from '@utils/glass-quote-store';
+import { SavedQuote, listSavedQuotes } from '@utils/quote-store';
 import { SavedWindowCosting, listWindowCostings } from '@utils/window-quote-store';
 import { QuoteToOrderDraftInput } from '@utils/quote-to-order';
+import { QuoteDraft, describeQuoteProducts, quoteDraftKinds } from '@utils/quote-draft';
 
 export type QuoteKind = 'glass' | 'window' | 'awning';
 
@@ -20,12 +22,15 @@ export const QUOTE_KIND_HREFS: Record<QuoteKind, string> = {
 };
 
 /**
- * One saved quote, whichever calculator priced it. The three calculators write to the same table
- * with different shapes; this is the shape the order list reads.
+ * One saved quote, whichever calculator priced it. The calculators write to the same table with
+ * different shapes; this is the shape the order list reads.
  */
 export interface QuoteRecord {
   id: string;
+  /** The first of `kinds`. What a single-product list shows and links to. */
   kind: QuoteKind;
+  /** Every product type on the quote, in the order glass, window, awning. */
+  kinds: QuoteKind[];
   name: string;
   customer: string;
   customerId: string | null;
@@ -43,6 +48,7 @@ function fromGlass(quote: SavedGlassQuote): QuoteRecord {
   return {
     id: quote.id,
     kind: 'glass',
+    kinds: ['glass'],
     name: quote.name,
     customer: quote.customer,
     customerId: quote.customerId,
@@ -74,6 +80,7 @@ function fromWindow(costing: SavedWindowCosting): QuoteRecord {
   return {
     id: costing.id,
     kind: 'window',
+    kinds: ['window'],
     name: costing.name,
     customer: costing.customer,
     customerId: null,
@@ -100,6 +107,7 @@ function fromAwning(costing: SavedAwningCosting): QuoteRecord {
   return {
     id: costing.id,
     kind: 'awning',
+    kinds: ['awning'],
     name: costing.name,
     customer: costing.customer,
     customerId: null,
@@ -122,9 +130,61 @@ function fromAwning(costing: SavedAwningCosting): QuoteRecord {
   };
 }
 
+function fromQuote(quote: SavedQuote): QuoteRecord {
+  const kinds = quoteDraftKinds(quote);
+  const lineCount = quote.glassLines.length + quote.windowLines.length + quote.awningLines.length;
+
+  return {
+    id: quote.id,
+    // A quote saved before anything was priced has no product to name, and the list still has to
+    // link it somewhere.
+    kind: kinds[0] || 'glass',
+    kinds,
+    name: quote.name,
+    customer: quote.customer,
+    customerId: quote.customerId,
+    date: quote.date,
+    lineCount,
+    total: quote.total,
+    status: quote.status,
+    statusReason: quote.statusReason,
+    draft: lineCount
+      ? {
+          quoteName: quote.name,
+          customerName: quote.customer,
+          customerId: quote.customerId,
+          quoteDate: quote.date ? quote.date.slice(0, 10) : '',
+          quoteNotes: quote.notes,
+          glassLines: quote.glassLines,
+          windowLines: quote.windowLines,
+          awningLines: quote.awningLines,
+        }
+      : null,
+  };
+}
+
+/** The saved record as a working quote: what the printed sheet, the mail link and a calculator read. */
+export function quoteDraftFromRecord(record: QuoteRecord): QuoteDraft {
+  return {
+    name: record.name,
+    customer: record.customer,
+    customerId: record.customerId,
+    date: record.date ? record.date.slice(0, 10) : '',
+    notes: record.draft?.quoteNotes || '',
+    glassLines: record.draft?.glassLines || [],
+    windowLines: record.draft?.windowLines || [],
+    awningLines: record.draft?.awningLines || [],
+  };
+}
+
+/** What a quote holds, for a list that shows one row per quote: "Glass + Window". */
+export function describeQuoteRecordProducts(record: QuoteRecord): string {
+  return describeQuoteProducts(record.kinds);
+}
+
 /** Every saved quote, newest first. A calculator that fails to read is reported, not dropped. */
 export async function listQuoteRecords(): Promise<{ records: QuoteRecord[]; errors: string[] }> {
-  const [glass, windows, awnings] = await Promise.allSettled([listGlassQuotes(), listWindowCostings(), listAwningCostings()]);
+  const [glass, windows, awnings, quotes] = await Promise.allSettled([listGlassQuotes(), listWindowCostings(), listAwningCostings(), listSavedQuotes()]);
   const records: QuoteRecord[] = [];
   const errors: string[] = [];
 
@@ -142,6 +202,11 @@ export async function listQuoteRecords(): Promise<{ records: QuoteRecord[]; erro
     records.push(...awnings.value.map(fromAwning));
   } else {
     errors.push('Awning costings could not be read.');
+  }
+  if (quotes.status === 'fulfilled') {
+    records.push(...quotes.value.map(fromQuote));
+  } else {
+    errors.push('Quotes could not be read.');
   }
 
   records.sort((a, b) => (b.date || '').localeCompare(a.date || ''));

@@ -9,10 +9,12 @@ import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
 import ImportPanel from '@components/ImportPanel';
 import Card from '@components/Card';
+import GlassCostingSheet, { GlassCostingSheetPiece } from '@components/GlassCostingSheet';
 import GlassSpecificationFields from '@components/GlassSpecificationFields';
 import GlassVisualizer from '@components/GlassVisualizer';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
+import QuoteSheet from '@components/QuoteSheet';
 import RowSpaceBetween from '@components/RowSpaceBetween';
 import Table from '@components/Table';
 import TableColumn from '@components/TableColumn';
@@ -23,11 +25,13 @@ import { usePricing } from '@components/PricingProvider';
 import { GlassSpecification, calculateCost, describeGlassSpecification, getEffectiveArea, getEffectivePerimeter, usesMeasuredGeometry } from '@utils/calculations';
 import { Customer, UserRole, formatCurrency, todayISODate } from '@utils/order-management';
 import { GlassQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
+import { EMPTY_QUOTE_DRAFT, QuoteDraft, clearQuoteDraft, clearQuoteDraftIfUnchanged, describeQuoteProducts, quoteDraftKinds, quoteDraftLineCount, quoteDraftTotal, readQuoteDraft, replaceQuoteDraftLines, subscribeToQuoteDraft } from '@utils/quote-draft';
+import { quoteEmailBody, quoteEmailTruncated, quoteMailtoHref } from '@utils/quote-email';
 import { ExtractedPiece } from '@utils/import/model';
 import { LineEditRequest, clearLineEditRequest, peekLineEditRequest, persistLineEditResult } from '@utils/line-editing';
-import { saveGlassQuote } from '@utils/glass-quote-store';
+import { saveQuote } from '@utils/quote-store';
 import { createClient } from '@utils/db-client';
-import { fetchCurrentSessionUser } from '@utils/session-client';
+import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 
 const TABLE_CUSTOMERS = 'customers';
 
@@ -61,9 +65,17 @@ function numberOrFallback(value: string, fallback = 0): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function formatStamp(stamp: string | null): string {
+  if (!stamp) {
+    return 'code defaults';
+  }
+  const parsed = new Date(stamp);
+  return Number.isNaN(parsed.getTime()) ? stamp : `saved ${parsed.toLocaleDateString()}`;
+}
+
 export default function AdhocQuotePage() {
   const router = useRouter();
-  const { pricingData, updatedAt } = usePricing();
+  const { pricingData, source, updatedAt } = usePricing();
 
   const [role, setRole] = useState<UserRole>('readonly');
   const [isLoading, setIsLoading] = useState(true);
@@ -88,6 +100,17 @@ export default function AdhocQuotePage() {
   const [status, setStatus] = useState<{ tone: 'success' | 'warning' | 'error'; message: string } | null>(null);
   // Set when the calculator was opened to price one line of a purchase order.
   const [lineEdit, setLineEdit] = useState<LineEditRequest | null>(null);
+  const [canSaveQuotes, setCanSaveQuotes] = useState(false);
+  // The quote all three calculators share, holding the windows and awnings priced on their pages.
+  const [workingDraft, setWorkingDraft] = useState<QuoteDraft>(EMPTY_QUOTE_DRAFT);
+  // Raised once the shared quote has been read. Mirroring before that would write this page's empty
+  // line list over a draft another calculator left.
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  // Customer by default, so a browser Cmd+P prints the safe document. The internal button raises it
+  // for one print and `afterprint` puts it back.
+  const [sheetAudience, setSheetAudience] = useState<'internal' | 'customer'>('customer');
+
+  const ratesLabel = source === 'saved' ? formatStamp(updatedAt) : 'code defaults';
 
   const calculation = useMemo(() => {
     try {
@@ -134,6 +157,21 @@ export default function AdhocQuotePage() {
   const quotePieceCount = quoteLines.reduce((sum, line) => sum + Math.max(1, line.item.quantity), 0);
   const quoteArea = quoteLines.reduce((sum, line) => sum + getEffectiveArea(line.item.spec) * Math.max(1, line.item.quantity), 0);
   const quoteEdge = quoteLines.reduce((sum, line) => sum + getEffectivePerimeter(line.item.spec) * Math.max(1, line.item.quantity), 0);
+
+  // The whole quote, not this page's product alone: a total that omits the windows already on it is
+  // not the number the customer is given.
+  const draftLineCount = quoteDraftLineCount(workingDraft);
+  const draftTotal = quoteDraftTotal(workingDraft);
+  const draftProducts = describeQuoteProducts(quoteDraftKinds(workingDraft));
+  const otherLines = [...workingDraft.windowLines, ...workingDraft.awningLines];
+  const otherTotal = otherLines.reduce((sum, line) => sum + line.unitPrice * Math.max(1, line.quantity), 0);
+  const otherLineCounts = [workingDraft.windowLines.length ? `${workingDraft.windowLines.length} window line${workingDraft.windowLines.length === 1 ? '' : 's'}` : '', workingDraft.awningLines.length ? `${workingDraft.awningLines.length} awning line${workingDraft.awningLines.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ');
+
+  // The costing sheet prints the pieces the quote holds; a quote with none prints the piece on
+  // screen. The customer's quotation is the quote itself and is refused when it holds nothing.
+  const sheetPieces: GlassCostingSheetPiece[] = quoteLines.length
+    ? quoteLines.map((line) => ({ id: line.item.localId, name: line.item.name, quantity: line.item.quantity, spec: line.item.spec, unitPrice: line.unitPrice, breakdown: line.breakdown }))
+    : [{ id: 'current', name: itemName, quantity: Math.max(1, quantity), spec, unitPrice: calculation.unitPrice, breakdown: calculation.breakdown }];
 
   // The cost build-up for the whole quote: every line's breakdown, times how many of that piece.
   const quoteBreakdown = useMemo(() => {
@@ -182,13 +220,16 @@ export default function AdhocQuotePage() {
         }
 
         setRole(user.effectiveRole as UserRole);
+        setCanSaveQuotes(userCan(user, 'quotes:write'));
 
         // Opened from an order to price one of its lines: load that line into the form.
         const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        let editingOrderLine = false;
         if (params?.get('editLine') === '1') {
           const request = peekLineEditRequest();
           const line = request?.order.lineDrafts.find((entry) => entry.localId === request.localId);
           if (request && line) {
+            editingOrderLine = true;
             setLineEdit(request);
             setSpec({ ...line.adhocSpec });
             setQuantity(Math.max(1, line.quantityOrdered));
@@ -201,6 +242,32 @@ export default function AdhocQuotePage() {
           }
         }
 
+        // Pricing an order line is not quoting, so it neither reads nor writes the shared quote.
+        if (!editingOrderLine) {
+          const draft = readQuoteDraft();
+          setWorkingDraft(draft);
+          setQuoteName(draft.name);
+          setCustomerName(draft.customer);
+          setCustomerId(draft.customerId || '');
+          if (draft.date) {
+            setQuoteDate(draft.date);
+          }
+          setQuoteNotes(draft.notes);
+          // The prices come back as they were quoted rather than repriced on today's rates.
+          setQuoteItems(
+            draft.glassLines.map((line, index) => ({
+              localId: `glass-${index}-${Math.random().toString(36).slice(2, 8)}`,
+              name: line.description,
+              spec: line.spec,
+              quantity: line.quantity,
+              markupPercent: line.markupPercent,
+              useRecommendedPrice: false,
+              manualUnitPrice: line.unitPrice,
+            }))
+          );
+          setDraftLoaded(true);
+        }
+
         const db = createClient();
         const { data: customerData } = await db.from(TABLE_CUSTOMERS).select('*').order('name', { ascending: true });
         setCustomers((customerData as Customer[]) || []);
@@ -211,6 +278,57 @@ export default function AdhocQuotePage() {
       }
     })();
   }, [router]);
+
+  // This page owns the glass lines of the shared quote and nothing else, so mirroring them leaves
+  // the windows and awnings another calculator put there untouched. A piece that could not be
+  // priced is not a line: the customer would be offered it at nothing.
+  useEffect(() => {
+    if (!draftLoaded) {
+      return;
+    }
+
+    setWorkingDraft(
+      replaceQuoteDraftLines(
+        'glass',
+        quoteLines
+          .filter((line) => !line.error)
+          .map((line) => ({
+            description: line.item.name,
+            quantity: line.item.quantity,
+            unitPrice: line.unitPrice,
+            markupPercent: line.item.markupPercent,
+            spec: line.item.spec,
+          })),
+        { name: quoteName, customer: selectedCustomer?.name || customerName, customerId: customerId || null, date: quoteDate, notes: quoteNotes }
+      )
+    );
+  }, [customerId, customerName, draftLoaded, quoteDate, quoteLines, quoteName, quoteNotes, selectedCustomer]);
+
+  // A second tab writing the quote leaves this page holding an older heading, which the mirror
+  // above would put back over it.
+  useEffect(() => {
+    if (!draftLoaded) {
+      return;
+    }
+
+    return subscribeToQuoteDraft((draft) => {
+      setWorkingDraft(draft);
+      setQuoteName(draft.name);
+      setCustomerName(draft.customer);
+      setCustomerId(draft.customerId || '');
+      setQuoteNotes(draft.notes);
+      if (draft.date) {
+        setQuoteDate(draft.date);
+      }
+    });
+  }, [draftLoaded]);
+
+  // Put the sheet back to the customer copy once a print finishes, so the next Cmd+P is safe.
+  useEffect(() => {
+    const restore = () => setSheetAudience('customer');
+    window.addEventListener('afterprint', restore);
+    return () => window.removeEventListener('afterprint', restore);
+  }, []);
 
   /** Hands the priced line back to the order it came from. */
   function saveLineToOrder() {
@@ -249,19 +367,26 @@ export default function AdhocQuotePage() {
     router.push(lineEdit.returnTo);
   }
 
-  function resetCalculator() {
+  /** Empties the whole quote: this page's pieces, its heading, and the other calculators' lines. */
+  function clearQuote() {
     setQuoteName('');
     setCustomerName('');
     setCustomerId('');
     setQuoteDate(todayISODate());
+    setQuoteNotes('');
+    setQuoteItems([]);
+    setWorkingDraft(EMPTY_QUOTE_DRAFT);
+    clearQuoteDraft();
+  }
+
+  /** The piece in the form. The quote it is being added to is left alone. */
+  function resetCalculator() {
     setQuantity(1);
     setMarkupPercent(20);
     setUseRecommendedPrice(true);
     setManualUnitPrice(0);
-    setQuoteNotes('');
     setSpec({ ...defaultQuoteSpec });
     setItemName('');
-    setQuoteItems([]);
     setCopyState('');
     setStatus(null);
     setCadPanelKey((key) => key + 1);
@@ -333,63 +458,124 @@ export default function AdhocQuotePage() {
     setQuoteItems((prev) => prev.filter((entry) => entry.localId !== localId));
   }
 
+  /** Saves every product on the quote, so the customer is given one document and one number. */
   async function handleSaveQuote() {
-    if (!quoteLines.length) {
-      setStatus({ tone: 'warning', message: 'Add a piece before saving.' });
+    if (!canSaveQuotes) {
+      setStatus({ tone: 'warning', message: 'This session cannot save quotes.' });
+      return;
+    }
+    // What is stored rather than this page's copy of it: a line another calculator wrote after the
+    // last mirror belongs on the quote that is filed.
+    const stored = readQuoteDraft();
+    if (!quoteDraftLineCount(stored)) {
+      setStatus({ tone: 'warning', message: 'Nothing on this quote to save.' });
       return;
     }
 
     try {
-      await saveGlassQuote({
-        name: quoteName,
-        customer: selectedCustomer?.name || customerName,
-        customerId: customerId || null,
-        notes: quoteNotes,
-        items: quoteLines.map((line) => ({
-          name: line.item.name,
-          spec: line.item.spec,
-          quantity: line.item.quantity,
-          markupPercent: line.item.markupPercent,
-          unitPrice: line.unitPrice,
-          breakdown: line.breakdown,
-        })),
-        total: quoteTotal,
+      await saveQuote({
+        name: stored.name,
+        customer: stored.customer,
+        customerId: stored.customerId,
+        date: stored.date,
+        notes: stored.notes,
+        glassLines: stored.glassLines,
+        windowLines: stored.windowLines,
+        awningLines: stored.awningLines,
+        total: quoteDraftTotal(stored),
         ratesUpdatedAt: updatedAt,
       });
-      setStatus({ tone: 'success', message: 'Quote saved.' });
+
+      if (clearQuoteDraftIfUnchanged(stored)) {
+        clearQuote();
+        setStatus({ tone: 'success', message: 'Quote saved.' });
+      } else {
+        setWorkingDraft(readQuoteDraft());
+        setStatus({ tone: 'success', message: 'Quote saved. The working quote changed while it saved and was kept.' });
+      }
     } catch (saveError: any) {
       setStatus({ tone: 'error', message: saveError?.message || 'Unable to save the quote.' });
     }
   }
 
-  async function copyQuoteToClipboard() {
-    if (!quoteSummary) {
+  /** The figures the customer is given. Holds no cost build-up. */
+  async function copySummary() {
+    const text = draftLineCount ? quoteEmailBody(workingDraft) : quoteSummary;
+    if (!text) {
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(quoteSummary);
-      setCopyState('Copied quote summary.');
+      await navigator.clipboard.writeText(text);
+      setCopyState('Copied the prices for the customer.');
     } catch {
       setCopyState('Clipboard copy failed.');
     }
   }
 
+  /** What the glass costs to make, against what it is priced at. Stays inside the shop. */
+  async function copyCostBreakdown() {
+    const priced = quoteLines.length;
+    const cost = priced ? quoteBreakdown.cost : calculation.breakdown?.total || 0;
+    const price = priced ? quoteTotal : calculation.totalPrice;
+    const text = [
+      `INTERNAL — ${quoteName.trim() || 'Ad hoc quote'} — do not send to a customer`,
+      `Rates: ${ratesLabel}`,
+      `Glass: ${formatCurrency(priced ? quoteBreakdown.baseGlass : calculation.breakdown?.baseGlass)}`,
+      `Edgework: ${formatCurrency(priced ? quoteBreakdown.edgework : calculation.breakdown?.edgework)}`,
+      `Holes: ${formatCurrency(priced ? quoteBreakdown.holes : calculation.breakdown?.holes)}`,
+      `Shape: ${formatCurrency(priced ? quoteBreakdown.shape : calculation.breakdown?.shape)}`,
+      `Ceramic band: ${formatCurrency(priced ? quoteBreakdown.ceramic : calculation.breakdown?.ceramic)}`,
+      `Scanning: ${formatCurrency(priced ? quoteBreakdown.scanning : calculation.breakdown?.scanning)}`,
+      `Minimum charge top-up: ${formatCurrency(priced ? quoteBreakdown.minimumTopUp : calculation.breakdown?.minimumTopUp)}`,
+      `Total cost: ${formatCurrency(cost)}`,
+      `Margin: ${formatCurrency(price - cost)}`,
+      `Glass price: ${formatCurrency(price)}`,
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyState('Copied the cost build-up (internal).');
+    } catch {
+      setCopyState('Clipboard copy failed.');
+    }
+  }
+
+  function printSheet(audience: 'internal' | 'customer') {
+    if (audience === 'customer' && !draftLineCount) {
+      setStatus({ tone: 'warning', message: 'Nothing on this quote to print.' });
+      return;
+    }
+
+    setSheetAudience(audience);
+    if (typeof window !== 'undefined') {
+      // Let the sheet re-render for the chosen audience before the print dialog reads the page.
+      window.setTimeout(() => window.print(), 50);
+    }
+  }
+
+  /** Opens the estimator's own mail client with the quotation already written. */
+  function emailQuote() {
+    if (!draftLineCount) {
+      setStatus({ tone: 'warning', message: 'Nothing on this quote to send.' });
+      return;
+    }
+
+    if (quoteEmailTruncated(workingDraft)) {
+      setStatus({ tone: 'warning', message: 'The quote is longer than the message body holds. Attach the printed quote.' });
+    }
+    window.location.href = quoteMailtoHref(workingDraft, selectedCustomer?.contact_email || '');
+  }
+
+  /** The whole quote goes on the order; a quote with nothing on it sends the piece on screen. */
   function handleCreatePurchaseOrder() {
-    // The quote list when there is one, otherwise the piece on screen.
-    const glassLines: GlassQuoteLine[] = quoteLines.length
-      ? quoteLines.map((line) => ({
-          description: line.item.name,
-          quantity: line.item.quantity,
-          unitPrice: line.unitPrice,
-          markupPercent: line.item.markupPercent,
-          spec: line.item.spec,
-        }))
-      : calculation.error
+    const glassLines: GlassQuoteLine[] = workingDraft.glassLines.length
+      ? workingDraft.glassLines
+      : draftLineCount || calculation.error
         ? []
         : [{ description: '', quantity: Math.max(1, quantity), unitPrice: calculation.unitPrice, markupPercent, spec }];
 
-    if (!glassLines.length) {
+    if (!glassLines.length && !workingDraft.windowLines.length && !workingDraft.awningLines.length) {
       router.push('/glass/new');
       return;
     }
@@ -401,6 +587,8 @@ export default function AdhocQuotePage() {
       quoteDate,
       quoteNotes,
       glassLines,
+      windowLines: workingDraft.windowLines,
+      awningLines: workingDraft.awningLines,
     });
     router.push('/glass/new?fromQuote=1');
   }
@@ -417,22 +605,30 @@ export default function AdhocQuotePage() {
       sidebar={
         <>
           {/* Actions are on the toolbar. */}
-          {/* With pieces on the quote, this summarises the quote; otherwise the piece in the form. */}
-          <Card title={quoteLines.length ? `QUOTE SUMMARY (${quoteLines.length} LINE${quoteLines.length === 1 ? '' : 'S'})` : 'THIS PIECE'}>
-            {quoteLines.length ? (
+          {/* With lines on the quote, this summarises the whole quote; otherwise the piece in the form. */}
+          <Card title={draftLineCount ? `QUOTE SUMMARY (${draftLineCount} LINE${draftLineCount === 1 ? '' : 'S'})` : 'THIS PIECE'}>
+            {draftLineCount ? (
               <>
                 <RowSpaceBetween>
-                  <Text>PIECES</Text>
-                  <Text>{quotePieceCount}</Text>
+                  <Text>PRODUCTS</Text>
+                  <Text>{draftProducts}</Text>
                 </RowSpaceBetween>
-                <RowSpaceBetween>
-                  <Text>AREA</Text>
-                  <Text>{quoteArea.toFixed(3)} m²</Text>
-                </RowSpaceBetween>
-                <RowSpaceBetween>
-                  <Text>EDGE LENGTH</Text>
-                  <Text>{quoteEdge.toFixed(2)} m</Text>
-                </RowSpaceBetween>
+                {quoteLines.length ? (
+                  <>
+                    <RowSpaceBetween>
+                      <Text>GLASS PIECES</Text>
+                      <Text>{quotePieceCount}</Text>
+                    </RowSpaceBetween>
+                    <RowSpaceBetween>
+                      <Text>GLASS AREA</Text>
+                      <Text>{quoteArea.toFixed(3)} m²</Text>
+                    </RowSpaceBetween>
+                    <RowSpaceBetween>
+                      <Text>GLASS EDGE LENGTH</Text>
+                      <Text>{quoteEdge.toFixed(2)} m</Text>
+                    </RowSpaceBetween>
+                  </>
+                ) : null}
                 {quoteLines.some((line) => line.error) ? (
                   <Text>
                     <span className="status-error">
@@ -443,11 +639,9 @@ export default function AdhocQuotePage() {
                 <RowSpaceBetween>
                   <Text>QUOTE TOTAL</Text>
                   <Text>
-                    <span className="status-pill status-pill-success">{formatCurrency(quoteTotal)}</span>
+                    <span className="status-pill status-pill-success">{formatCurrency(draftTotal)}</span>
                   </Text>
                 </RowSpaceBetween>
-                <br />
-                <ActionButton onClick={copyQuoteToClipboard}>Copy Quote Summary</ActionButton>
               </>
             ) : calculation.error ? (
               <Text>
@@ -480,13 +674,11 @@ export default function AdhocQuotePage() {
                   <Text>{Math.max(1, quantity)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
-                  <Text>TOTAL QUOTE</Text>
+                  <Text>PIECE TOTAL</Text>
                   <Text>
                     <span className="status-pill status-pill-success">{formatCurrency(calculation.totalPrice)}</span>
                   </Text>
                 </RowSpaceBetween>
-                <br />
-                <ActionButton onClick={copyQuoteToClipboard}>Copy Quote Summary</ActionButton>
               </>
             )}
 
@@ -494,14 +686,14 @@ export default function AdhocQuotePage() {
               <>
                 <br />
                 <Text>
-                  <span className={copyState === 'Copied quote summary.' ? 'status-success' : 'status-warning'}>{copyState}</span>
+                  <span className={copyState.startsWith('Copied') ? 'status-success' : 'status-warning'}>{copyState}</span>
                 </Text>
               </>
             ) : null}
           </Card>
 
-          {/* Cost build-up of the quote when it has pieces; otherwise of the piece in the form. */}
-          <Card title={quoteLines.length ? 'PRICE BREAKDOWN (WHOLE QUOTE)' : 'PRICE BREAKDOWN'}>
+          {/* Cost build-up of the glass on the quote; otherwise of the piece in the form. */}
+          <Card title={quoteLines.length ? 'PRICE BREAKDOWN (ALL GLASS)' : 'PRICE BREAKDOWN'}>
             {quoteLines.length ? (
               <Table>
                 <TableRow>
@@ -547,7 +739,7 @@ export default function AdhocQuotePage() {
                   <TableColumn>{formatCurrency(quoteTotal - quoteBreakdown.cost)}</TableColumn>
                 </TableRow>
                 <TableRow>
-                  <TableColumn>Quote Total ({quotePieceCount} pieces)</TableColumn>
+                  <TableColumn>Glass Total ({quotePieceCount} pieces)</TableColumn>
                   <TableColumn>{formatCurrency(quoteTotal)}</TableColumn>
                 </TableRow>
               </Table>
@@ -605,7 +797,7 @@ export default function AdhocQuotePage() {
                     <TableColumn>{formatCurrency(calculation.unitPrice)}</TableColumn>
                   </TableRow>
                   <TableRow>
-                    <TableColumn>Quote Total ({Math.max(1, quantity)} units)</TableColumn>
+                    <TableColumn>Piece Total ({Math.max(1, quantity)} units)</TableColumn>
                     <TableColumn>{formatCurrency(calculation.totalPrice)}</TableColumn>
                   </TableRow>
                 </Table>
@@ -626,17 +818,47 @@ export default function AdhocQuotePage() {
             { icon: '⊹', children: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
           ],
         },
-        { body: 'Copy Quote', onClick: copyQuoteToClipboard },
         {
-          body: 'Use Recommended Price',
+          body: 'Print',
+          items: [
+            { icon: '⊹', children: 'Quote For Customer', onClick: () => printSheet('customer') },
+            { icon: '⊹', children: 'Costing Sheet (Internal)', onClick: () => printSheet('internal') },
+          ],
+        },
+        {
+          body: 'Send',
+          items: [{ icon: '⊹', children: 'Electronic Mail To Customer', onClick: emailQuote }],
+        },
+        {
+          body: 'Copy',
+          items: [
+            { icon: '⊹', children: 'Prices For Customer', onClick: copySummary },
+            { icon: '⊹', children: 'Cost Build-up (Internal)', onClick: copyCostBreakdown },
+          ],
+        },
+        {
+          body: 'Set Manual Price To Recommended',
           onClick: () => {
             setUseRecommendedPrice(false);
             setManualUnitPrice(Number(calculation.recommendedUnitPrice.toFixed(2)));
           },
         },
+        { body: canSaveQuotes ? 'Save Quote' : 'Saving Needs Access', onClick: canSaveQuotes ? handleSaveQuote : undefined },
         { body: 'Reset', onClick: resetCalculator },
       ]}
     >
+      {/* Step one of the estimator's job: the customer's document arrives and is read into lines. */}
+      <CardDouble title="IMPORT A CUSTOMER ORDER OR DRAWING">
+        <ImportPanel
+          spec={spec}
+          cadPanelKey={cadPanelKey}
+          disabled={role === 'readonly'}
+          onApplyCad={(result) => setSpec(result.spec)}
+          onClearCad={() => setSpec((prev) => ({ ...prev, cadOutline: null }))}
+          onAddPieces={addImportedPieces}
+        />
+      </CardDouble>
+
       {error && (
         <Card title="ERROR">
           <Text>
@@ -679,7 +901,7 @@ export default function AdhocQuotePage() {
 
         <Input label="PIECE NAME (OPTIONAL)" name="item_name" value={itemName} onChange={(event) => setItemName(event.target.value)} placeholder="Front window, side panel..." />
         <br />
-        {lineEdit ? null : <ActionButton onClick={addToQuote}>Add Piece To Quote</ActionButton>}
+        {lineEdit ? null : <ActionButton onClick={addToQuote}>Add To Quote</ActionButton>}
       </CardDouble>
 
       {lineEdit ? null : (
@@ -714,7 +936,7 @@ export default function AdhocQuotePage() {
       )}
 
       {lineEdit ? null : (
-        <CardDouble title={`QUOTE LINES (${quoteLines.length})`}>
+        <CardDouble title={`QUOTE LINES (${draftLineCount})`}>
           {quoteLines.length ? (
             <>
               <Table>
@@ -747,35 +969,35 @@ export default function AdhocQuotePage() {
                 ))}
               </Table>
               <br />
+            </>
+          ) : (
+            <Text>No glass lines on this quote.</Text>
+          )}
+
+          {otherLineCounts ? (
+            <Text>
+              {otherLineCounts} on this quote. {formatCurrency(otherTotal)}.
+            </Text>
+          ) : null}
+
+          {draftLineCount ? (
+            <>
+              <br />
               <RowSpaceBetween>
                 <Text>QUOTE TOTAL</Text>
                 <Text>
-                  <span className="status-pill status-pill-success">{formatCurrency(quoteTotal)}</span>
+                  <span className="status-pill status-pill-success">{formatCurrency(draftTotal)}</span>
                 </Text>
               </RowSpaceBetween>
               <br />
-              <RowSpaceBetween>
-                <ActionButton onClick={handleSaveQuote}>Save Quote</ActionButton>
-                <ActionButton onClick={() => setQuoteItems([])}>Clear Quote</ActionButton>
-              </RowSpaceBetween>
+              <ActionButton onClick={clearQuote}>Clear Quote</ActionButton>
             </>
-          ) : (
-            <Text>No pieces on this quote.</Text>
-          )}
+          ) : null}
         </CardDouble>
       )}
 
-      <CardDouble title="READ A CUSTOMER'S ORDER OR DRAWING">
-        <ImportPanel
-          spec={spec}
-          cadPanelKey={cadPanelKey}
-          disabled={role === 'readonly'}
-          onApplyCad={(result) => setSpec(result.spec)}
-          onClearCad={() => setSpec((prev) => ({ ...prev, cadOutline: null }))}
-          onAddPieces={addImportedPieces}
-        />
-      </CardDouble>
-
+      {/* Both sheets print everything portalled into the page, so only one is ever mounted. */}
+      {sheetAudience === 'customer' ? <QuoteSheet quote={workingDraft} /> : <GlassCostingSheet quoteName={quoteName} customerName={selectedCustomer?.name || customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} pieces={sheetPieces} />}
     </AppFrame>
   );
 }

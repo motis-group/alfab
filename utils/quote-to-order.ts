@@ -98,7 +98,7 @@ function isWindowCostingInput(value: unknown): value is WindowCostingInput {
   return typeof spec.type === 'string' && typeof spec.heightMm === 'number' && typeof spec.lengthMm === 'number';
 }
 
-function normalizeWindowLines(value: unknown): WindowQuoteLine[] {
+export function normalizeWindowLines(value: unknown): WindowQuoteLine[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -125,7 +125,7 @@ function isAwningCostingInput(value: unknown): value is AwningCostingInput {
   return typeof spec.heightMm === 'number' && typeof spec.widthMm === 'number' && typeof spec.qty === 'number';
 }
 
-function normalizeAwningLines(value: unknown): AwningQuoteLine[] {
+export function normalizeAwningLines(value: unknown): AwningQuoteLine[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -144,7 +144,7 @@ function normalizeAwningLines(value: unknown): AwningQuoteLine[] {
     });
 }
 
-function normalizeGlassLines(value: unknown): GlassQuoteLine[] {
+export function normalizeGlassLines(value: unknown): GlassQuoteLine[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -174,20 +174,19 @@ function isQuoteToOrderDraft(value: unknown): value is QuoteToOrderDraft {
     return false;
   }
 
-  if (draft.kind === 'window') {
-    return normalizeWindowLines(draft.windowLines).length > 0;
-  }
-  if (draft.kind === 'awning') {
-    return normalizeAwningLines(draft.awningLines).length > 0;
-  }
-  return normalizeGlassLines(draft.glassLines).length > 0 || isGlassSpecification(draft.spec);
+  // A draft holds whatever the quote held, so any priced line makes it an order. Reading validity
+  // off `kind` alone refused a quote of windows and awnings, which carries no glass line.
+  return normalizeGlassLines(draft.glassLines).length > 0 || normalizeWindowLines(draft.windowLines).length > 0 || normalizeAwningLines(draft.awningLines).length > 0 || isGlassSpecification(draft.spec);
 }
 
 function normalizeDraft(draft: QuoteToOrderDraftInput | QuoteToOrderDraft): QuoteToOrderDraft {
-  const kind: QuoteToOrderDraftKind = draft.kind === 'window' || draft.kind === 'awning' ? draft.kind : 'glass';
   const windowLines = normalizeWindowLines(draft.windowLines);
   const awningLines = normalizeAwningLines(draft.awningLines);
   const glassLines = normalizeGlassLines(draft.glassLines);
+  // The lines name the kind when the caller does not, so a draft merged from several quotes is
+  // described by what it holds.
+  const declared: QuoteToOrderDraftKind | null = draft.kind === 'glass' || draft.kind === 'window' || draft.kind === 'awning' ? draft.kind : null;
+  const kind: QuoteToOrderDraftKind = declared ?? (glassLines.length || isGlassSpecification(draft.spec) ? 'glass' : windowLines.length ? 'window' : awningLines.length ? 'awning' : 'glass');
   const firstLine = windowLines[0] || awningLines[0] || glassLines[0];
 
   return {

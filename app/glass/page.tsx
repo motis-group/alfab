@@ -29,9 +29,10 @@ import {
   localISODate,
 } from '@utils/order-management';
 import QuoteStatusControl from '@components/QuoteStatusControl';
-import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
+import { QUOTE_KIND_HREFS, QuoteRecord, describeQuoteRecordProducts, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder, quoteDraftFromRecord } from '@utils/quote-register';
 import { QUOTE_STATUS_LABELS, QUOTE_STATUS_ORDER, QuoteStatus, setQuoteStatus } from '@utils/quote-status';
 import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
+import { quoteDraftLineCount, readQuoteDraft, writeQuoteDraft } from '@utils/quote-draft';
 import { overdueOrders } from '@utils/order-metrics';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
@@ -262,6 +263,19 @@ export default function OrderDashboardPage() {
     router.push('/glass/new?fromQuote=1');
   }
 
+  /**
+   * A saved quote back on a calculator. It becomes the working quote, because a calculator prices
+   * the quote in local storage and has no other way to be given one.
+   */
+  function openQuoteInCalculator(quote: QuoteRecord) {
+    if (quoteDraftLineCount(readQuoteDraft()) && !window.confirm('The working quote on this machine is replaced by this one.')) {
+      return;
+    }
+
+    writeQuoteDraft(quoteDraftFromRecord(quote));
+    router.push(QUOTE_KIND_HREFS[quote.kind]);
+  }
+
   const selectedRecords = quotes.filter((quote) => selectedQuotes.has(quote.id));
   const selectedCount = selectedRecords.length;
   const selectedTotal = selectedRecords.reduce((sum, quote) => sum + quote.total, 0);
@@ -426,14 +440,17 @@ export default function OrderDashboardPage() {
           <Table>
             <TableRow>
               <TableColumn style={{ width: '4ch' }}>ON</TableColumn>
+              {/* Unsized, so it takes the slack and the sized columns keep the width they ask for. */}
               <TableColumn>QUOTE</TableColumn>
-              <TableColumn style={{ width: '10ch' }}>PRODUCT</TableColumn>
-              <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
-              <TableColumn style={{ width: '13ch' }}>DATE</TableColumn>
-              <TableColumn style={{ width: '8ch' }}>LINES</TableColumn>
-              <TableColumn style={{ width: '13ch' }}>TOTAL</TableColumn>
-              <TableColumn style={{ width: '22ch' }}>STATUS</TableColumn>
-              <TableColumn style={{ width: '24ch' }}>ACTIONS</TableColumn>
+              {/* Sized for the common single product; the rare three-product value wraps rather than
+                  starving the quote name, which is the column that carries the content. */}
+              <TableColumn style={{ width: '12ch' }}>PRODUCT</TableColumn>
+              <TableColumn style={{ width: '20ch' }}>CUSTOMER</TableColumn>
+              <TableColumn style={{ width: '12ch' }}>DATE</TableColumn>
+              <TableColumn style={{ width: '7ch' }}>LINES</TableColumn>
+              <TableColumn style={{ width: '12ch' }}>TOTAL</TableColumn>
+              <TableColumn style={{ width: '20ch' }}>STATUS</TableColumn>
+              <TableColumn style={{ width: '17ch' }}>ACTIONS</TableColumn>
             </TableRow>
 
             {filteredQuotes.map((quote) => (
@@ -442,7 +459,7 @@ export default function OrderDashboardPage() {
                   <input type="checkbox" checked={selectedQuotes.has(quote.id)} disabled={!quote.draft} aria-label={`Put ${quote.name || 'this quote'} on an order`} onChange={() => toggleQuote(quote.id)} />
                 </TableColumn>
                 <TableColumn>{quote.name || 'Untitled'}</TableColumn>
-                <TableColumn>{QUOTE_KIND_LABELS[quote.kind]}</TableColumn>
+                <TableColumn>{describeQuoteRecordProducts(quote) || '—'}</TableColumn>
                 <TableColumn>{quote.customer || 'Walk-in'}</TableColumn>
                 <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
                 <TableColumn>{quote.lineCount}</TableColumn>
@@ -451,7 +468,8 @@ export default function OrderDashboardPage() {
                   <QuoteStatusControl status={quote.status} statusReason={quote.statusReason} disabled={role === 'readonly'} onChange={(next, reason) => markQuote(quote.id, next, reason)} />
                 </TableColumn>
                 <TableColumn style={{ whiteSpace: 'nowrap' }}>
-                  <ActionButton onClick={() => router.push(QUOTE_KIND_HREFS[quote.kind])}>Open</ActionButton>{' '}
+                  {/* A quote of several products has no calculator of its own, so it opens in the one that prices its first product. */}
+                  <ActionButton onClick={() => openQuoteInCalculator(quote)}>Open</ActionButton>{' '}
                   <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuotes([quote])}>Convert</ActionButton>
                 </TableColumn>
               </TableRow>

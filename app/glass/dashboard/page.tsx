@@ -18,9 +18,10 @@ import Text from '@components/Text';
 
 import { Customer, PurchaseOrder, formatCurrency, statusLabel, todayISODate } from '@utils/order-management';
 import { openOrdersByCustomer, ordersDueWithin, ordersWithStatus, overdueOrders, recentOrders, tallyQuotes } from '@utils/order-metrics';
-import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
+import { QUOTE_KIND_HREFS, QuoteRecord, describeQuoteRecordProducts, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder, quoteDraftFromRecord } from '@utils/quote-register';
 import { QUOTE_STATUS_LABELS, setQuoteStatus, winRate } from '@utils/quote-status';
 import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
+import { quoteDraftLineCount, readQuoteDraft, writeQuoteDraft } from '@utils/quote-draft';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
@@ -89,6 +90,19 @@ export default function DashboardPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  /**
+   * A saved quote back on a calculator. It becomes the working quote, because a calculator prices
+   * the quote in local storage and has no other way to be given one.
+   */
+  function openQuoteInCalculator(quote: QuoteRecord) {
+    if (quoteDraftLineCount(readQuoteDraft()) && !window.confirm('The working quote on this machine is replaced by this one.')) {
+      return;
+    }
+
+    writeQuoteDraft(quoteDraftFromRecord(quote));
+    router.push(QUOTE_KIND_HREFS[quote.kind]);
+  }
 
   /** A quote reads better as the document the customer was sent than as a row. */
   async function convertOpenQuote(quote: QuoteRecord) {
@@ -201,7 +215,8 @@ export default function DashboardPage() {
           <QuoteDocument
             quote={openQuote}
             onClose={() => setOpenQuote(null)}
-            onOpen={() => router.push(QUOTE_KIND_HREFS[openQuote.kind])}
+            // A quote of several products has no calculator of its own, so it opens in the one that prices its first product.
+            onOpen={() => openQuoteInCalculator(openQuote)}
             onConvert={() => convertOpenQuote(openQuote)}
           />
           <br />
@@ -270,7 +285,9 @@ export default function DashboardPage() {
           <Table>
             <TableRow>
               <TableColumn>QUOTE</TableColumn>
-              <TableColumn style={{ width: '10ch' }}>PRODUCT</TableColumn>
+              {/* Sized for the common single product; the rare three-product value wraps rather than
+                  starving the quote name, which is the column that carries the content. */}
+              <TableColumn style={{ width: '12ch' }}>PRODUCT</TableColumn>
               <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
               <TableColumn style={{ width: '13ch' }}>DATE</TableColumn>
               <TableColumn style={{ width: '13ch' }}>TOTAL</TableColumn>
@@ -282,7 +299,7 @@ export default function DashboardPage() {
               .map((quote) => (
                 <TableRow key={quote.id}>
                   <TableColumn>{quote.name || 'Untitled'}</TableColumn>
-                  <TableColumn>{QUOTE_KIND_LABELS[quote.kind]}</TableColumn>
+                  <TableColumn>{describeQuoteRecordProducts(quote) || '—'}</TableColumn>
                   <TableColumn>{quote.customer || 'Walk-in'}</TableColumn>
                   <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
                   <TableColumn>{formatCurrency(quote.total)}</TableColumn>
