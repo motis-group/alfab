@@ -730,7 +730,7 @@ const AFB035: WindowTypeConfig = {
   labourParts: ['window', 'develop', 'sundry'],
   defaults: { hinges: 2, strutKind: 'gas', struts: 2, handles: 1 },
   provisionalNote:
-    'AFB035: the frame is costed on the 015 / AFB008 section and the labour minutes are borrowed from the 1000 slider. Time an 035 and price its fittings before quoting from this.',
+    'AFB035: frame costed on the 015 / AFB008 section, labour from the 1000 slider. Time an 035 before quoting from this.',
   lines: (c) => {
     const i = c.input;
     const struts = i.strutKind === 'none' ? 0 : count(i.struts);

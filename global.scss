@@ -687,9 +687,8 @@ select option {
 }
 
 @media print {
-  /* The sheet is portalled to <body>, so taking body's other children out of the layout leaves the
-     sheet alone on the page. Hiding the app with `visibility` instead kept its full height, which
-     printed as blank pages behind and after the sheet. */
+  /* The sheet is a child of <body>. Removing body's other children from the layout leaves only the
+     sheet; visibility: hidden would keep the app's height. */
   body > *:not(.window-costing-sheet) {
     display: none !important;
   }
@@ -713,8 +712,7 @@ select option {
     page-break-inside: avoid;
   }
 
-  /* The internal sheet is one window per page, because a fabricator carries a sheet to the bench.
-     A customer quote is one document: its windows follow each other and it fits on a page. */
+  /* Internal sheet: one window per page. Customer quote: one document. */
   .window-costing-sheet[data-audience='internal'] .window-costing-sheet__window {
     page-break-after: always;
   }

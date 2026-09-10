@@ -192,7 +192,7 @@ export default function CadImportPanel({ spec, onApply, onClear, disabled = fals
         }}
       >
         <span className={styles.dropZoneTitle}>{isLoading ? 'Reading file…' : loaded ? 'Drop another file to replace' : 'Drop a 2D CAD file here or click to choose'}</span>
-        <span className={styles.dropZoneHint}>DXF · DWG · SVG — the outline, size, shape, radius corners and holes are read automatically</span>
+        <span className={styles.dropZoneHint}>DXF · DWG · SVG</span>
       </div>
         </>
       ) : null}
@@ -293,7 +293,7 @@ export default function CadImportPanel({ spec, onApply, onClear, disabled = fals
           ) : null}
 
           <label>
-            <input type="checkbox" checked={priceOnMeasured} disabled={disabled} onChange={(event) => setPriceOnMeasured(event.target.checked)} /> Price on the measured outline (true area and edge length) instead of width × height
+            <input type="checkbox" checked={priceOnMeasured} disabled={disabled} onChange={(event) => setPriceOnMeasured(event.target.checked)} /> Price on the measured outline
           </label>
           <br />
 
@@ -366,7 +366,7 @@ export default function CadImportPanel({ spec, onApply, onClear, disabled = fals
         <>
           <br />
           <Text>
-            <span className={measuredActive ? 'status-success' : 'status-warning'}>{measuredActive ? 'Pricing uses the measured outline area and edge length.' : 'Pricing uses width × height; the measured outline is kept for reference.'}</span>
+            <span className={measuredActive ? 'status-success' : 'status-warning'}>{measuredActive ? 'Priced on the measured outline.' : 'Priced on width × height.'}</span>
           </Text>
           {dimensionsEdited ? (
             <Text>

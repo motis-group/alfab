@@ -18,19 +18,11 @@ interface SidebarTabsProps {
   'aria-label'?: string;
 }
 
-/**
- * One panel of the sidebar at a time.
- *
- * The calculators show the price, then six more cards analysing it: the cost build-up, the batch
- * ladder, the glazing, the win rate, the rates that priced it. Each is worth reading occasionally
- * and none is worth three screens of scrolling every time a size changes. Only the open panel is
- * rendered, so the closed ones cost nothing.
- */
+/** One sidebar panel at a time. Only the open panel is rendered. */
 export default function SidebarTabs({ tabs, initial, 'aria-label': ariaLabel = 'Sidebar sections' }: SidebarTabsProps) {
   const [active, setActive] = React.useState(initial || tabs[0]?.id);
 
-  // A tab can disappear when the costing changes — a reinforcement is removed, say. Fall back
-  // rather than showing nothing.
+  // Fall back to the first tab when the active one no longer exists.
   const current = tabs.find((tab) => tab.id === active) || tabs[0];
   if (!current) {
     return null;

@@ -277,7 +277,7 @@ test('the 035 hopper prices on Nick\'s description, and says what it is standing
   const result = costWindow(createWindowInput('AFB035', { heightMm: 900, lengthMm: 600, glazingId: 'ap6_clear' }), rates);
   assert.ok(result.price != null && result.price > 0, 'it prices');
   assert.deepEqual(result.errors, [], 'and without errors');
-  assert.ok(result.warnings.some((w) => w.includes('borrowed')), 'the borrowed labour is warned about on every costing');
+  assert.ok(result.warnings.some((w) => w.includes('labour from the 1000 slider')), 'the borrowed labour is warned about on every costing');
 
   // The fittings Nick has still to price show as not priced rather than quietly costing nothing.
   for (const path of ['each.hingeStainless', 'each.strutGas', 'each.handleVitus']) {

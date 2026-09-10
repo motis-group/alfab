@@ -47,7 +47,7 @@ export default function JobPanel({ job, onChange, onCreateOrder }: JobPanelProps
     <CardDouble title={`THIS JOB — ${describeJob(job.lines).toUpperCase()}`}>
       {job.lines.length ? (
         <>
-          <Text>Windows, awnings and cut glass on one job. It becomes one purchase order, with a line for each.</Text>
+          <Text>One purchase order, one line per item.</Text>
           <br />
           <Table>
             <TableRow>
@@ -96,7 +96,7 @@ export default function JobPanel({ job, onChange, onCreateOrder }: JobPanelProps
             <ActionButton onClick={onCreateOrder}>Create Purchase Order For The Job</ActionButton>
             <ActionButton
               onClick={() => {
-                if (window.confirm('Clear everything on this job? The items are not saved anywhere else.')) {
+                if (window.confirm('Clear this job?')) {
                   onChange(clearJob());
                 }
               }}
@@ -106,7 +106,7 @@ export default function JobPanel({ job, onChange, onCreateOrder }: JobPanelProps
           </RowSpaceBetween>
         </>
       ) : (
-        <Text>Nothing on this job yet. Price an item, then &quot;Add To Job&quot; to build a quote that spans windows, awnings and cut glass together.</Text>
+        <Text>Nothing on this job.</Text>
       )}
     </CardDouble>
   );

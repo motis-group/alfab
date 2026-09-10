@@ -4,8 +4,7 @@
 //
 //   DATABASE_URL=postgres://... node scripts/check-schema-tables.mjs
 //
-// CI runs this against a throwaway Postgres. It is the check the awning rates fell through: the
-// gateway listed a table, nothing proved the table was there.
+// CI runs this against a throwaway Postgres.
 
 import pg from 'pg';
 import { execFileSync } from 'node:child_process';

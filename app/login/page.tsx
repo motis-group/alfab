@@ -85,7 +85,7 @@ export default function LoginPage() {
             <br />
             <Divider />
             <br />
-            <Text style={{ opacity: 0.75 }}>Use your invited username/password. Superadmins can also sign in with the master admin password.</Text>
+            <Text style={{ opacity: 0.75 }}>Sign in with your username and password.</Text>
           </form>
         </Card>
       </Grid>

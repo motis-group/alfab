@@ -18,8 +18,7 @@ export function RateAgeBadge({ text }: { text: string }) {
     <Text>
       <span className={TONE[age.freshness]}>
         {describeAge(age)}
-        {age.freshness === 'stale' ? ' — check this before quoting on it' : ''}
-        {age.freshness === 'unknown' ? ' — nobody recorded when this was last checked' : ''}
+        {age.freshness === 'unknown' ? ' — never dated' : ''}
       </span>
     </Text>
   );
@@ -53,8 +52,8 @@ export function RateReviewCard({ asAt, label, action, title = 'RATE AGE' }: Rate
     <Card title={title}>
       <Text>
         <span className="status-warning">
-          {review.length} price {review.length === 1 ? 'group has' : 'groups have'} not been checked in a long time.
-          {oldest ? ` The oldest is ${oldest.label}, ${describeAge(oldest)}.` : ''}
+          {review.length} price {review.length === 1 ? 'group is' : 'groups are'} out of date.
+          {oldest ? ` Oldest: ${oldest.label}, ${describeAge(oldest)}.` : ''}
         </span>
       </Text>
       {review.map((group) => (
@@ -65,7 +64,6 @@ export function RateReviewCard({ asAt, label, action, title = 'RATE AGE' }: Rate
           </span>
         </Text>
       ))}
-      <Text style={{ opacity: 0.7 }}>A quote built on these still prints a confident price. Nothing here blocks it.</Text>
       {action}
     </Card>
   );

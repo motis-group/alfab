@@ -1,13 +1,7 @@
 /**
- * Every table the database gateway will serve, and the rules that apply to it.
- *
- * A table is only reachable when it appears in TABLE_COLUMNS *and* TABLE_PERMISSIONS: the gateway
- * refuses an unlisted table, and refuses a column that is not on its list. NATURAL_KEY_TABLES and
- * AUDITED_TABLES are subsets and say what else is true of a table already listed in both.
- *
- * Adding a table means adding it to both of the first two. `utils/db-tables.test.ts` fails when a
- * table reaches one registry and not the others, because a half-added table is rejected on every
- * read and every write, which reads to the user as a save that quietly did nothing.
+ * Tables the database gateway serves. A table is reachable only when it appears in both
+ * TABLE_COLUMNS and TABLE_PERMISSIONS. NATURAL_KEY_TABLES and AUDITED_TABLES are subsets.
+ * `utils/db-tables.test.ts` checks the registries agree.
  */
 
 import { AppPermission } from '@utils/authz';

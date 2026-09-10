@@ -81,8 +81,7 @@ export function WinRateCard({ tally, quotes, title = 'WIN RATE' }: WinRateCardPr
     <Card title={title}>
       {tally.rate == null ? (
         <>
-          <Text>No quote has been marked won or lost yet.</Text>
-          <Text style={{ opacity: 0.7 }}>Mark them as you hear back. After a dozen the rate starts telling you whether the price is right.</Text>
+          <Text>No outcomes recorded.</Text>
         </>
       ) : (
         <>
@@ -125,7 +124,7 @@ export function WinRateCard({ tally, quotes, title = 'WIN RATE' }: WinRateCardPr
           </Table>
           {reasons[0].reason === 'Price' ? (
             <Text>
-              <span className="status-warning">Price is the commonest reason given. Worth a look at the margin before the next quote goes out.</span>
+              <span className="status-warning">Price is the most common reason given.</span>
             </Text>
           ) : null}
         </>

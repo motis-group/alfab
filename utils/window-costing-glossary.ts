@@ -41,7 +41,7 @@ export const WINDOW_COSTING_GLOSSARY: Record<GlossaryGroup, GlossaryEntry[]> = {
     },
     {
       term: 'Uplift',
-      definition: 'The last step: 7.5 percent added to everything above, or 10 percent on the T4633. The sheet applied it to every window but never recorded what it covers. Confirm what it is for before changing it.',
+      definition: '7.5 percent added last, 10 percent on the T4633. What it covers is not recorded.',
       where: 'Price card. Set per window type under Margin & uplift.',
     },
     {
@@ -61,7 +61,7 @@ export const WINDOW_COSTING_GLOSSARY: Record<GlossaryGroup, GlossaryEntry[]> = {
     },
     {
       term: 'Not priced',
-      definition: 'A rate the legacy sheet never held. The costing charges the line as nil and says so, so the quote is short by whatever that item really costs.',
+      definition: 'A rate the legacy sheet never held. Charged as nil and reported.',
       where: 'Not priced card, and the rates editor in yellow.',
     },
   ],
@@ -110,7 +110,7 @@ export const WINDOW_COSTING_GLOSSARY: Record<GlossaryGroup, GlossaryEntry[]> = {
     },
     {
       term: 'Development labour',
-      definition: 'The minutes for working out a window that has not been made before: drawings, jigs and first-off checks. Turn it off for a window already in production.',
+      definition: 'The minutes for working out a window that has not been made before: drawings, jigs and first-off checks.',
       where: 'Finish and labour card.',
     },
     {
@@ -138,7 +138,7 @@ export const WINDOW_COSTING_GLOSSARY: Record<GlossaryGroup, GlossaryEntry[]> = {
     {
       term: 'Marine Window Service',
       definition: 'A pricing basis the sheet used for marine work: a lower margin on three window types and a lower glass loading on all of them.',
-      where: 'Finish and labour card. Confirm it is still in use before relying on it.',
+      where: 'Finish and labour card.',
     },
   ],
   glazing: [

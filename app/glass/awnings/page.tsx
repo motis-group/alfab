@@ -227,7 +227,7 @@ export default function AwningCostingPage() {
     setInput({ ...item.input });
     setAwningName(item.name);
     setQuoteItems((prev) => prev.filter((entry) => entry.localId !== localId));
-    setStatus({ tone: 'success', message: 'Loaded back into the form. Add it to the quote when you are done.' });
+    setStatus({ tone: 'success', message: 'Loaded into the form.' });
   }
 
   function removeQuoteItem(localId: string) {
@@ -257,7 +257,7 @@ export default function AwningCostingPage() {
 
     try {
       await navigator.clipboard.writeText(text);
-      setStatus({ tone: 'warning', message: 'Copied the cost build-up. It shows your margin, so keep it internal.' });
+      setStatus({ tone: 'warning', message: 'Copied the cost build-up (internal).' });
     } catch {
       setStatus({ tone: 'warning', message: 'Clipboard copy failed.' });
     }
@@ -311,7 +311,7 @@ export default function AwningCostingPage() {
     }
     setStatus({
       tone: costing.ratesUpdatedAt === ratesUpdatedAt ? 'success' : 'warning',
-      message: costing.ratesUpdatedAt === ratesUpdatedAt ? `Loaded "${costing.name}".` : `Loaded "${costing.name}". It was priced on older rates, so the price here may differ from ${formatCurrency(costing.price)}.`,
+      message: costing.ratesUpdatedAt === ratesUpdatedAt ? `Loaded "${costing.name}".` : `Loaded "${costing.name}". Priced on older rates; quoted at ${formatCurrency(costing.price)}.`,
     });
   }
 
@@ -342,7 +342,7 @@ export default function AwningCostingPage() {
 
     setJob(addToJob(lines, { name: quoteName, customerName: selectedCustomer?.name || customerName, customerId: customerId || null, notes: quoteNotes }));
     setQuoteItems([]);
-    setStatus({ tone: 'success', message: `Added to the job. Price windows or cut glass and they land on the same order.` });
+    setStatus({ tone: 'success', message: `Added to the job.` });
   }
 
   function createOrderForJob() {
@@ -406,8 +406,7 @@ export default function AwningCostingPage() {
       sidebarMobileOrder="top"
       sidebar={
         <>
-          {/* Every action lives on the toolbar. This card said the same things a second time, and
-              a stack of nine buttons is a list to read rather than a menu to aim at. */}
+          {/* Actions are on the toolbar. */}
           {status ? (
             <Card title="LAST ACTION">
               <Text>
@@ -456,7 +455,7 @@ export default function AwningCostingPage() {
           {result.unpriced.length ? (
             <Card title="NOT PRICED">
               <Text>
-                <span className="status-warning">These lines have no rate and are charged as nil.</span>
+                <span className="status-warning">No rate; charged as nil.</span>
               </Text>
               <Table>
                 {result.unpriced.map((entry) => (
@@ -473,8 +472,7 @@ export default function AwningCostingPage() {
 
 
 
-          {/* Same split as the window calculator: the price stays on screen, what analyses it is one
-              click away, and only the open panel is rendered. */}
+          {/* Analysis cards are tabbed; only the open panel is rendered. */}
           <SidebarTabs
             aria-label="Costing detail"
             tabs={[
@@ -550,7 +548,7 @@ export default function AwningCostingPage() {
                         <Text>PERIMETER</Text>
                         <Text>{result.perimeterM.toFixed(3)} m</Text>
                       </RowSpaceBetween>
-                      <Text style={{ opacity: 0.7 }}>The frame, the rubber seal, the track infill and the flat polish are all cut to the glass perimeter.</Text>
+                      <Text style={{ opacity: 0.7 }}>Frame, seal, track infill and flat polish are priced on the glass perimeter.</Text>
                     </Card>
                   </>
                 ),
@@ -562,7 +560,7 @@ export default function AwningCostingPage() {
                   <>
                     {batches.length ? (
                       <Card title="BATCH PRICE">
-                        <Text>Setup labour is shared across a run, so a larger run costs less each.</Text>
+                        <Text>Setup labour is divided across the run.</Text>
                         <Table>
                           <TableRow>
                             <TableColumn style={{ width: '12ch' }}>RUN</TableColumn>
@@ -648,7 +646,7 @@ export default function AwningCostingPage() {
       )}
 
       <CardDouble title="AWNING">
-        <Text style={{ opacity: 0.7 }}>Sizes are the glass, not the opening. The frame is cut to the glass.</Text>
+        <Text style={{ opacity: 0.7 }}>Glass size, not opening size.</Text>
         <br />
         <Input label="GLASS HEIGHT (MM)" type="number" name="awning_height" value={String(input.heightMm)} onChange={(event) => updateNumber('heightMm', event.target.value)} min="0" />
         <Input label="GLASS WIDTH (MM)" type="number" name="awning_width" value={String(input.widthMm)} onChange={(event) => updateNumber('widthMm', event.target.value)} min="0" />
@@ -676,7 +674,7 @@ export default function AwningCostingPage() {
         <br />
 
         <label>
-          <input type="checkbox" checked={input.banding} onChange={(event) => update({ banding: event.target.checked })} /> Ceramic banding (set price, whatever the size)
+          <input type="checkbox" checked={input.banding} onChange={(event) => update({ banding: event.target.checked })} /> Ceramic banding (fixed price)
         </label>
         <br />
         <label>
@@ -686,7 +684,7 @@ export default function AwningCostingPage() {
         <label>
           <input type="checkbox" checked={input.flyscreen} onChange={(event) => update({ flyscreen: event.target.checked })} /> Flyscreen and clips
         </label>
-        <Text style={{ opacity: 0.7 }}>The flyscreen line is a selling price in the source sheet and is still inside the cost the margin is taken on, so it is marked up twice. Kept as the sheet had it.</Text>
+        <Text style={{ opacity: 0.7 }}>Flyscreen is a selling price in the source sheet and is marked up again. Kept as the sheet had it.</Text>
       </CardDouble>
 
       <CardDouble title="QUOTE DETAILS">
@@ -744,7 +742,7 @@ export default function AwningCostingPage() {
             </RowSpaceBetween>
           </>
         ) : (
-          <Text>No awnings on this quote yet. Add the awning above to build a quote with several; one purchase order line is created for each.</Text>
+          <Text>No awnings on this quote.</Text>
         )}
       </CardDouble>
 
@@ -779,7 +777,7 @@ export default function AwningCostingPage() {
             ))}
           </Table>
         ) : (
-          <Text>No saved costings. Save one to reuse it as a template for a repeat customer.</Text>
+          <Text>No saved costings.</Text>
         )}
 
         {comparison ? (
@@ -802,7 +800,7 @@ export default function AwningCostingPage() {
             </RowSpaceBetween>
             {comparison.onOriginal != null && comparison.quoted != null && Math.abs(comparison.onOriginal - comparison.quoted) > 0.01 ? (
               <Text>
-                <span className="status-warning">The recalculation does not match what was quoted, so the costing itself changed, not just the rates.</span>
+                <span className="status-warning">Recalculated price differs from the quoted price: the costing changed, not only the rates.</span>
               </Text>
             ) : null}
           </>

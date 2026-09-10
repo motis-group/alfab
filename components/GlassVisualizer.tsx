@@ -141,17 +141,17 @@ function buildDrawing(spec: GlassSpecification): Drawing | null {
     path = roundedRectPath(width, height, radius);
     exact = true;
     if (spec.radiusCorners && knownRadius === null) {
-      notes.push('Corner radius is not recorded, so the corners are drawn at a nominal size.');
+      notes.push('Corner radius not recorded; drawn at a nominal size.');
     }
   } else {
     path = roundedRectPath(width, height, 0);
     exact = false;
-    notes.push(`A ${spec.shape === 'SIMPLE' ? 'simple' : 'complex'} profile is not described by width and height alone. Upload the CAD file to draw the real outline.`);
+    notes.push(`A ${spec.shape === 'SIMPLE' ? 'simple' : 'complex'} profile is not described by width and height. Upload the CAD file for the outline.`);
   }
 
   const holes = spec.holes && spec.numHoles > 0 ? indicativeHolePositions(width, height, spec.numHoles).map((point) => ({ x: point.x, y: point.y, d: Math.max(Math.min(width, height) * 0.03, 6) })) : [];
   if (holes.length) {
-    notes.push('Hole positions and sizes are indicative; only the count affects the price.');
+    notes.push('Hole positions are indicative; only the count is priced.');
   }
 
   return {
@@ -179,7 +179,7 @@ export default function GlassVisualizer({ spec }: GlassVisualizerProps) {
     return (
       <div className={styles.root}>
         <Text>
-          <span className="status-warning">Enter a width and height, or upload a CAD file, to see the glass.</span>
+          <span className="status-warning">Enter a size or upload a CAD file.</span>
         </Text>
       </div>
     );

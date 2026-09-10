@@ -18,12 +18,8 @@ function formatNumber(value: number): string {
 }
 
 /**
- * The outline as an SVG in millimetres, at 1:1.
- *
- * A sketch read off a drawing arrives as bare points, which is exactly what a DXF outline reduces
- * to. Rendering it as SVG and sending it back through the CAD pipeline means a shape read from a
- * customer's sketch is classified, measured and priced by the same code as the same shape imported
- * from a DXF, instead of by a second implementation that could disagree with it.
+ * The outline as an SVG in millimetres at 1:1. Sending it through the CAD pipeline means a sketched
+ * shape is classified, measured and priced by the same code as a DXF import.
  */
 export function sketchToSvg(outline: SketchOutline): string {
   if (outline.points.length < 3) {

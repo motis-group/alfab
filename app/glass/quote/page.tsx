@@ -241,10 +241,7 @@ export default function AdhocQuotePage() {
     setStatus({ tone: 'success', message: `Added. ${quoteItems.length + 1} piece${quoteItems.length ? 's' : ''} on this quote.` });
   }
 
-  /**
-   * Pieces read off a customer's order, already checked by the estimator in the import panel. They
-   * take the markup showing on the form, because that is the margin being quoted at this moment.
-   */
+  /** Pieces from an imported order. Each takes the markup currently on the form. */
   function addImportedPieces(pieces: ExtractedPiece[]) {
     if (!pieces.length) {
       return;
@@ -263,7 +260,7 @@ export default function AdhocQuotePage() {
         manualUnitPrice: 0,
       })),
     ]);
-    setStatus({ tone: 'success', message: `Added ${pieces.length} piece${pieces.length === 1 ? '' : 's'} from the order. Check each one before you send the quote.` });
+    setStatus({ tone: 'success', message: `Added ${pieces.length} piece${pieces.length === 1 ? '' : 's'} from the order.` });
   }
 
   /** Put a piece back in the form to change it. It leaves the list until it is added again. */
@@ -281,7 +278,7 @@ export default function AdhocQuotePage() {
     setManualUnitPrice(item.manualUnitPrice);
     setQuoteItems((prev) => prev.filter((entry) => entry.localId !== localId));
     setCadPanelKey((key) => key + 1);
-    setStatus({ tone: 'success', message: 'Loaded back into the form. Add it to the quote when you are done.' });
+    setStatus({ tone: 'success', message: 'Loaded into the form.' });
   }
 
   function removeQuoteItem(localId: string) {
@@ -290,7 +287,7 @@ export default function AdhocQuotePage() {
 
   async function handleSaveQuote() {
     if (!quoteLines.length) {
-      setStatus({ tone: 'warning', message: 'Add at least one piece to the quote before saving it.' });
+      setStatus({ tone: 'warning', message: 'Add a piece before saving.' });
       return;
     }
 
@@ -312,7 +309,7 @@ export default function AdhocQuotePage() {
         ratesUpdatedAt: updatedAt,
       });
       setSavedQuotes(await listGlassQuotes());
-      setStatus({ tone: 'success', message: 'Quote saved. Load it back to re-quote the same job.' });
+      setStatus({ tone: 'success', message: 'Quote saved.' });
     } catch (saveError: any) {
       setStatus({ tone: 'error', message: saveError?.message || 'Unable to save the quote.' });
     }
@@ -341,7 +338,7 @@ export default function AdhocQuotePage() {
     const moved = (quote.ratesUpdatedAt || null) !== (updatedAt || null);
     setStatus({
       tone: moved ? 'warning' : 'success',
-      message: moved ? 'Loaded at the prices it was quoted at. The glass rates have changed since, so a fresh price would differ.' : 'Loaded at the prices it was quoted at.',
+      message: moved ? 'Loaded at the quoted prices. Glass rates have changed since.' : 'Loaded at the prices it was quoted at.',
     });
   }
 
@@ -385,7 +382,7 @@ export default function AdhocQuotePage() {
 
     setJob(addToJob(lines, { name: quoteName, customerName: selectedCustomer?.name || customerName, customerId: customerId || null, notes: quoteNotes }));
     setQuoteItems([]);
-    setStatus({ tone: 'success', message: 'Added to the job. Price windows or awnings and they land on the same order.' });
+    setStatus({ tone: 'success', message: 'Added to the job.' });
   }
 
   function createOrderForJob() {
@@ -439,11 +436,8 @@ export default function AdhocQuotePage() {
       sidebarMobileOrder="top"
       sidebar={
         <>
-          {/* Every action lives on the toolbar. This card repeated it. */}
-          {/* Once the quote holds pieces it is the quote that gets summarised, not whatever is left in
-              the form. Reading an order puts 43 pieces on a quote and leaves the form untouched, so a
-              card headed QUOTE SUMMARY was reporting the default 1000 x 1000 piece and calling its
-              price the quote total. The form's own numbers are below it, under PRICE BREAKDOWN. */}
+          {/* Actions are on the toolbar. */}
+          {/* With pieces on the quote, this summarises the quote; otherwise the piece in the form. */}
           <Card title={quoteLines.length ? `QUOTE SUMMARY (${quoteLines.length} LINE${quoteLines.length === 1 ? '' : 'S'})` : 'THIS PIECE'}>
             {quoteLines.length ? (
               <>
@@ -462,7 +456,7 @@ export default function AdhocQuotePage() {
                 {quoteLines.some((line) => line.error) ? (
                   <Text>
                     <span className="status-error">
-                      {quoteLines.filter((line) => line.error).length} line{quoteLines.filter((line) => line.error).length === 1 ? '' : 's'} cannot be priced and {quoteLines.filter((line) => line.error).length === 1 ? 'is' : 'are'} not in this total.
+                      {quoteLines.filter((line) => line.error).length} line{quoteLines.filter((line) => line.error).length === 1 ? '' : 's'} not priced; excluded from the total.
                     </span>
                   </Text>
                 ) : null}
@@ -530,8 +524,7 @@ export default function AdhocQuotePage() {
 
           <RateReviewCard asAt={pricingData.asAt} label={(key) => (key === 'basePrices' ? 'Base glass prices' : key === 'edgeworkPrices' ? 'Edgework' : 'Holes, shaping and services')} action={<ActionButton onClick={() => router.push('/settings')}>Review Glass Rates</ActionButton>} />
 
-          {/* Like the summary above: once the quote holds pieces this is the quote's cost build-up,
-              because a build-up of the piece left in the form is not what the estimator is reading. */}
+          {/* Cost build-up of the quote when it has pieces; otherwise of the piece in the form. */}
           <Card title={quoteLines.length ? 'PRICE BREAKDOWN (WHOLE QUOTE)' : 'PRICE BREAKDOWN'}>
             {quoteLines.length ? (
               <Table>
@@ -775,7 +768,7 @@ export default function AdhocQuotePage() {
             </RowSpaceBetween>
           </>
         ) : (
-          <Text>No pieces yet. Price one above and add it. A job with several sizes is one quote, not several.</Text>
+          <Text>No pieces on this quote.</Text>
         )}
       </CardDouble>
 
@@ -813,7 +806,7 @@ export default function AdhocQuotePage() {
             ))}
           </Table>
         ) : (
-          <Text>Nothing saved yet. A saved quote keeps the prices it was given, so a customer who rings back gets the same number.</Text>
+          <Text>Nothing saved yet.</Text>
         )}
       </CardDouble>
 

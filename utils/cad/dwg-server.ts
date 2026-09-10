@@ -97,7 +97,7 @@ export async function convertDwgBufferToDxf(input: Buffer, timeoutMs = DWG_CONVE
         ok: false,
         status: 501,
         error: 'DWG conversion is not available on this server.',
-        hint: 'Export the drawing as DXF from your CAD package and upload that instead. DWG support has not been switched on for this server yet.',
+        hint: 'DWG conversion is not installed on this server. Export as DXF.',
       };
     }
 

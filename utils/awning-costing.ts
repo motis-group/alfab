@@ -155,7 +155,7 @@ export function costAwning(input: AwningCostingInput, rates: AwningRates): Awnin
   };
   const perMinute = rates.labour.perHour == null ? null : rates.labour.perHour / 60;
   if (rates.labour.perHour === 0) {
-    errors.push('The labour rate is zero, so every awning quotes short by its whole labour cost.');
+    errors.push('Labour rate is zero.');
   }
 
   // The sheet's own line order, so a printed sheet reads against it row for row.

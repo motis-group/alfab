@@ -498,7 +498,7 @@ export function analyzeCadDocument(doc: CadDocument, options: CadAnalysisOptions
   const warnings: string[] = [];
 
   if (!doc.paths.length) {
-    throw new CadAnalysisError('No drawable geometry was found in the file.', 'The file may only contain text, dimensions or 3D solids. Export the flat 2D outline of the glass as DXF or SVG.');
+    throw new CadAnalysisError('No drawable geometry was found in the file.', 'No 2D outline found. Export the flat outline as DXF or SVG.');
   }
 
   const scaled = scalePaths(doc.paths, toMm);
@@ -526,7 +526,7 @@ export function analyzeCadDocument(doc: CadDocument, options: CadAnalysisOptions
   if (!built.loops.length) {
     throw new CadAnalysisError(
       built.openChains ? `The drawing has ${built.openChains} open line chain${built.openChains === 1 ? '' : 's'} but no closed outline.` : 'No closed outline was found in the drawing.',
-      'The glass outline must be a closed shape (a closed polyline, or lines and arcs whose ends meet). Check for gaps at the corners and re-export.'
+      'The outline must be closed. Check for gaps at the corners.'
     );
   }
 
@@ -562,7 +562,7 @@ export function analyzeCadDocument(doc: CadDocument, options: CadAnalysisOptions
     const chosen = preferred || firstNonFrame || candidates[0];
     outlineIndex = chosen.index;
     if (chosen.index !== 0 && candidates[0].frameLike) {
-      warnings.push(`Outline 1 was skipped because ${candidates[0].frameReason}; using outline ${chosen.index + 1} instead. Change the outline selection if this is wrong.`);
+      warnings.push(`Outline 1 was skipped because ${candidates[0].frameReason}; using outline ${chosen.index + 1} instead.`);
     }
   }
 
@@ -631,7 +631,7 @@ export function analyzeCadDocument(doc: CadDocument, options: CadAnalysisOptions
   }
 
   if (assumed) {
-    warnings.push(`The file does not state its units; ${doc.unitsHintLabel || 'mm'} was assumed. Change the units if the size looks wrong.`);
+    warnings.push(`The file does not state its units; ${doc.unitsHintLabel || 'mm'} was assumed.`);
   }
   const largest = Math.max(outline.widthMm, outline.heightMm);
   if (largest < 50) {

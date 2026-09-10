@@ -40,9 +40,9 @@ export const WINDOW_SERIES: WindowSeries[] = [
     id: '1000',
     name: '1000 Series',
     products: [
-      { id: '1000-008', code: '015/008', name: 'Slider', type: 'AFB008', variant: 0, note: 'Priced on the AFB008 section. Confirm the 015 Riviera slider costs the same, since its section is lighter.' },
+      { id: '1000-008', code: '015/008', name: 'Slider', type: 'AFB008', variant: 0, note: 'Priced on the AFB008 section. Confirm the 015 Riviera slider costs the same.' },
       { id: '1000-6567', code: '6567', name: 'Fixed', type: 'U6567' },
-      { id: '1000-035', code: '035', name: 'Hopper', type: 'AFB035', note: 'Costed on Nick\'s description, not on the legacy sheet, which never priced an 035. The frame runs on the 015 / AFB008 section and the labour is borrowed from the 1000 slider. The stainless hinge, the struts and the Vitus handle have no price yet. Gas struts, manual struts and no struts are one costing with an option, not three windows.' },
+      { id: '1000-035', code: '035', name: 'Hopper', type: 'AFB035', note: 'Costed from Nick\'s description; the legacy sheet never priced an 035. Frame on the 015 / AFB008 section, labour from the 1000 slider. Hinge, struts and handle unpriced. Strut options are one costing with an option.' },
     ],
   },
   {
@@ -50,13 +50,13 @@ export const WINDOW_SERIES: WindowSeries[] = [
     name: '750 Series',
     products: [
       { id: '750-5573', code: '5573', name: 'Fixed', type: 'T5573' },
-      { id: '750-003', code: '003', name: 'Slider', type: 'AFB008', variant: 1, note: 'The sheet calls this the medium slider and prices it with 1000 series track, clip channel and wipe. Confirm a 750 uses the same parts.' },
+      { id: '750-003', code: '003', name: 'Slider', type: 'AFB008', variant: 1, note: 'The sheet\'s medium slider, priced with 1000 series track, clip channel and wipe. Confirm a 750 uses the same parts.' },
     ],
   },
   {
     id: '650',
     name: '650 Series',
-    products: [{ id: '650-037', code: '037', name: 'Slider', type: 'T4633', variant: 1, note: 'The shop\'s most common slider. No trim fits it, it takes no plunger lock, and nothing thicker than 6 mm goes in. The sheet priced the 037 frame at the T4633 rate, not the lighter AFB037 die. Confirm which is bought.' }],
+    products: [{ id: '650-037', code: '037', name: 'Slider', type: 'T4633', variant: 1, note: 'No trim, no plunger lock, glass to 6 mm. The sheet priced the frame at the T4633 rate, not AFB037. Confirm which is bought.' }],
   },
   {
     id: '500',
@@ -65,7 +65,7 @@ export const WINDOW_SERIES: WindowSeries[] = [
       { id: '500-5573', code: '5573', name: 'Fixed', type: 'T5573' },
       { id: '500-5836', code: '5836', name: 'Slider', type: 'T5836' },
       { id: '500-4633', code: '4633', name: 'Slider, horse float', type: 'T4633', variant: 0 },
-      { id: '500-023', code: '023', name: 'Fixed, horse float front', type: null, note: 'No costing has ever existed for the 023: quotes were estimated off another window. Nick is writing up the extrusion cost, the materials and the labour.' },
+      { id: '500-023', code: '023', name: 'Fixed, horse float front', type: null, note: 'No costing exists for the 023. Nick is documenting extrusion, materials and labour.' },
     ],
   },
   {
