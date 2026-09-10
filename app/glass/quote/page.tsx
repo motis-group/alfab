@@ -678,144 +678,7 @@ export default function AdhocQuotePage() {
         </Card>
       ) : null}
 
-      <CardDouble title="QUOTE DETAILS">
-        <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} />
-        <Text>CUSTOMER</Text>
-        <select
-          value={customerId}
-          onChange={(event) => {
-            const nextId = event.target.value;
-            setCustomerId(nextId);
-            const picked = customers.find((entry) => entry.id === nextId);
-            if (picked) {
-              setCustomerName(picked.name);
-            }
-          }}
-        >
-          <option value="">Walk-in / not on file</option>
-          {customers
-            .filter((customer) => customer.is_active !== false)
-            .map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.name}
-              </option>
-            ))}
-        </select>
-        {selectedCustomer ? <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text> : <Input label="CUSTOMER NAME" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />}
-        <br />
-        <Input label="QUOTE DATE" type="date" name="quote_date" value={quoteDate} onChange={(event) => setQuoteDate(event.target.value)} />
-        <Input label="QUANTITY" type="number" name="quote_quantity" value={String(quantity)} onChange={(event) => setQuantity(Math.max(1, numberOrFallback(event.target.value, 1)))} min="1" />
-        <Input label="MARKUP (%)" type="number" name="quote_markup" value={String(markupPercent)} onChange={(event) => setMarkupPercent(Math.max(0, numberOrFallback(event.target.value, 0)))} min="0" />
-
-        <label>
-          <input type="checkbox" checked={useRecommendedPrice} onChange={(event) => setUseRecommendedPrice(event.target.checked)} /> Use recommended unit price
-        </label>
-
-        {!useRecommendedPrice && <Input label="MANUAL UNIT PRICE ($)" type="number" name="manual_unit_price" value={String(manualUnitPrice)} onChange={(event) => setManualUnitPrice(Math.max(0, numberOrFallback(event.target.value, 0)))} min="0" />}
-
-        <Input label="QUOTE NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
-        <Input label="THIS PIECE IS FOR (OPTIONAL)" name="item_name" value={itemName} onChange={(event) => setItemName(event.target.value)} placeholder="Front window, side panel..." />
-        <br />
-        <ActionButton onClick={addToQuote}>Add This Piece To The Quote</ActionButton>
-      </CardDouble>
-
-      <CardDouble title={`QUOTE (${quoteLines.length} PIECE${quoteLines.length === 1 ? '' : 'S'})`}>
-        {quoteLines.length ? (
-          <>
-            <Table>
-              <TableRow>
-                <TableColumn>PIECE</TableColumn>
-                <TableColumn style={{ width: '6ch' }}>QTY</TableColumn>
-                <TableColumn style={{ width: '12ch' }}>UNIT</TableColumn>
-                <TableColumn style={{ width: '12ch' }}>TOTAL</TableColumn>
-                <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
-              </TableRow>
-              {quoteLines.map((line) => (
-                <TableRow key={line.item.localId}>
-                  <TableColumn>
-                    {line.item.name ? `${line.item.name}: ` : ''}
-                    {describeGlassSpecification(line.item.spec)}
-                    {line.error ? (
-                      <>
-                        <br />
-                        <span className="status-error">{line.error}</span>
-                      </>
-                    ) : null}
-                  </TableColumn>
-                  <TableColumn>{line.item.quantity}</TableColumn>
-                  <TableColumn>{formatCurrency(line.unitPrice)}</TableColumn>
-                  <TableColumn>{formatCurrency(line.total)}</TableColumn>
-                  <TableColumn style={{ whiteSpace: 'nowrap' }}>
-                    <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton> <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
-                  </TableColumn>
-                </TableRow>
-              ))}
-            </Table>
-            <br />
-            <RowSpaceBetween>
-              <Text>QUOTE TOTAL</Text>
-              <Text>
-                <span className="status-pill status-pill-success">{formatCurrency(quoteTotal)}</span>
-              </Text>
-            </RowSpaceBetween>
-            <br />
-            <RowSpaceBetween>
-              <ActionButton onClick={handleSaveQuote}>Save Quote</ActionButton>
-              <ActionButton onClick={() => setQuoteItems([])}>Clear Quote</ActionButton>
-            </RowSpaceBetween>
-          </>
-        ) : (
-          <Text>No pieces on this quote.</Text>
-        )}
-      </CardDouble>
-
-      <JobPanel job={job} onChange={setJob} onCreateOrder={createOrderForJob} />
-
-      <CardDouble title={`SAVED QUOTES (${savedQuotes.length})`}>
-        {savedQuotes.length ? (
-          <Table>
-            <TableRow>
-              <TableColumn>QUOTE</TableColumn>
-              <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
-              <TableColumn style={{ width: '13ch' }}>DATE</TableColumn>
-              <TableColumn style={{ width: '8ch' }}>PIECES</TableColumn>
-              <TableColumn style={{ width: '12ch' }}>TOTAL</TableColumn>
-              <TableColumn style={{ width: '22ch' }}>OUTCOME</TableColumn>
-              <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
-            </TableRow>
-            {savedQuotes.map((quote) => (
-              <TableRow key={quote.id}>
-                <TableColumn>{quote.name}</TableColumn>
-                <TableColumn>{quote.customer}</TableColumn>
-                <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
-                <TableColumn>{quote.items.length}</TableColumn>
-                <TableColumn>{formatCurrency(quote.total)}</TableColumn>
-                <TableColumn>
-                  <QuoteStatusControl status={quote.status} statusReason={quote.statusReason} onChange={(next, reason) => markQuote(quote.id, next, reason)} />
-                </TableColumn>
-                <TableColumn style={{ whiteSpace: 'nowrap' }}>
-                  <ActionButton onClick={() => loadSavedQuote(quote)}>Load</ActionButton> <ActionButton onClick={() => handleDeleteSavedQuote(quote.id)}>Delete</ActionButton>
-                </TableColumn>
-              </TableRow>
-            ))}
-          </Table>
-        ) : (
-          <Text>Nothing saved yet.</Text>
-        )}
-      </CardDouble>
-
-      <CardDouble title="READ A CUSTOMER'S ORDER OR DRAWING">
-        <ImportPanel
-          spec={spec}
-          cadPanelKey={cadPanelKey}
-          disabled={role === 'readonly'}
-          onApplyCad={(result) => setSpec(result.spec)}
-          onClearCad={() => setSpec((prev) => ({ ...prev, cadOutline: null }))}
-          onAddPieces={addImportedPieces}
-        />
-      </CardDouble>
-
-      <CardDouble title="GLASS SPECIFICATION">
+      <CardDouble title="PIECE">
         <Text>GLASS THICKNESS (MM)</Text>
         <select
           value={String(spec.thickness)}
@@ -997,7 +860,146 @@ export default function AdhocQuotePage() {
           min="0"
           disabled={!spec.holes}
         />
+        <br />
+        <Input label="QUANTITY" type="number" name="quote_quantity" value={String(quantity)} onChange={(event) => setQuantity(Math.max(1, numberOrFallback(event.target.value, 1)))} min="1" />
+        <Input label="MARKUP (%)" type="number" name="quote_markup" value={String(markupPercent)} onChange={(event) => setMarkupPercent(Math.max(0, numberOrFallback(event.target.value, 0)))} min="0" />
+
+        <label>
+          <input type="checkbox" checked={useRecommendedPrice} onChange={(event) => setUseRecommendedPrice(event.target.checked)} /> Use recommended unit price
+        </label>
+
+        {!useRecommendedPrice && <Input label="MANUAL UNIT PRICE ($)" type="number" name="manual_unit_price" value={String(manualUnitPrice)} onChange={(event) => setManualUnitPrice(Math.max(0, numberOrFallback(event.target.value, 0)))} min="0" />}
+
+        <Input label="PIECE NAME (OPTIONAL)" name="item_name" value={itemName} onChange={(event) => setItemName(event.target.value)} placeholder="Front window, side panel..." />
+        <br />
+        <ActionButton onClick={addToQuote}>Add Piece To Quote</ActionButton>
       </CardDouble>
+
+      <CardDouble title="QUOTE">
+        <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} />
+        <Text>CUSTOMER</Text>
+        <select
+          value={customerId}
+          onChange={(event) => {
+            const nextId = event.target.value;
+            setCustomerId(nextId);
+            const picked = customers.find((entry) => entry.id === nextId);
+            if (picked) {
+              setCustomerName(picked.name);
+            }
+          }}
+        >
+          <option value="">Walk-in / not on file</option>
+          {customers
+            .filter((customer) => customer.is_active !== false)
+            .map((customer) => (
+              <option key={customer.id} value={customer.id}>
+                {customer.name}
+              </option>
+            ))}
+        </select>
+        {selectedCustomer ? <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text> : <Input label="CUSTOMER NAME" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />}
+        <br />
+        <Input label="QUOTE DATE" type="date" name="quote_date" value={quoteDate} onChange={(event) => setQuoteDate(event.target.value)} />
+        <Input label="QUOTE NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
+      </CardDouble>
+
+      <CardDouble title={`QUOTE LINES (${quoteLines.length})`}>
+        {quoteLines.length ? (
+          <>
+            <Table>
+              <TableRow>
+                <TableColumn>PIECE</TableColumn>
+                <TableColumn style={{ width: '6ch' }}>QTY</TableColumn>
+                <TableColumn style={{ width: '12ch' }}>UNIT</TableColumn>
+                <TableColumn style={{ width: '12ch' }}>TOTAL</TableColumn>
+                <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
+              </TableRow>
+              {quoteLines.map((line) => (
+                <TableRow key={line.item.localId}>
+                  <TableColumn>
+                    {line.item.name ? `${line.item.name}: ` : ''}
+                    {describeGlassSpecification(line.item.spec)}
+                    {line.error ? (
+                      <>
+                        <br />
+                        <span className="status-error">{line.error}</span>
+                      </>
+                    ) : null}
+                  </TableColumn>
+                  <TableColumn>{line.item.quantity}</TableColumn>
+                  <TableColumn>{formatCurrency(line.unitPrice)}</TableColumn>
+                  <TableColumn>{formatCurrency(line.total)}</TableColumn>
+                  <TableColumn style={{ whiteSpace: 'nowrap' }}>
+                    <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton> <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
+                  </TableColumn>
+                </TableRow>
+              ))}
+            </Table>
+            <br />
+            <RowSpaceBetween>
+              <Text>QUOTE TOTAL</Text>
+              <Text>
+                <span className="status-pill status-pill-success">{formatCurrency(quoteTotal)}</span>
+              </Text>
+            </RowSpaceBetween>
+            <br />
+            <RowSpaceBetween>
+              <ActionButton onClick={handleSaveQuote}>Save Quote</ActionButton>
+              <ActionButton onClick={() => setQuoteItems([])}>Clear Quote</ActionButton>
+            </RowSpaceBetween>
+          </>
+        ) : (
+          <Text>No pieces on this quote.</Text>
+        )}
+      </CardDouble>
+
+      <JobPanel job={job} onChange={setJob} onCreateOrder={createOrderForJob} />
+
+      <CardDouble title={`SAVED QUOTES (${savedQuotes.length})`}>
+        {savedQuotes.length ? (
+          <Table>
+            <TableRow>
+              <TableColumn>QUOTE</TableColumn>
+              <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
+              <TableColumn style={{ width: '13ch' }}>DATE</TableColumn>
+              <TableColumn style={{ width: '8ch' }}>PIECES</TableColumn>
+              <TableColumn style={{ width: '12ch' }}>TOTAL</TableColumn>
+              <TableColumn style={{ width: '22ch' }}>OUTCOME</TableColumn>
+              <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
+            </TableRow>
+            {savedQuotes.map((quote) => (
+              <TableRow key={quote.id}>
+                <TableColumn>{quote.name}</TableColumn>
+                <TableColumn>{quote.customer}</TableColumn>
+                <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
+                <TableColumn>{quote.items.length}</TableColumn>
+                <TableColumn>{formatCurrency(quote.total)}</TableColumn>
+                <TableColumn>
+                  <QuoteStatusControl status={quote.status} statusReason={quote.statusReason} onChange={(next, reason) => markQuote(quote.id, next, reason)} />
+                </TableColumn>
+                <TableColumn style={{ whiteSpace: 'nowrap' }}>
+                  <ActionButton onClick={() => loadSavedQuote(quote)}>Load</ActionButton> <ActionButton onClick={() => handleDeleteSavedQuote(quote.id)}>Delete</ActionButton>
+                </TableColumn>
+              </TableRow>
+            ))}
+          </Table>
+        ) : (
+          <Text>Nothing saved yet.</Text>
+        )}
+      </CardDouble>
+
+      <CardDouble title="READ A CUSTOMER'S ORDER OR DRAWING">
+        <ImportPanel
+          spec={spec}
+          cadPanelKey={cadPanelKey}
+          disabled={role === 'readonly'}
+          onApplyCad={(result) => setSpec(result.spec)}
+          onClearCad={() => setSpec((prev) => ({ ...prev, cadOutline: null }))}
+          onAddPieces={addImportedPieces}
+        />
+      </CardDouble>
+
     </AppFrame>
   );
 }
