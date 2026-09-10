@@ -7,8 +7,6 @@ import { useRouter } from 'next/navigation';
 
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
-import CadImportPanel from '@components/CadImportPanel';
-import GlassSpecificationFields from '@components/GlassSpecificationFields';
 import Card from '@components/Card';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
@@ -18,9 +16,8 @@ import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 
-import { usePricing } from '@components/PricingProvider';
 import JobSheet from '@components/JobSheet';
-import { CostBreakdown, GlassSpecification, calculateCost, describeGlassSpecification } from '@utils/calculations';
+import { GlassSpecification, describeGlassSpecification } from '@utils/calculations';
 import { LineDraft, OrderFormState, createLineDraft, defaultAdhocSpec } from '@utils/order-draft';
 import { OrderSnapshot, applyLineEditResult, calculatorFor, consumeLineEditResult, persistLineEditRequest } from '@utils/line-editing';
 import { Customer, CustomerProduct, ORDER_STATUS_OPTIONS, OrderStatus, ParsedLineNotes, PricingSource, PurchaseOrder, PurchaseOrderLine, UserRole, formatCurrency, parseCustomerProductNotes, parseLineNotes, serializeLineNotes, statusLabel, todayISODate } from '@utils/order-management';
@@ -64,7 +61,6 @@ function normalizeCustomerLookupName(value: string): string {
 
 export default function NewPurchaseOrderPage() {
   const router = useRouter();
-  const { pricingData } = usePricing();
 
   const [role, setRole] = useState<UserRole>('readonly');
 
@@ -327,24 +323,6 @@ export default function NewPurchaseOrderPage() {
 
   function updateLineDraft(localId: string, updater: (line: LineDraft) => LineDraft) {
     setLineDrafts((prev) => prev.map((line) => (line.localId === localId ? updater(line) : line)));
-  }
-
-  function getLineCost(line: LineDraft): { breakdown: CostBreakdown | null; recommendedUnitPrice: number; error: string | null } {
-    try {
-      const breakdown = calculateCost(line.adhocSpec, pricingData);
-      const recommendedUnitPrice = breakdown.total * (1 + line.markupPercent / 100);
-      return {
-        breakdown,
-        recommendedUnitPrice,
-        error: null,
-      };
-    } catch (error: any) {
-      return {
-        breakdown: null,
-        recommendedUnitPrice: 0,
-        error: error?.message || 'Unable to calculate ad hoc price.',
-      };
-    }
   }
 
   function applyQuoteDraft(quoteDraft: QuoteToOrderDraft, availableCustomers: Customer[]) {
@@ -646,7 +624,6 @@ export default function NewPurchaseOrderPage() {
     };
   });
 
-  const activeLineCost = activeLine ? getLineCost(activeLine) : null;
 
   return (
     <AppFrame
@@ -924,120 +901,16 @@ export default function NewPurchaseOrderPage() {
               disabled={!canEditOrders}
             />
 
+            {/* The glass is priced in the calculator that prices glass. This says what the line is
+                and offers the way in; the form used to be duplicated here. */}
             {activeLine.pricingSource === 'adhoc_calculator' && (
               <>
                 <br />
-                <Text>AD HOC CALCULATOR</Text>
+                <Text>GLASS</Text>
+                <Text>{describeGlassSpecification(activeLine.adhocSpec)}</Text>
+                {activeLine.adhocSpec.cadOutline ? <Text>Cut to {activeLine.adhocSpec.cadOutline.fileName}.</Text> : null}
                 <br />
-
-                <Text>CAD FILE</Text>
-                <CadImportPanel
-                  key={activeLine.localId}
-                  spec={activeLine.adhocSpec}
-                  disabled={!canEditOrders}
-                  onApply={(result) => updateLineDraft(activeLine.localId, (current) => ({ ...current, adhocSpec: result.spec }))}
-                  onClear={() =>
-                    updateLineDraft(activeLine.localId, (current) => ({
-                      ...current,
-                      adhocSpec: { ...current.adhocSpec, cadOutline: null },
-                    }))
-                  }
-                />
-                <br />
-
-                <GlassSpecificationFields
-                  spec={activeLine.adhocSpec}
-                  onChange={(next) => updateLineDraft(activeLine.localId, (current) => ({ ...current, adhocSpec: next }))}
-                  basePrices={pricingData.basePrices}
-                  disabled={!canEditOrders}
-                  namePrefix={`line_${activeLine.localId}`}
-                />
-
-                <Text>SHAPE TYPE</Text>
-                <select
-                  value={activeLine.adhocSpec.shape}
-                  disabled={!canEditOrders}
-                  onChange={(event) =>
-                    updateLineDraft(activeLine.localId, (current) => ({
-                      ...current,
-                      adhocSpec: {
-                        ...current.adhocSpec,
-                        shape: event.target.value as GlassSpecification['shape'],
-                      },
-                    }))
-                  }
-                >
-                  <option value="RECTANGLE">Rectangle</option>
-                  <option value="TRIANGLE">Triangle</option>
-                  <option value="SIMPLE">Simple Shape</option>
-                  <option value="COMPLEX">Complex Shape</option>
-                </select>
-
-                <br />
-                <Card title="PRICE BREAKDOWN">
-                  {activeLineCost?.error ? (
-                    <Text>
-                      <span className="status-error">{activeLineCost.error}</span>
-                    </Text>
-                  ) : (
-                    <>
-                      <Table>
-                        <TableRow>
-                          <TableColumn style={{ width: '20ch' }}>COMPONENT</TableColumn>
-                          <TableColumn>COST</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>Base Glass</TableColumn>
-                          <TableColumn>${(activeLineCost?.breakdown?.baseGlass || 0).toFixed(2)}</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>Edgework</TableColumn>
-                          <TableColumn>${(activeLineCost?.breakdown?.edgework || 0).toFixed(2)}</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>Holes</TableColumn>
-                          <TableColumn>${(activeLineCost?.breakdown?.holes || 0).toFixed(2)}</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>Shape</TableColumn>
-                          <TableColumn>${(activeLineCost?.breakdown?.shape || 0).toFixed(2)}</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>Ceramic</TableColumn>
-                          <TableColumn>${(activeLineCost?.breakdown?.ceramic || 0).toFixed(2)}</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>Scanning</TableColumn>
-                          <TableColumn>${(activeLineCost?.breakdown?.scanning || 0).toFixed(2)}</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>Subtotal</TableColumn>
-                          <TableColumn>${(activeLineCost?.breakdown?.total || 0).toFixed(2)}</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>Markup ({activeLine.markupPercent}%)</TableColumn>
-                          <TableColumn>${(((activeLineCost?.breakdown?.total || 0) * activeLine.markupPercent) / 100).toFixed(2)}</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>TOTAL</TableColumn>
-                          <TableColumn>${(activeLineCost?.recommendedUnitPrice || 0).toFixed(2)}</TableColumn>
-                        </TableRow>
-                      </Table>
-
-                      <br />
-                      <ActionButton
-                        onClick={() =>
-                          updateLineDraft(activeLine.localId, (current) => ({
-                            ...current,
-                            unitPriceAtOrder: Number((activeLineCost?.recommendedUnitPrice || 0).toFixed(2)),
-                          }))
-                        }
-                      >
-                        Apply Calculator Price
-                      </ActionButton>
-                    </>
-                  )}
-                </Card>
+                <ActionButton onClick={() => editLineInCalculator(activeLine)}>Price In The Calculator</ActionButton>
               </>
             )}
 
