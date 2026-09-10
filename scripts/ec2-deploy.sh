@@ -234,6 +234,21 @@ if [[ -z "${DATABASE_SSL_REJECT_UNAUTHORIZED}" || "${DATABASE_SSL_REJECT_UNAUTHO
   DATABASE_SSL_REJECT_UNAUTHORIZED="false"
 fi
 
+# This file is rewritten from scratch below, so anything the server was given by hand and this
+# script does not know about would be lost on every release. ANTHROPIC_API_KEY was, silently, and
+# the feature that needs it reported itself switched off. Unmanaged settings are carried across.
+MANAGED_KEYS="NODE_ENV PORT DATABASE_URL DATABASE_SSL DATABASE_SSL_REJECT_UNAUTHORIZED NODE_OPTIONS SUPERADMIN_USERNAME ADMIN_PASSWORD"
+PRESERVED_ENV=""
+if [[ -f /etc/alfab.env ]]; then
+  PRESERVED_ENV="$(run_as_root awk -v managed="${MANAGED_KEYS}" '
+    BEGIN { split(managed, keys, " "); for (i in keys) skip[keys[i]] = 1 }
+    /^[A-Za-z_][A-Za-z0-9_]*=/ {
+      key = substr($0, 1, index($0, "=") - 1)
+      if (!(key in skip)) print
+    }
+  ' /etc/alfab.env)"
+fi
+
 cat <<ENVVARS | run_as_root tee /etc/alfab.env >/dev/null
 NODE_ENV=production
 PORT=3000
@@ -248,6 +263,11 @@ fi
 
 if [[ -n "${SUPERADMIN_USERNAME}" ]]; then
   echo "SUPERADMIN_USERNAME=${SUPERADMIN_USERNAME}" | run_as_root tee -a /etc/alfab.env >/dev/null
+fi
+
+if [[ -n "${PRESERVED_ENV}" ]]; then
+  printf '%s\n' "${PRESERVED_ENV}" | run_as_root tee -a /etc/alfab.env >/dev/null
+  echo "Kept $(printf '%s\n' "${PRESERVED_ENV}" | grep -c '=') setting(s) this script does not manage."
 fi
 
 if [[ -n "${ADMIN_PASSWORD}" ]]; then
