@@ -108,7 +108,7 @@ export function createRatesStore<T>(table: string, merge: (saved: unknown) => T)
       // ponytail: read-then-compare, not a conditional update. The gateway takes only eq filters and
       // a shop this size does not have two people in the rates editor at the same second.
       if (expectedUpdatedAt !== undefined && (current?.updated_at || null) !== (expectedUpdatedAt || null)) {
-        throw new Error('These rates were saved by someone else while this page was open. Reload to see their changes, then make yours again.');
+        throw new Error('Rates were changed by another user. Reload and re-apply your changes.');
       }
 
       await archiveCurrent(table, current);
@@ -128,25 +128,20 @@ export function createRatesStore<T>(table: string, merge: (saved: unknown) => T)
       }
     },
 
-    /**
-     * A save that is announced without being read back reports success for a write that never
-     * happened, and the editor keeps showing the values in the form. The user finds out the next
-     * time they open the page, with no way to tell which of their edits were lost.
-     */
+    /** Reads the table back after writing. Without this, a failed write is reported as a success. */
     async saveAndReload(rates: T, expectedUpdatedAt?: string | null): Promise<LoadedRates<T>> {
       await this.save(rates, expectedUpdatedAt);
 
       const loaded = await this.load();
       if (loaded.error) {
-        throw new Error(`The rates were written but could not be read back, so it is not certain they saved: ${loaded.error}`);
+        throw new Error(`Saved, but the read-back failed: ${loaded.error}`);
       }
       if (loaded.source !== 'saved') {
-        throw new Error('The rates did not save: the table holds no saved rates, so the editor is still showing the defaults.');
+        throw new Error('Save failed: no saved rates found after writing.');
       }
-      // The stamp advances on every write. One that has not moved means the row was not touched, and
-      // the archive row that keeps the replaced prices was not written either.
+      // updated_at advances on every write. Unchanged means the row was not written.
       if (expectedUpdatedAt !== undefined && loaded.updatedAt === (expectedUpdatedAt || null)) {
-        throw new Error('The rates did not save: the table still holds the rates that were there before. Reload the page and try again.');
+        throw new Error('Save failed: the stored rates did not change. Reload and retry.');
       }
 
       return loaded;

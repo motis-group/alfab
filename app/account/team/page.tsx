@@ -375,7 +375,7 @@ export default function TeamAccessPage() {
 
           {!isLoading && canInvite ? (
             <CardDouble title="INVITE TEAMMATES">
-              <Text>Admins and superadmins can generate one-time join links from this page.</Text>
+              <Text>Generate one-time join links.</Text>
               <Input label="EMAIL (OPTIONAL)" name="invite_email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="person@company.com" />
               <Input label="EXPIRES IN HOURS" name="expires_hours" type="number" value={inviteHours} onChange={(event) => setInviteHours(event.target.value)} />
 
@@ -406,7 +406,7 @@ export default function TeamAccessPage() {
 
           {!isLoading && isSuperadmin ? (
             <CardDouble title="CREATE USER">
-              <Text>Superadmins can create users directly or reset credentials from here.</Text>
+              <Text>Create users or reset credentials.</Text>
               <Input label="USERNAME" name="create_username" value={createUsername} onChange={(event) => setCreateUsername(event.target.value)} placeholder="username" />
               <Input label="PASSWORD" name="create_password" type="password" value={createPassword} onChange={(event) => setCreatePassword(event.target.value)} placeholder="minimum 8 characters" />
 
@@ -429,7 +429,7 @@ export default function TeamAccessPage() {
 
           {!isLoading && isSuperadmin && editingUser ? (
             <CardDouble title={`EDIT USER — ${editingUser.username.toUpperCase()}`}>
-              <Text>Update role, status, username, and password from this panel.</Text>
+              <Text>Update role, status, username and password.</Text>
               <Input
                 label="USERNAME"
                 name="edit_username"
@@ -491,7 +491,7 @@ export default function TeamAccessPage() {
               <TableColumn style={{ width: '14ch' }}>ROLE</TableColumn>
               <TableColumn style={{ width: '12ch' }}>STATUS</TableColumn>
               <TableColumn style={{ width: '18ch', whiteSpace: 'nowrap' }}>CREATED</TableColumn>
-              <TableColumn>ACTIONS</TableColumn>
+              <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
             </TableRow>
 
             {users.map((user) => (

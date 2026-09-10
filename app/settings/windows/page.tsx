@@ -316,7 +316,7 @@ export default function WindowRatesSettings() {
       return;
     }
     if (errorCount > 0) {
-      setStatus({ tone: 'error', message: `Fix the ${errorCount} rate${errorCount === 1 ? '' : 's'} marked in red first. Saved as they are, every quote would come out too low without any warning.` });
+      setStatus({ tone: 'error', message: `Fix the ${errorCount} rate${errorCount === 1 ? '' : 's'} marked in red.` });
       return;
     }
     try {
@@ -326,7 +326,7 @@ export default function WindowRatesSettings() {
       setSource(loaded.source);
       setUpdatedAt(loaded.updatedAt);
       setDrafts({});
-      setStatus({ tone: 'success', message: 'Window rates saved. The rates they replaced are kept, so earlier costings can still be recalculated.' });
+      setStatus({ tone: 'success', message: 'Window rates saved.' });
     } catch (saveError: any) {
       setStatus({ tone: 'error', message: saveError?.message || 'Unable to save the window rates.' });
     }
@@ -336,7 +336,7 @@ export default function WindowRatesSettings() {
     if (!canEdit) {
       return;
     }
-    if (source === 'saved' && !window.confirm('Reset throws away the whole company price list and goes back to the numbers the legacy sheet shipped with. The list being dropped is kept as an archive row, but every price typed since then is gone from the editor. Reset?')) {
+    if (source === 'saved' && !window.confirm('Reset all window rates to the legacy sheet defaults? The current rates are archived.')) {
       return;
     }
     try {
@@ -383,7 +383,7 @@ export default function WindowRatesSettings() {
                 <ActionButton onClick={handleReset}>Reset to Defaults</ActionButton>
               </>
             ) : (
-              <Text>Read only. An admin can change these rates.</Text>
+              <Text>Read only.</Text>
             )}
             {status ? (
               <>
@@ -422,7 +422,7 @@ export default function WindowRatesSettings() {
                   </Table>
                 </>
               ) : (
-                <Text>{samples.length ? 'No saved costing changes price.' : 'No saved costings to price against. Save one from the costing page.'}</Text>
+                <Text>{samples.length ? 'No saved costing changes price.' : 'No saved costings.'}</Text>
               )}
             </Card>
           ) : null}
@@ -503,9 +503,9 @@ export default function WindowRatesSettings() {
           </Card>
 
           <Card title="ABOUT">
-            <Text>Rates behind the Window Costing page, taken from the legacy costing sheet on the Victorian basis.</Text>
+            <Text>Window costing rates, from the legacy sheet (Victorian basis).</Text>
             <br />
-            <Text>Blank means not priced: the costing warns and charges the line as nil.</Text>
+            <Text>Blank = not priced; charged as nil.</Text>
             <br />
             <Text>{source === 'saved' && updatedAt ? `Saved ${new Date(updatedAt).toLocaleString()}.` : 'No saved rates yet, so the code defaults are in use.'}</Text>
           </Card>
@@ -532,7 +532,7 @@ export default function WindowRatesSettings() {
 
       {query ? null : (
         <CardDouble title="WHAT THESE TERMS MEAN">
-          <Text>The costing keeps the legacy sheet's words. These are what they mean.</Text>
+          <Text>Terms used by the legacy sheet.</Text>
           <br />
           <WindowCostingGlossary groups={['price']} openGroup="price" />
         </CardDouble>

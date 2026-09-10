@@ -52,8 +52,7 @@ export default function OrderImportPanel({ onAdd, disabled = false, file = null,
   const [error, setError] = React.useState<PanelError | null>(null);
   const [isDragActive, setIsDragActive] = React.useState(false);
 
-  // Priced here rather than on the server: the shop's own rates live in the browser's pricing
-  // context, and a reviewer deciding whether a read is right wants the number they will quote.
+  // Priced in the browser with the shop's rates from the pricing context.
   React.useEffect(() => {
     setRows((previous) =>
       previous.map((row) => {
@@ -166,8 +165,8 @@ export default function OrderImportPanel({ onAdd, disabled = false, file = null,
           handleFile(event.dataTransfer?.files?.[0]);
         }}
       >
-        <span className={styles.dropZoneTitle}>{isReading ? 'Reading the order…' : reading ? 'Drop another order to replace' : "Drop the customer's order here or click to choose"}</span>
-        <span className={styles.dropZoneHint}>PDF · Word — a typed cut list or a drawing. Every piece is read for you to check before it goes on the quote.</span>
+        <span className={styles.dropZoneTitle}>{isReading ? 'Reading the order…' : reading ? 'Drop another order to replace' : "Drop an order here or click to choose"}</span>
+        <span className={styles.dropZoneHint}>PDF · Word</span>
       </div>
         </>
       ) : null}

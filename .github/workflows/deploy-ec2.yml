@@ -131,9 +131,7 @@ jobs:
           grep -qi '^HTTP/.* 200' /tmp/prod-login.headers
           grep -qi '<form' /tmp/prod-login.html
 
-      # nginx defaults to a 1 MB body, which silently refuses a scanned order before the app sees
-      # it. The directive that raises it lives in a config that certbot and ec2-deploy.sh both
-      # rewrite, so it is asserted on every release rather than assumed to have survived.
+      # client_max_body_size lives in a file that certbot and ec2-deploy.sh rewrite; assert it each release.
       - name: Smoke test upload size limit
         run: |
           set -euo pipefail

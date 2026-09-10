@@ -131,7 +131,7 @@ export function detectCadFormat(fileName: string, bytes: Uint8Array): CadDetecti
 export function describeUnsupported(reason: UnsupportedKind): { message: string; hint: string } {
   switch (reason) {
     case 'pdf':
-      return { message: 'PDF drawings cannot be measured reliably.', hint: 'Ask the customer for the DXF (or DWG) export from their CAD package. In AutoCAD use SAVEAS and choose DXF.' };
+      return { message: 'PDF drawings cannot be measured reliably.', hint: 'Request a DXF or DWG export.' };
     case 'step':
     case 'iges':
     case 'stl':

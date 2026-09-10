@@ -215,7 +215,7 @@ export default function BillingSettingsPage() {
             <Card title="CHECKOUT STATUS">
               <Text>
                 {checkoutState === 'success' ? (
-                  <span className="status-pill status-pill-success">Stripe checkout completed. Wait up to a few seconds, then reload.</span>
+                  <span className="status-pill status-pill-success">Checkout complete. Reload in a few seconds.</span>
                 ) : (
                   <span className="status-pill status-pill-warning">Stripe checkout was cancelled.</span>
                 )}
@@ -236,7 +236,7 @@ export default function BillingSettingsPage() {
               <Text>Loading subscription status...</Text>
             ) : (
               <>
-                <Text>Set the margin and create a monthly Stripe subscription for Alfab.</Text>
+                <Text>Set the margin and create the monthly subscription.</Text>
                 <br />
                 <Input label="MARGIN PERCENT (%)" type="number" step="0.1" min="0" value={marginPercent} onChange={(event) => setMarginPercent(event.target.value)} />
                 <br />
@@ -300,7 +300,7 @@ export default function BillingSettingsPage() {
           <Text>Loading billing estimate...</Text>
         ) : (
           <>
-            <Text>Estimated infrastructure baseline plus margin for managed operation.</Text>
+            <Text>Infrastructure estimate plus margin.</Text>
             <br />
             <Table>
               <TableRow>

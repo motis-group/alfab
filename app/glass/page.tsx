@@ -420,7 +420,7 @@ export default function OrderDashboardPage() {
           </Text>
           <br />
           <Text>
-            <span className="status-warning">Run `docs/order-management-schema.sql` on your AWS PostgreSQL database, then reload.</span>
+            <span className="status-warning">Apply docs/order-management-schema.sql to the database, then reload.</span>
           </Text>
         </Card>
       )}
@@ -446,7 +446,7 @@ export default function OrderDashboardPage() {
               <TableColumn style={{ width: '16ch' }}>STATUS</TableColumn>
               <TableColumn style={{ width: '12ch' }}>LINES</TableColumn>
               <TableColumn style={{ width: '14ch' }}>TOTAL</TableColumn>
-              <TableColumn>ACTIONS</TableColumn>
+              <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
             </TableRow>
 
             {filteredOrders.map((order) => {
@@ -481,7 +481,7 @@ export default function OrderDashboardPage() {
             {!filteredOrders.length && (
               <TableRow>
                 <TableColumn colSpan={8} style={{ textAlign: 'center' }}>
-                  No purchase orders match your current filters.
+                  No purchase orders match the filters.
                 </TableColumn>
               </TableRow>
             )}

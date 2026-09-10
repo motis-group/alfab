@@ -136,6 +136,29 @@ export default function AdhocQuotePage() {
   }, [pricingData, quoteItems]);
 
   const quoteTotal = quoteLines.reduce((sum, line) => sum + line.total, 0);
+  const quotePieceCount = quoteLines.reduce((sum, line) => sum + Math.max(1, line.item.quantity), 0);
+  const quoteArea = quoteLines.reduce((sum, line) => sum + getEffectiveArea(line.item.spec) * Math.max(1, line.item.quantity), 0);
+  const quoteEdge = quoteLines.reduce((sum, line) => sum + getEffectivePerimeter(line.item.spec) * Math.max(1, line.item.quantity), 0);
+
+  // The cost build-up for the whole quote: every line's breakdown, times how many of that piece.
+  const quoteBreakdown = useMemo(() => {
+    const totals = { baseGlass: 0, edgework: 0, holes: 0, shape: 0, ceramic: 0, scanning: 0, minimumTopUp: 0, cost: 0 };
+    for (const line of quoteLines) {
+      if (!line.breakdown) {
+        continue;
+      }
+      const qty = Math.max(1, line.item.quantity);
+      totals.baseGlass += line.breakdown.baseGlass * qty;
+      totals.edgework += line.breakdown.edgework * qty;
+      totals.holes += line.breakdown.holes * qty;
+      totals.shape += line.breakdown.shape * qty;
+      totals.ceramic += line.breakdown.ceramic * qty;
+      totals.scanning += line.breakdown.scanning * qty;
+      totals.minimumTopUp += line.breakdown.minimumTopUp * qty;
+      totals.cost += line.breakdown.total * qty;
+    }
+    return totals;
+  }, [quoteLines]);
   const [job, setJob] = useJob();
 
   const quoteSummary = useMemo(() => {
@@ -218,10 +241,7 @@ export default function AdhocQuotePage() {
     setStatus({ tone: 'success', message: `Added. ${quoteItems.length + 1} piece${quoteItems.length ? 's' : ''} on this quote.` });
   }
 
-  /**
-   * Pieces read off a customer's order, already checked by the estimator in the import panel. They
-   * take the markup showing on the form, because that is the margin being quoted at this moment.
-   */
+  /** Pieces from an imported order. Each takes the markup currently on the form. */
   function addImportedPieces(pieces: ExtractedPiece[]) {
     if (!pieces.length) {
       return;
@@ -240,7 +260,7 @@ export default function AdhocQuotePage() {
         manualUnitPrice: 0,
       })),
     ]);
-    setStatus({ tone: 'success', message: `Added ${pieces.length} piece${pieces.length === 1 ? '' : 's'} from the order. Check each one before you send the quote.` });
+    setStatus({ tone: 'success', message: `Added ${pieces.length} piece${pieces.length === 1 ? '' : 's'} from the order.` });
   }
 
   /** Put a piece back in the form to change it. It leaves the list until it is added again. */
@@ -258,7 +278,7 @@ export default function AdhocQuotePage() {
     setManualUnitPrice(item.manualUnitPrice);
     setQuoteItems((prev) => prev.filter((entry) => entry.localId !== localId));
     setCadPanelKey((key) => key + 1);
-    setStatus({ tone: 'success', message: 'Loaded back into the form. Add it to the quote when you are done.' });
+    setStatus({ tone: 'success', message: 'Loaded into the form.' });
   }
 
   function removeQuoteItem(localId: string) {
@@ -267,7 +287,7 @@ export default function AdhocQuotePage() {
 
   async function handleSaveQuote() {
     if (!quoteLines.length) {
-      setStatus({ tone: 'warning', message: 'Add at least one piece to the quote before saving it.' });
+      setStatus({ tone: 'warning', message: 'Add a piece before saving.' });
       return;
     }
 
@@ -289,7 +309,7 @@ export default function AdhocQuotePage() {
         ratesUpdatedAt: updatedAt,
       });
       setSavedQuotes(await listGlassQuotes());
-      setStatus({ tone: 'success', message: 'Quote saved. Load it back to re-quote the same job.' });
+      setStatus({ tone: 'success', message: 'Quote saved.' });
     } catch (saveError: any) {
       setStatus({ tone: 'error', message: saveError?.message || 'Unable to save the quote.' });
     }
@@ -318,7 +338,7 @@ export default function AdhocQuotePage() {
     const moved = (quote.ratesUpdatedAt || null) !== (updatedAt || null);
     setStatus({
       tone: moved ? 'warning' : 'success',
-      message: moved ? 'Loaded at the prices it was quoted at. The glass rates have changed since, so a fresh price would differ.' : 'Loaded at the prices it was quoted at.',
+      message: moved ? 'Loaded at the quoted prices. Glass rates have changed since.' : 'Loaded at the prices it was quoted at.',
     });
   }
 
@@ -362,7 +382,7 @@ export default function AdhocQuotePage() {
 
     setJob(addToJob(lines, { name: quoteName, customerName: selectedCustomer?.name || customerName, customerId: customerId || null, notes: quoteNotes }));
     setQuoteItems([]);
-    setStatus({ tone: 'success', message: 'Added to the job. Price windows or awnings and they land on the same order.' });
+    setStatus({ tone: 'success', message: 'Added to the job.' });
   }
 
   function createOrderForJob() {
@@ -416,9 +436,40 @@ export default function AdhocQuotePage() {
       sidebarMobileOrder="top"
       sidebar={
         <>
-          {/* Every action lives on the toolbar. This card repeated it. */}
-          <Card title="QUOTE SUMMARY">
-            {calculation.error ? (
+          {/* Actions are on the toolbar. */}
+          {/* With pieces on the quote, this summarises the quote; otherwise the piece in the form. */}
+          <Card title={quoteLines.length ? `QUOTE SUMMARY (${quoteLines.length} LINE${quoteLines.length === 1 ? '' : 'S'})` : 'THIS PIECE'}>
+            {quoteLines.length ? (
+              <>
+                <RowSpaceBetween>
+                  <Text>PIECES</Text>
+                  <Text>{quotePieceCount}</Text>
+                </RowSpaceBetween>
+                <RowSpaceBetween>
+                  <Text>AREA</Text>
+                  <Text>{quoteArea.toFixed(3)} m²</Text>
+                </RowSpaceBetween>
+                <RowSpaceBetween>
+                  <Text>EDGE LENGTH</Text>
+                  <Text>{quoteEdge.toFixed(2)} m</Text>
+                </RowSpaceBetween>
+                {quoteLines.some((line) => line.error) ? (
+                  <Text>
+                    <span className="status-error">
+                      {quoteLines.filter((line) => line.error).length} line{quoteLines.filter((line) => line.error).length === 1 ? '' : 's'} not priced; excluded from the total.
+                    </span>
+                  </Text>
+                ) : null}
+                <RowSpaceBetween>
+                  <Text>QUOTE TOTAL</Text>
+                  <Text>
+                    <span className="status-pill status-pill-success">{formatCurrency(quoteTotal)}</span>
+                  </Text>
+                </RowSpaceBetween>
+                <br />
+                <ActionButton onClick={copyQuoteToClipboard}>Copy Quote Summary</ActionButton>
+              </>
+            ) : calculation.error ? (
               <Text>
                 <span className="status-error">{calculation.error}</span>
               </Text>
@@ -473,8 +524,58 @@ export default function AdhocQuotePage() {
 
           <RateReviewCard asAt={pricingData.asAt} label={(key) => (key === 'basePrices' ? 'Base glass prices' : key === 'edgeworkPrices' ? 'Edgework' : 'Holes, shaping and services')} action={<ActionButton onClick={() => router.push('/settings')}>Review Glass Rates</ActionButton>} />
 
-          <Card title="PRICE BREAKDOWN">
-            {calculation.error ? (
+          {/* Cost build-up of the quote when it has pieces; otherwise of the piece in the form. */}
+          <Card title={quoteLines.length ? 'PRICE BREAKDOWN (WHOLE QUOTE)' : 'PRICE BREAKDOWN'}>
+            {quoteLines.length ? (
+              <Table>
+                <TableRow>
+                  <TableColumn style={{ width: '24ch' }}>COMPONENT</TableColumn>
+                  <TableColumn>COST</TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn>Base Glass</TableColumn>
+                  <TableColumn>{formatCurrency(quoteBreakdown.baseGlass)}</TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn>Edgework</TableColumn>
+                  <TableColumn>{formatCurrency(quoteBreakdown.edgework)}</TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn>Holes</TableColumn>
+                  <TableColumn>{formatCurrency(quoteBreakdown.holes)}</TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn>Shape</TableColumn>
+                  <TableColumn>{formatCurrency(quoteBreakdown.shape)}</TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn>Ceramic</TableColumn>
+                  <TableColumn>{formatCurrency(quoteBreakdown.ceramic)}</TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn>Scanning</TableColumn>
+                  <TableColumn>{formatCurrency(quoteBreakdown.scanning)}</TableColumn>
+                </TableRow>
+                {quoteBreakdown.minimumTopUp ? (
+                  <TableRow>
+                    <TableColumn>Minimum charge top-up</TableColumn>
+                    <TableColumn>{formatCurrency(quoteBreakdown.minimumTopUp)}</TableColumn>
+                  </TableRow>
+                ) : null}
+                <TableRow>
+                  <TableColumn>Cost</TableColumn>
+                  <TableColumn>{formatCurrency(quoteBreakdown.cost)}</TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn>Markup</TableColumn>
+                  <TableColumn>{formatCurrency(quoteTotal - quoteBreakdown.cost)}</TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn>Quote Total ({quotePieceCount} pieces)</TableColumn>
+                  <TableColumn>{formatCurrency(quoteTotal)}</TableColumn>
+                </TableRow>
+              </Table>
+            ) : calculation.error ? (
               <Text>
                 <span className="status-error">{calculation.error}</span>
               </Text>
@@ -623,11 +724,11 @@ export default function AdhocQuotePage() {
           <>
             <Table>
               <TableRow>
-                <TableColumn style={{ width: '38ch' }}>PIECE</TableColumn>
+                <TableColumn>PIECE</TableColumn>
                 <TableColumn style={{ width: '6ch' }}>QTY</TableColumn>
                 <TableColumn style={{ width: '12ch' }}>UNIT</TableColumn>
                 <TableColumn style={{ width: '12ch' }}>TOTAL</TableColumn>
-                <TableColumn>ACTIONS</TableColumn>
+                <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
               </TableRow>
               {quoteLines.map((line) => (
                 <TableRow key={line.item.localId}>
@@ -644,11 +745,8 @@ export default function AdhocQuotePage() {
                   <TableColumn>{line.item.quantity}</TableColumn>
                   <TableColumn>{formatCurrency(line.unitPrice)}</TableColumn>
                   <TableColumn>{formatCurrency(line.total)}</TableColumn>
-                  <TableColumn>
-                    <RowSpaceBetween>
-                      <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton>
-                      <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
-                    </RowSpaceBetween>
+                  <TableColumn style={{ whiteSpace: 'nowrap' }}>
+                    <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton> <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
                   </TableColumn>
                 </TableRow>
               ))}
@@ -667,7 +765,7 @@ export default function AdhocQuotePage() {
             </RowSpaceBetween>
           </>
         ) : (
-          <Text>No pieces yet. Price one above and add it. A job with several sizes is one quote, not several.</Text>
+          <Text>No pieces on this quote.</Text>
         )}
       </CardDouble>
 
@@ -677,13 +775,13 @@ export default function AdhocQuotePage() {
         {savedQuotes.length ? (
           <Table>
             <TableRow>
-              <TableColumn style={{ width: '26ch' }}>QUOTE</TableColumn>
+              <TableColumn>QUOTE</TableColumn>
               <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
               <TableColumn style={{ width: '13ch' }}>DATE</TableColumn>
               <TableColumn style={{ width: '8ch' }}>PIECES</TableColumn>
               <TableColumn style={{ width: '12ch' }}>TOTAL</TableColumn>
               <TableColumn style={{ width: '22ch' }}>OUTCOME</TableColumn>
-              <TableColumn>ACTIONS</TableColumn>
+              <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
             </TableRow>
             {savedQuotes.map((quote) => (
               <TableRow key={quote.id}>
@@ -695,17 +793,14 @@ export default function AdhocQuotePage() {
                 <TableColumn>
                   <QuoteStatusControl status={quote.status} statusReason={quote.statusReason} onChange={(next, reason) => markQuote(quote.id, next, reason)} />
                 </TableColumn>
-                <TableColumn>
-                  <RowSpaceBetween>
-                    <ActionButton onClick={() => loadSavedQuote(quote)}>Load</ActionButton>
-                    <ActionButton onClick={() => handleDeleteSavedQuote(quote.id)}>Delete</ActionButton>
-                  </RowSpaceBetween>
+                <TableColumn style={{ whiteSpace: 'nowrap' }}>
+                  <ActionButton onClick={() => loadSavedQuote(quote)}>Load</ActionButton> <ActionButton onClick={() => handleDeleteSavedQuote(quote.id)}>Delete</ActionButton>
                 </TableColumn>
               </TableRow>
             ))}
           </Table>
         ) : (
-          <Text>Nothing saved yet. A saved quote keeps the prices it was given, so a customer who rings back gets the same number.</Text>
+          <Text>Nothing saved yet.</Text>
         )}
       </CardDouble>
 

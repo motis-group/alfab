@@ -422,7 +422,7 @@ export default function CustomersPage() {
     >
       {!canEdit && (
         <Card title="READ ONLY">
-          <Text>Customer and product management requires admin or superadmin role.</Text>
+          <Text>Requires admin access.</Text>
         </Card>
       )}
 
@@ -445,7 +445,7 @@ export default function CustomersPage() {
               <TableColumn style={{ width: '26ch' }}>EMAIL</TableColumn>
               <TableColumn style={{ width: '16ch' }}>PHONE</TableColumn>
               <TableColumn style={{ width: '12ch' }}>STATUS</TableColumn>
-              <TableColumn>ACTIONS</TableColumn>
+              <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
             </TableRow>
 
             {customers.map((customer) => (
@@ -499,7 +499,7 @@ export default function CustomersPage() {
             <TableColumn style={{ width: '10ch' }}>DEFAULT QTY</TableColumn>
             <TableColumn style={{ width: '16ch' }}>DEFAULT PRICE</TableColumn>
             <TableColumn style={{ width: '24ch' }}>NOTES</TableColumn>
-            <TableColumn>ACTIONS</TableColumn>
+            <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
           </TableRow>
 
           {selectedCustomerProducts.map((product) => {
@@ -535,7 +535,7 @@ export default function CustomersPage() {
           {selectedCustomerId && !selectedCustomerProducts.length && (
             <TableRow>
               <TableColumn colSpan={6} style={{ textAlign: 'center' }}>
-                No products defined for this customer.
+                No products for this customer.
               </TableColumn>
             </TableRow>
           )}

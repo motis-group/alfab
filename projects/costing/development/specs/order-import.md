@@ -72,8 +72,8 @@ A photograph or a scan has to be saved as a PDF first. A `.doc` from a version o
 2007 is not a ZIP and is refused; Word saves one as `.docx` without changing the content.
 
 The route is `POST /api/import`, signed-in sessions only, and it needs `ANTHROPIC_API_KEY` on the
-server. `GET /api/import` reports whether the key is set. Without it the panel says the feature is
-not switched on rather than failing silently.
+server. `GET /api/import` reports whether the key is set. Without it the panel reports that order
+import is not enabled.
 
 A refusal, a rate limit and an unreadable answer each come back with the same advice: enter the
 pieces by hand. The panel is a way to save typing, never the only way to build a quote.

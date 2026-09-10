@@ -70,7 +70,7 @@ export function checkRateValue(path: string, value: number | null): RateIssue | 
       path,
       tone: 'error',
       badge: 'breaks the costing',
-      message: 'The costing divides by this number, so a blank or a zero deletes the whole line. Enter the bar length or the batch quantity.',
+      message: 'Divisor; blank or zero voids the line.',
     };
   }
 
@@ -79,7 +79,7 @@ export function checkRateValue(path: string, value: number | null): RateIssue | 
       path,
       tone: 'error',
       badge: 'below zero',
-      message: 'A rate below zero turns the line into a credit, so the window gets cheaper the more work it takes.',
+      message: 'Below zero.',
     };
   }
 
@@ -88,7 +88,7 @@ export function checkRateValue(path: string, value: number | null): RateIssue | 
       path,
       tone: 'error',
       badge: 'not a fraction',
-      message: 'This value is a fraction: 0.2 means 20 percent. A value above 1 multiplies the price instead of adding to it.',
+      message: 'Fraction expected: 0.2 for 20%.',
     };
   }
 
@@ -98,14 +98,14 @@ export function checkRateValue(path: string, value: number | null): RateIssue | 
         path,
         tone: 'warning',
         badge: 'not priced',
-        message: 'The legacy sheet never priced this. The costing charges the line as nil and lists it as not priced.',
+        message: 'Never priced; charged as nil.',
       };
     }
     return {
       path,
       tone: 'error',
       badge: 'was priced',
-      message: 'This rate had a price. Left blank it counts as zero in the costing, and the quote still prints a price that is too low.',
+      message: 'Blank; this rate had a price. Read as zero.',
     };
   }
 
@@ -115,14 +115,14 @@ export function checkRateValue(path: string, value: number | null): RateIssue | 
         path,
         tone: 'error',
         badge: 'zero on every window',
-        message: 'A zero here prices this item at nothing on every window, and a zero is never reported as not priced.',
+        message: 'Zero; not reported as unpriced.',
       };
     }
     return {
       path,
       tone: 'warning',
       badge: 'free of charge',
-      message: 'A zero means the item is supplied free. Leave the field blank to say that it is not priced yet.',
+      message: 'Zero = supplied free. Blank = not priced.',
     };
   }
 

@@ -40,8 +40,7 @@ jobs:
       - name: Build
         run: npm run build
 
-  # The gateway lists the tables it will serve; nothing proved those tables exist. Awning rates
-  # shipped listed-but-absent and every save was refused in production while passing every test.
+  # Applies the schema to a throwaway database and checks that every table the gateway serves exists.
   schema:
     runs-on: ubuntu-latest
     timeout-minutes: 10
