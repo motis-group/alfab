@@ -850,7 +850,7 @@ export default function NewPurchaseOrderPage() {
             <TableColumn style={{ width: '10ch' }}>QTY</TableColumn>
             <TableColumn style={{ width: '14ch' }}>UNIT</TableColumn>
             <TableColumn style={{ width: '14ch' }}>TOTAL</TableColumn>
-            <TableColumn>ACTIONS</TableColumn>
+            <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
           </TableRow>
 
           {lineSummaries.map((summary) => (

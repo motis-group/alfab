@@ -1089,11 +1089,11 @@ export default function WindowCostingPage() {
           <>
             <Table>
               <TableRow>
-                <TableColumn style={{ width: '34ch' }}>WINDOW</TableColumn>
+                <TableColumn>WINDOW</TableColumn>
                 <TableColumn style={{ width: '8ch' }}>QTY</TableColumn>
                 <TableColumn style={{ width: '14ch' }}>UNIT</TableColumn>
                 <TableColumn style={{ width: '14ch' }}>TOTAL</TableColumn>
-                <TableColumn>ACTIONS</TableColumn>
+                <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
               </TableRow>
               {quoteLines.map((line) => (
                 <TableRow key={line.item.localId}>
@@ -1101,11 +1101,8 @@ export default function WindowCostingPage() {
                   <TableColumn>{line.item.quantity}</TableColumn>
                   <TableColumn>{formatCurrency(line.result.price)}</TableColumn>
                   <TableColumn>{formatCurrency(line.total)}</TableColumn>
-                  <TableColumn>
-                    <RowSpaceBetween>
-                      <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton>
-                      <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
-                    </RowSpaceBetween>
+                  <TableColumn style={{ whiteSpace: 'nowrap' }}>
+                    <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton> <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
                   </TableColumn>
                 </TableRow>
               ))}
@@ -1133,7 +1130,7 @@ export default function WindowCostingPage() {
               <TableColumn style={{ width: '20ch' }}>CUSTOMER</TableColumn>
               <TableColumn style={{ width: '14ch' }}>PRICE</TableColumn>
               <TableColumn style={{ width: '22ch' }}>OUTCOME</TableColumn>
-              <TableColumn>ACTIONS</TableColumn>
+              <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
             </TableRow>
             {savedCostings.map((costing) => (
               <TableRow key={costing.id}>

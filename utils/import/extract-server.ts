@@ -171,7 +171,8 @@ ${text}
   }
 
   const pieces: ExtractedPiece[] = cutList.entries.map((entry: CutListEntry) => ({
-    name: `${entry.widthMm} x ${entry.heightMm}`,
+    // The description already states the size; a name would repeat it on every row.
+    name: '',
     quantity: entry.quantity,
     spec: { ...baseSpec(settled), width: entry.widthMm, height: entry.heightMm },
     confidence: 'read',

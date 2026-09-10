@@ -446,7 +446,7 @@ export default function OrderDashboardPage() {
               <TableColumn style={{ width: '16ch' }}>STATUS</TableColumn>
               <TableColumn style={{ width: '12ch' }}>LINES</TableColumn>
               <TableColumn style={{ width: '14ch' }}>TOTAL</TableColumn>
-              <TableColumn>ACTIONS</TableColumn>
+              <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
             </TableRow>
 
             {filteredOrders.map((order) => {
