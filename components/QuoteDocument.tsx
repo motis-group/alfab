@@ -9,9 +9,9 @@ import { formatCurrency } from '@utils/order-management';
  */
 export const QUOTE_ISSUER = {
   name: 'Alfab Pty Ltd',
-  addressLines: [] as string[],
-  abn: '',
-  phone: '',
+  addressLines: ['130 Bamfield Road', 'Heidelberg West VIC 3081'],
+  abn: '70 649 036 966',
+  phone: '(03) 9459 1333',
   email: 'nick@alfab.com.au',
 };
 
