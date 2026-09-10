@@ -17,7 +17,8 @@ import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 import WindowCostingGlossary from '@components/WindowCostingGlossary';
-import WindowCostingSheet, { WindowCostingSheetWindow } from '@components/WindowCostingSheet';
+import WindowCostingSheet, { WindowCostingSheetWindow, windowQuoteLines } from '@components/WindowCostingSheet';
+import { CustomerQuoteContent, quoteFingerprint, quoteReference, saveCustomerQuote } from '@utils/customer-quote-store';
 
 import { Customer, UserRole, formatCurrency, todayISODate } from '@utils/order-management';
 import { createClient } from '@utils/db-client';
@@ -116,6 +117,9 @@ export default function WindowCostingPage() {
 
   const [role, setRole] = useState<UserRole>('readonly');
   const [canSaveCostings, setCanSaveCostings] = useState(false);
+  const [username, setUsername] = useState<string | null>(null);
+  // The quote last saved for the customer, and the content it was saved with.
+  const [issued, setIssued] = useState<{ id: string; fingerprint: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<{ tone: 'success' | 'warning'; message: string } | null>(null);
@@ -213,6 +217,7 @@ export default function WindowCostingPage() {
 
         setRole(user.effectiveRole as UserRole);
         setCanSaveCostings(userCan(user, 'quotes:write'));
+        setUsername(user.username);
 
         const { data: customerData } = await createClient().from('customers').select('*').order('name', { ascending: true });
         setCustomers((customerData as Customer[]) || []);
@@ -346,7 +351,38 @@ export default function WindowCostingPage() {
     }
   }
 
-  function printSheet(audience: 'internal' | 'customer') {
+  // The customer copy on screen, as a print would record it. A reprint of unchanged content reuses
+  // the quote already saved; any change is a different offer and prints as a draft until it is saved.
+  const printedQuote: CustomerQuoteContent = { kind: 'window-quote', name: quoteName, customer: customerName, customerId: customerId || null, date: quoteDate, notes: quoteNotes, lines: windowQuoteLines(sheetWindows, rates) };
+  const printedFingerprint = quoteFingerprint(printedQuote);
+  const reference = issued && issued.fingerprint === printedFingerprint ? quoteReference(issued.id) : null;
+
+  /** Saves the customer copy so the print carries a number. False, with the reason on screen, when it cannot. */
+  async function issueQuote(): Promise<boolean> {
+    if (!canSaveCostings) {
+      setStatus({ tone: 'warning', message: 'A numbered quote is saved as it prints, and saving quotes needs access. Cmd+P prints a draft.' });
+      return false;
+    }
+    if (!printedQuote.lines.some((line) => line.unitPrice != null)) {
+      setStatus({ tone: 'warning', message: 'Nothing on this quote has a price, so there is no offer to print.' });
+      return false;
+    }
+
+    try {
+      const id = await saveCustomerQuote({ ...printedQuote, issuedBy: username, ratesUpdatedAt });
+      setIssued({ id, fingerprint: printedFingerprint });
+      setStatus({ tone: 'success', message: `Quote ${quoteReference(id)} saved. It is in the order list.` });
+      return true;
+    } catch (saveError: any) {
+      setStatus({ tone: 'warning', message: `The quote was not saved, so it was not printed. ${saveError?.message || ''}`.trim() });
+      return false;
+    }
+  }
+
+  async function printSheet(audience: 'internal' | 'customer') {
+    if (audience === 'customer' && !reference && !(await issueQuote())) {
+      return;
+    }
     setSheetAudience(audience);
     if (typeof window !== 'undefined') {
       // Let the sheet re-render for the chosen audience before the print dialog reads the page.
@@ -1015,7 +1051,7 @@ export default function WindowCostingPage() {
         <WindowCostingGlossary />
       </CardDouble>
 
-      <WindowCostingSheet audience={sheetAudience} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} windows={sheetWindows} />
+      <WindowCostingSheet audience={sheetAudience} reference={reference} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} windows={sheetWindows} />
     </AppFrame>
   );
 }

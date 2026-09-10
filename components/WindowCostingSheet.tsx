@@ -1,7 +1,8 @@
 'use client';
 
 import PrintSheet from '@components/PrintSheet';
-import QuoteDocument, { QuoteDocumentLine } from '@components/QuoteDocument';
+import QuoteDocument from '@components/QuoteDocument';
+import { CustomerQuoteLine } from '@utils/customer-quote-store';
 import { formatCurrency } from '@utils/order-management';
 import { productFullName } from '@utils/window-catalogue';
 import { CostLine, WindowCostResult, WindowCostingInput, describeWindow } from '@utils/window-costing';
@@ -18,6 +19,8 @@ export interface WindowCostingSheetWindow {
 interface WindowCostingSheetProps {
   /** Internal shows the cost build-up. Customer shows prices only and is safe to hand over. */
   audience: 'internal' | 'customer';
+  /** The saved quote's reference, or null while what is on screen has not been saved. */
+  reference: string | null;
   quoteName: string;
   customerName: string;
   quoteDate: string;
@@ -25,6 +28,18 @@ interface WindowCostingSheetProps {
   ratesLabel: string;
   rates: WindowRates;
   windows: WindowCostingSheetWindow[];
+}
+
+/** The customer's lines. The page saves these and the sheet prints them, so the record matches the paper. */
+export function windowQuoteLines(windows: WindowCostingSheetWindow[], rates: WindowRates): CustomerQuoteLine[] {
+  return windows.map((window, index) => ({
+    description: window.name || `Window ${index + 1}`,
+    spec: describeWindow(window.input, rates, productFullName(window.input.productId)),
+    quantity: window.quantity,
+    unitPrice: window.result.price,
+    extras: Object.values(window.result.extras).map((extra) => ({ label: extra.label, total: extra.total })),
+    input: window.input,
+  }));
 }
 
 function formatQty(line: CostLine): string {
@@ -38,18 +53,9 @@ function formatQty(line: CostLine): string {
  * The internal sheet repeats the heading on every window, because it prints one window per page for
  * the bench. The customer copy is the shared quote document, with each window as one of its lines.
  */
-export default function WindowCostingSheet({ audience, quoteName, customerName, quoteDate, notes, ratesLabel, rates, windows }: WindowCostingSheetProps) {
+export default function WindowCostingSheet({ audience, reference, quoteName, customerName, quoteDate, notes, ratesLabel, rates, windows }: WindowCostingSheetProps) {
   if (audience === 'customer') {
-    const lines: QuoteDocumentLine[] = windows.map((window, index) => ({
-      id: window.id,
-      description: window.name || `Window ${index + 1}`,
-      spec: describeWindow(window.input, rates, productFullName(window.input.productId)),
-      quantity: window.quantity,
-      unitPrice: window.result.price,
-      extras: Object.values(window.result.extras).map((extra) => ({ label: extra.label, total: extra.total })),
-    }));
-
-    return <QuoteDocument quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={notes} lines={lines} />;
+    return <QuoteDocument reference={reference} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={notes} lines={windowQuoteLines(windows, rates)} />;
   }
 
   return (

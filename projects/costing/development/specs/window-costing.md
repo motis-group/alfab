@@ -16,6 +16,7 @@ only; the Queensland branch of the sheet is not implemented (`state` is fixed to
 | Rate severity | `utils/window-rate-health.ts` |
 | Glossary | `utils/window-costing-glossary.ts`, shown by `components/WindowCostingGlossary.tsx` |
 | Saved costings | `utils/window-quote-store.ts`, table `quotes` |
+| Printed quotes | `utils/customer-quote-store.ts`, table `quotes`, rows marked `kind: window-quote` |
 | Golden checks | `utils/window-costing.test.ts` (`npm test`) |
 
 Every window type has a golden check: a window worked by hand from the sheet's own formulas.
@@ -112,13 +113,24 @@ the glass loading to 15% for every type.
 - **Quote with several windows.** Add each costed window to the quote. The quote creates one
   purchase order line per window.
 - **Printing.** Two documents print the quote's windows, or the window on screen when the quote
-  is empty. "Print Quote For Customer" carries the specification and the price only: one heading,
-  one line per window, one total, on as few pages as the windows fit. "Print Costing Sheet
-  (internal)" adds every cost line, the rates used, the labour minutes, margin, packing and uplift,
-  and starts a new page for each window, because a fabricator carries a sheet to the bench. The
-  sheet is rendered at the end of `<body>`, outside the app, so printing takes the app out of the
-  layout rather than hiding it in place; hidden in place it kept its height and printed as blank
-  pages.
+  is empty. "Print Costing Sheet (internal)" shows every cost line, the rates used, the labour
+  minutes, margin, packing and uplift. It starts a new page for each window, because a fabricator
+  carries a sheet to the bench. Both documents render at the end of `<body>`, outside the app, so
+  printing takes the app out of the layout. A sheet hidden in place keeps the height of the app and
+  prints as blank pages.
+- **Customer quote.** "Print Quote For Customer" prints `components/QuoteDocument.tsx`, which the
+  awning calculator also uses. The layout follows an invoice: issuer, customer, one line for each
+  window, and a totals block with GST. The type is Berkeley Mono, served from `public/fonts`.
+- **Quote reference.** "Print Quote For Customer" saves the quote, then prints it with a reference
+  such as `Q-3F2A9C1E`. The order list shows the same reference, so a customer can quote it back.
+  An order made from the quote carries the reference in each line description. A reprint of
+  unchanged content uses the saved quote again. Changed content is a new offer and gets a new
+  reference. If the save fails, nothing prints.
+- **Drafts.** A browser Cmd+P prints the reference only when the screen matches the saved quote.
+  Otherwise the print shows "Draft, not issued" in place of the reference.
+- **Limits.** The reference is the first eight hex digits of the row id, so two quotes can share
+  one. The chance stays under 1% until about 9,000 quotes. The footer promises a 30-day price hold
+  from the quote date. Nothing marks a quote expired after 30 days, so staff set `expired` by hand.
 - **Copying.** "Copy Prices For Customer" is the same split in text. "Copy Cost Build-up
   (internal)" carries the build-up and is marked as not for a customer.
 - **Customer.** Picked from the customer list, so the purchase order does not have to match one by

@@ -528,7 +528,7 @@ export default function OrderDashboardPage() {
 
             {filteredQuotes.map((quote) => (
               <TableRow key={quote.id}>
-                <TableColumn>{quote.name || 'Untitled'}</TableColumn>
+                <TableColumn>{[quote.reference, quote.name || 'Untitled'].filter(Boolean).join(' · ')}</TableColumn>
                 <TableColumn>{QUOTE_KIND_LABELS[quote.kind]}</TableColumn>
                 <TableColumn>{quote.customer || 'Walk-in'}</TableColumn>
                 <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>

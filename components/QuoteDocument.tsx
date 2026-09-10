@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import PrintSheet from '@components/PrintSheet';
+import { GST_RATE, QuoteLine, quoteTotals } from '@utils/customer-quote-store';
 import { formatCurrency } from '@utils/order-management';
 
 /**
@@ -17,30 +18,17 @@ export const QUOTE_ISSUER = {
   email: 'nick@alfab.com.au',
 };
 
-/** Quoted prices are struck excluding GST; the document states it rather than burying it. */
-const GST_RATE = 0.1;
-
 /** Declared in styles/global-fonts.scss, where the app's font picker also reaches it. */
 const QUOTE_FONT = 'Berkeley Mono';
 
-export interface QuoteDocumentLine {
-  id: string;
-  /** What the customer calls it: "Window 1", "Kitchen awning". */
-  description: string;
-  /** The specification under the description, in the calculator's own words. */
-  spec: string;
-  quantity: number;
-  /** Null when the calculator could not price the line. Such lines carry no amount. */
-  unitPrice: number | null;
-  extras?: { label: string; total: number | null }[];
-}
-
 interface QuoteDocumentProps {
+  /** The saved quote's reference. Null prints a draft: content nobody has recorded is not an offer. */
+  reference: string | null;
   quoteName: string;
   customerName: string;
   quoteDate: string;
   notes: string;
-  lines: QuoteDocumentLine[];
+  lines: QuoteLine[];
 }
 
 /**
@@ -50,17 +38,14 @@ interface QuoteDocumentProps {
  *
  * Monospace, like the app it comes out of.
  */
-export default function QuoteDocument({ quoteName, customerName, quoteDate, notes, lines }: QuoteDocumentProps) {
+export default function QuoteDocument({ reference, quoteName, customerName, quoteDate, notes, lines }: QuoteDocumentProps) {
   // The sheet is display: none until the print dialog opens, and a hidden element fetches no font.
   // Ask for it on mount, or the first print of a session comes out in the fallback monospace.
   React.useEffect(() => {
     document.fonts?.load(`9pt "${QUOTE_FONT}"`);
   }, []);
 
-  const amounts = lines.map((line) => (line.unitPrice == null ? null : line.unitPrice * line.quantity));
-  const subtotal = amounts.reduce<number>((total, amount) => total + (amount ?? 0), 0);
-  const gst = subtotal * GST_RATE;
-  const anyUnpriced = amounts.some((amount) => amount == null);
+  const { amounts, subtotal, gst, total, anyUnpriced } = quoteTotals(lines);
 
   return (
     <PrintSheet audience="customer">
@@ -68,13 +53,19 @@ export default function QuoteDocument({ quoteName, customerName, quoteDate, note
 
       <header className="quote-doc__masthead">
         <div>
-          <h1 className="quote-doc__title">Quotation</h1>
+          <h1 className="quote-doc__title">{reference ? 'Quotation' : 'Draft quotation'}</h1>
           <table className="quote-doc__metadata">
             <tbody>
               <tr>
-                <td>Quote</td>
-                <td>{quoteName.trim() || 'Quotation'}</td>
+                <td>Quote no.</td>
+                <td>{reference || 'Draft, not issued'}</td>
               </tr>
+              {quoteName.trim() ? (
+                <tr>
+                  <td>Job</td>
+                  <td>{quoteName.trim()}</td>
+                </tr>
+              ) : null}
               <tr>
                 <td>Date</td>
                 <td>{quoteDate}</td>
@@ -101,7 +92,7 @@ export default function QuoteDocument({ quoteName, customerName, quoteDate, note
         </div>
       </div>
 
-      <div className="quote-doc__headline">{formatCurrency(subtotal + gst)} AUD</div>
+      <div className="quote-doc__headline">{formatCurrency(total)} AUD</div>
 
       <table className="quote-doc__table">
         <thead>
@@ -114,7 +105,7 @@ export default function QuoteDocument({ quoteName, customerName, quoteDate, note
         </thead>
         <tbody>
           {lines.map((line, index) => (
-            <tr key={line.id} className="quote-doc__line">
+            <tr key={index} className="quote-doc__line">
               <td>
                 <div className="quote-doc__item">{line.description || `Item ${index + 1}`}</div>
                 {line.spec ? <div className="quote-doc__spec">{line.spec}</div> : null}
@@ -141,7 +132,7 @@ export default function QuoteDocument({ quoteName, customerName, quoteDate, note
           </tr>
           <tr className="quote-doc__due">
             <td colSpan={3}>Total</td>
-            <td className="quote-doc__amount">{formatCurrency(subtotal + gst)}</td>
+            <td className="quote-doc__amount">{formatCurrency(total)}</td>
           </tr>
         </tbody>
       </table>

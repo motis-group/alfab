@@ -17,6 +17,7 @@ carries nine recipes. Both feed the same purchase orders.
 | Costing page | `app/glass/awnings/page.tsx` |
 | Printed sheet | `components/AwningCostingSheet.tsx`, print styles shared with the window sheet |
 | Saved costings | `utils/awning-quote-store.ts`, table `quotes`, rows marked `kind: awning` |
+| Printed quotes | `utils/customer-quote-store.ts`, table `quotes`, rows marked `kind: awning-quote` |
 | Golden checks | `utils/awning-costing.test.ts` (`npm test`) |
 
 The golden check is the sheet's own worked example: 1220 x 1100 glass, six off, Super Grey
@@ -54,11 +55,10 @@ none of them.
   divide across the run, so the price for each falls as the run grows.
 - **Quote with several awnings.** Add each costed awning to the quote. The quote creates one
   purchase order line per awning.
-- **Printing.** "Print Quote For Customer" carries the specification and the price only: one
-  heading, one line per awning, one total. "Print Costing Sheet (internal)" adds every cost line,
-  the rates used, the labour minutes and the margin, and starts a new page for each awning. The
-  screen copy is the customer one, so a browser Cmd+P prints the safe document. Both share the
-  window sheet's print behaviour, described in [window-costing.md](window-costing.md).
+- **Printing.** "Print Costing Sheet (internal)" shows every cost line, the rates used, the
+  labour minutes and the margin. It starts a new page for each awning. "Print Quote For Customer"
+  prints the shared customer quote, with one line for each awning. Both documents follow
+  [window-costing.md](window-costing.md), which also describes the quote reference and drafts.
 - **Copying.** "Copy Prices For Customer" is the same split in text. "Copy Cost Build-up
   (internal)" carries the build-up and is marked as not for a customer.
 - **Saved costings.** A saved costing keeps the awning, the customer and the price. Load it to

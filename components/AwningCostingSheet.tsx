@@ -1,7 +1,8 @@
 'use client';
 
 import PrintSheet from '@components/PrintSheet';
-import QuoteDocument, { QuoteDocumentLine } from '@components/QuoteDocument';
+import QuoteDocument from '@components/QuoteDocument';
+import { CustomerQuoteLine } from '@utils/customer-quote-store';
 import { formatCurrency } from '@utils/order-management';
 import { AwningCostResult, AwningCostingInput, AwningRates, CostLine, describeAwning } from '@utils/awning-costing';
 
@@ -16,6 +17,8 @@ export interface AwningCostingSheetAwning {
 interface AwningCostingSheetProps {
   /** Internal shows the cost build-up. Customer shows prices only and is safe to hand over. */
   audience: 'internal' | 'customer';
+  /** The saved quote's reference, or null while what is on screen has not been saved. */
+  reference: string | null;
   quoteName: string;
   customerName: string;
   quoteDate: string;
@@ -23,6 +26,17 @@ interface AwningCostingSheetProps {
   ratesLabel: string;
   rates: AwningRates;
   awnings: AwningCostingSheetAwning[];
+}
+
+/** The customer's lines. The page saves these and the sheet prints them, so the record matches the paper. */
+export function awningQuoteLines(awnings: AwningCostingSheetAwning[], rates: AwningRates): CustomerQuoteLine[] {
+  return awnings.map((awning, index) => ({
+    description: awning.name || `Awning ${index + 1}`,
+    spec: describeAwning(awning.input, rates),
+    quantity: awning.quantity,
+    unitPrice: awning.result.price,
+    input: awning.input,
+  }));
 }
 
 function formatQty(line: CostLine): string {
@@ -35,17 +49,9 @@ function formatQty(line: CostLine): string {
  * window sheet's class names, so both bench documents print identically: one awning per page. The
  * customer copy is the shared quote document, with each awning as one of its lines.
  */
-export default function AwningCostingSheet({ audience, quoteName, customerName, quoteDate, notes, ratesLabel, rates, awnings }: AwningCostingSheetProps) {
+export default function AwningCostingSheet({ audience, reference, quoteName, customerName, quoteDate, notes, ratesLabel, rates, awnings }: AwningCostingSheetProps) {
   if (audience === 'customer') {
-    const lines: QuoteDocumentLine[] = awnings.map((awning, index) => ({
-      id: awning.id,
-      description: awning.name || `Awning ${index + 1}`,
-      spec: describeAwning(awning.input, rates),
-      quantity: awning.quantity,
-      unitPrice: awning.result.price,
-    }));
-
-    return <QuoteDocument quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={notes} lines={lines} />;
+    return <QuoteDocument reference={reference} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={notes} lines={awningQuoteLines(awnings, rates)} />;
   }
 
   return (
