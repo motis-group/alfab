@@ -42,5 +42,6 @@ const store = createRatesStore<PricingData>('glass_costing_rates', mergeGlassRat
 export type LoadedGlassRates = LoadedRates<PricingData>;
 
 export const loadGlassRates = () => store.load();
-export const saveGlassRates = (rates: PricingData, expectedUpdatedAt?: string | null) => store.save(rates, expectedUpdatedAt);
+/** Saves and returns what the table then holds, so a save that did not land is not announced as one. */
+export const saveGlassRates = (rates: PricingData, expectedUpdatedAt?: string | null) => store.saveAndReload(rates, expectedUpdatedAt);
 export const resetGlassRates = () => store.reset();

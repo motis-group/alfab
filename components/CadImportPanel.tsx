@@ -26,6 +26,10 @@ interface CadImportPanelProps {
   onApply: (result: CadImportApplyResult) => void;
   onClear: () => void;
   disabled?: boolean;
+  /** A file chosen elsewhere. Set when the panel shares one drop zone with another importer. */
+  file?: File | null;
+  /** Off when a parent owns the drop zone, so the page does not show two of them. */
+  showDropZone?: boolean;
 }
 
 interface PanelError {
@@ -51,7 +55,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function CadImportPanel({ spec, onApply, onClear, disabled = false }: CadImportPanelProps) {
+export default function CadImportPanel({ spec, onApply, onClear, disabled = false, file = null, showDropZone = true }: CadImportPanelProps) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const specRef = React.useRef(spec);
   const onApplyRef = React.useRef(onApply);
@@ -86,6 +90,13 @@ export default function CadImportPanel({ spec, onApply, onClear, disabled = fals
       setError(toPanelError(analysisError));
     }
   }, [loaded, unitsOverride, outlineIndex, priceOnMeasured]);
+
+  React.useEffect(() => {
+    if (file) {
+      handleFile(file);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [file]);
 
   async function handleFile(file: File | null | undefined) {
     if (!file || disabled) {
@@ -146,6 +157,8 @@ export default function CadImportPanel({ spec, onApply, onClear, disabled = fals
 
   return (
     <div className={styles.root}>
+      {showDropZone ? (
+        <>
       <input ref={inputRef} className={styles.hiddenInput} type="file" accept={ACCEPT_ATTRIBUTE} disabled={disabled} tabIndex={-1} aria-hidden="true" onChange={(event) => handleFile(event.target.files?.[0])} />
 
       <div
@@ -177,6 +190,8 @@ export default function CadImportPanel({ spec, onApply, onClear, disabled = fals
         <span className={styles.dropZoneTitle}>{isLoading ? 'Reading file…' : loaded ? 'Drop another file to replace' : 'Drop a 2D CAD file here or click to choose'}</span>
         <span className={styles.dropZoneHint}>DXF · DWG · SVG — the outline, size, shape, radius corners and holes are read automatically</span>
       </div>
+        </>
+      ) : null}
 
       {error ? (
         <>

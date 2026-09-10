@@ -7,5 +7,6 @@ export type LoadedWindowRates = LoadedRates<WindowRates>;
 
 export const loadWindowRates = () => store.load();
 export const loadWindowRatesVersion = (updatedAt: string) => store.loadVersion(updatedAt);
-export const saveWindowRates = (rates: WindowRates, expectedUpdatedAt?: string | null) => store.save(rates, expectedUpdatedAt);
+/** Saves and returns what the table then holds, so a save that did not land is not announced as one. */
+export const saveWindowRates = (rates: WindowRates, expectedUpdatedAt?: string | null) => store.saveAndReload(rates, expectedUpdatedAt);
 export const resetWindowRates = () => store.reset();

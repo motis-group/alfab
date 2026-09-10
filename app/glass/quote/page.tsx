@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
-import CadImportPanel from '@components/CadImportPanel';
+import ImportPanel from '@components/ImportPanel';
 import Card from '@components/Card';
 import GlassVisualizer from '@components/GlassVisualizer';
 import CardDouble from '@components/CardDouble';
@@ -26,6 +26,7 @@ import { GlassSpecification, calculateCost, describeGlassSpecification, getAvail
 import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import { Customer, UserRole, formatCurrency, todayISODate } from '@utils/order-management';
 import { GlassQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
+import { ExtractedPiece } from '@utils/import/model';
 import JobPanel, { useJob } from '@components/JobPanel';
 import { addToJob, jobLineId } from '@utils/job-basket';
 import { SavedGlassQuote, deleteGlassQuote, listGlassQuotes, saveGlassQuote } from '@utils/glass-quote-store';
@@ -217,6 +218,31 @@ export default function AdhocQuotePage() {
     setStatus({ tone: 'success', message: `Added. ${quoteItems.length + 1} piece${quoteItems.length ? 's' : ''} on this quote.` });
   }
 
+  /**
+   * Pieces read off a customer's order, already checked by the estimator in the import panel. They
+   * take the markup showing on the form, because that is the margin being quoted at this moment.
+   */
+  function addImportedPieces(pieces: ExtractedPiece[]) {
+    if (!pieces.length) {
+      return;
+    }
+
+    const stamp = Date.now();
+    setQuoteItems((prev) => [
+      ...prev,
+      ...pieces.map((piece, index) => ({
+        localId: `glass-${stamp}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+        name: piece.name,
+        spec: { ...piece.spec },
+        quantity: Math.max(1, piece.quantity),
+        markupPercent,
+        useRecommendedPrice: true,
+        manualUnitPrice: 0,
+      })),
+    ]);
+    setStatus({ tone: 'success', message: `Added ${pieces.length} piece${pieces.length === 1 ? '' : 's'} from the order. Check each one before you send the quote.` });
+  }
+
   /** Put a piece back in the form to change it. It leaves the list until it is added again. */
   function editQuoteItem(localId: string) {
     const item = quoteItems.find((entry) => entry.localId === localId);
@@ -390,25 +416,7 @@ export default function AdhocQuotePage() {
       sidebarMobileOrder="top"
       sidebar={
         <>
-          <Card title="QUICK ACTIONS">
-            <ActionButton onClick={addToQuote}>Add To Quote</ActionButton>
-            <br />
-            <ActionButton onClick={addJobLines}>Add To Job</ActionButton>
-            <br />
-            <ActionButton onClick={handleCreatePurchaseOrder}>Create Purchase Order</ActionButton>
-            <br />
-            <ActionButton
-              onClick={() => {
-                setUseRecommendedPrice(false);
-                setManualUnitPrice(Number(calculation.recommendedUnitPrice.toFixed(2)));
-              }}
-            >
-              Use Recommended as Manual
-            </ActionButton>
-            <br />
-            <ActionButton onClick={resetCalculator}>Reset Calculator</ActionButton>
-          </Card>
-
+          {/* Every action lives on the toolbar. This card repeated it. */}
           <Card title="QUOTE SUMMARY">
             {calculation.error ? (
               <Text>
@@ -534,10 +542,23 @@ export default function AdhocQuotePage() {
         </>
       }
       actionItems={[
-        { body: 'Reset', onClick: resetCalculator },
-        { body: 'Add To Quote', onClick: addToQuote },
+        {
+          body: 'Add',
+          items: [
+            { icon: '⊹', children: 'Add To Quote', onClick: addToQuote },
+            { icon: '⊹', children: 'Add To Job', onClick: addJobLines },
+            { icon: '⊹', children: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
+          ],
+        },
         { body: 'Copy Quote', onClick: copyQuoteToClipboard },
-        { body: 'New PO', onClick: handleCreatePurchaseOrder },
+        {
+          body: 'Use Recommended Price',
+          onClick: () => {
+            setUseRecommendedPrice(false);
+            setManualUnitPrice(Number(calculation.recommendedUnitPrice.toFixed(2)));
+          },
+        },
+        { body: 'Reset', onClick: resetCalculator },
       ]}
     >
       {error && (
@@ -688,8 +709,15 @@ export default function AdhocQuotePage() {
         )}
       </CardDouble>
 
-      <CardDouble title="CAD FILE IMPORT">
-        <CadImportPanel key={cadPanelKey} spec={spec} onApply={(result) => setSpec(result.spec)} onClear={() => setSpec((prev) => ({ ...prev, cadOutline: null }))} />
+      <CardDouble title="READ A CUSTOMER'S ORDER OR DRAWING">
+        <ImportPanel
+          spec={spec}
+          cadPanelKey={cadPanelKey}
+          disabled={role === 'readonly'}
+          onApplyCad={(result) => setSpec(result.spec)}
+          onClearCad={() => setSpec((prev) => ({ ...prev, cadOutline: null }))}
+          onAddPieces={addImportedPieces}
+        />
       </CardDouble>
 
       <CardDouble title="GLASS SPECIFICATION">

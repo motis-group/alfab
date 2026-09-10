@@ -11,7 +11,7 @@ The ad hoc pricing calculator (`/glass/quote`) and the ad hoc line editor on the
 | DWG | Converted to DXF on the server, then read in the browser | Needs LibreDWG on the server, see below. |
 | SVG | In the browser | Physical units come from `width`/`height` + `viewBox`. |
 
-Files that cannot be measured (PDF, images, STEP/IGES/STL, AI/EPS, zip) are rejected with a message telling the user what to ask the customer for.
+Files that cannot be measured (PDF, images, STEP/IGES/STL, AI/EPS, zip) are rejected with a message telling the user what to ask the customer for. A customer's order sent as a PDF or a Word document is read by a different panel; see [order-import.md](order-import.md).
 
 Entities read from DXF: `LINE`, `ARC`, `CIRCLE`, `ELLIPSE`, `LWPOLYLINE` (with bulges), `POLYLINE`/`VERTEX`, `SPLINE` (NURBS or fit points), `INSERT` (blocks, including scale/rotation/arrays) and `HATCH` boundaries as a fallback. Text, dimensions, leaders, solids, 3D entities, frozen/off layers, invisible entities and paper space are ignored.
 

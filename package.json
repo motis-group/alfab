@@ -13,9 +13,10 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "rm -rf .next && tsc --noEmit",
-    "test": "tsx --test utils/cad/*.test.ts utils/*.test.ts"
+    "test": "tsx --test utils/cad/*.test.ts utils/import/*.test.ts utils/*.test.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
     "next": "^14.0.0",
     "pg": "^8.13.1",
     "react": "^18.2.0",

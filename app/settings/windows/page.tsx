@@ -320,8 +320,7 @@ export default function WindowRatesSettings() {
       return;
     }
     try {
-      await saveWindowRates(rates, updatedAt);
-      const loaded = await loadWindowRates();
+      const loaded = await saveWindowRates(rates, updatedAt);
       setRates(loaded.rates);
       setSavedRates(loaded.rates);
       setSource(loaded.source);

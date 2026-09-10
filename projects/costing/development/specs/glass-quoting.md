@@ -10,6 +10,8 @@ A quote holds as many pieces as the job has. Price a piece, name it, add it to t
 next. Each piece keeps its own size, glass, markup and quantity, and becomes one purchase order
 line. The quote total is what the customer is told.
 
+Pieces are priced one at a time, or read off a customer's order in one go; see [order-import.md](order-import.md).
+
 A quote can be saved and reopened. A saved quote holds the prices it was given, not today's, so a
 customer who rings back a fortnight later gets the same number. It records which glass rates priced
 it; reopening a quote priced on rates that have since changed says so.

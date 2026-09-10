@@ -687,21 +687,19 @@ select option {
 }
 
 @media print {
-  body {
-    visibility: hidden;
-    background: #fff;
+  /* The sheet is portalled to <body>, so taking body's other children out of the layout leaves the
+     sheet alone on the page. Hiding the app with `visibility` instead kept its full height, which
+     printed as blank pages behind and after the sheet. */
+  body > *:not(.window-costing-sheet) {
+    display: none !important;
   }
 
-  .window-costing-sheet,
-  .window-costing-sheet * {
-    visibility: visible;
+  body {
+    background: #fff;
   }
 
   .window-costing-sheet {
     display: block;
-    position: absolute;
-    left: 0;
-    top: 0;
     width: 100%;
     padding: 0 12mm;
     color: #000;
@@ -713,10 +711,15 @@ select option {
 
   .window-costing-sheet__window {
     page-break-inside: avoid;
+  }
+
+  /* The internal sheet is one window per page, because a fabricator carries a sheet to the bench.
+     A customer quote is one document: its windows follow each other and it fits on a page. */
+  .window-costing-sheet[data-audience='internal'] .window-costing-sheet__window {
     page-break-after: always;
   }
 
-  .window-costing-sheet__window:last-child {
+  .window-costing-sheet[data-audience='internal'] .window-costing-sheet__window:last-child {
     page-break-after: auto;
   }
 
@@ -791,6 +794,17 @@ select option {
     margin-top: 4mm;
     padding-top: 2mm;
     border-top: 0.25pt solid #999;
+  }
+
+  /* What the customer is being asked to pay for the whole quote, under the last line. */
+  .window-costing-sheet__total {
+    display: flex;
+    justify-content: space-between;
+    border-top: 0.75pt solid #000;
+    padding-top: 1mm;
+    margin-top: 2mm;
+    font-size: 11pt;
+    font-weight: 700;
   }
 }
 
