@@ -699,6 +699,8 @@ select option {
 
   .window-costing-sheet {
     display: block;
+    /* Border-box, or the side padding is added to the full width and the sheet runs off the page. */
+    box-sizing: border-box;
     width: 100%;
     padding: 0 12mm;
     color: #000;
@@ -794,15 +796,135 @@ select option {
     border-top: 0.25pt solid #999;
   }
 
-  /* What the customer is being asked to pay for the whole quote, under the last line. */
-  .window-costing-sheet__total {
+  /* The customer's quote, laid out as an invoice: masthead, parties, one table, totals block. It
+     keeps the app's monospace, so the document reads as the calculator's own output. */
+  .window-costing-sheet[data-audience='customer'] {
+    padding: 0 16mm;
+  }
+
+  .quote-doc__rule {
+    height: 1.5mm;
+    background: #000;
+    margin-bottom: 8mm;
+  }
+
+  .quote-doc__masthead {
     display: flex;
     justify-content: space-between;
-    border-top: 0.75pt solid #000;
-    padding-top: 1mm;
-    margin-top: 2mm;
-    font-size: 11pt;
+    align-items: flex-start;
+    margin-bottom: 8mm;
+  }
+
+  .quote-doc__title {
+    font-size: 16pt;
     font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 0 0 3mm;
+  }
+
+  .quote-doc__metadata td {
+    padding: 0 6mm 0.5mm 0;
+    vertical-align: top;
+  }
+
+  .quote-doc__metadata td:first-child {
+    color: #555;
+  }
+
+  .quote-doc__mark {
+    font-size: 12pt;
+    font-weight: 700;
+    text-align: right;
+  }
+
+  .quote-doc__parties {
+    display: grid;
+    grid-template-columns: 40% 60%;
+    margin-bottom: 8mm;
+  }
+
+  .quote-doc__party-name {
+    font-weight: 700;
+  }
+
+  /* What the customer is being asked to pay, stated once before the detail, as an invoice does. */
+  .quote-doc__headline {
+    font-size: 14pt;
+    font-weight: 700;
+    margin-bottom: 6mm;
+  }
+
+  .quote-doc__table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 4mm;
+  }
+
+  .quote-doc__table th {
+    text-align: left;
+    font-size: 8pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding-bottom: 1.5mm;
+    border-bottom: 0.75pt solid #000;
+  }
+
+  .quote-doc__table td {
+    padding: 1.5mm 0;
+    vertical-align: top;
+  }
+
+  .quote-doc__line {
+    page-break-inside: avoid;
+  }
+
+  .quote-doc__line + .quote-doc__line td {
+    border-top: 0.25pt solid #ebebeb;
+  }
+
+  .quote-doc__spec {
+    font-size: 8pt;
+    color: #555;
+  }
+
+  .quote-doc__amount {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    padding-left: 4mm;
+  }
+
+  .quote-doc__totals td {
+    padding: 1mm 0;
+    border-top: 0.25pt solid #ebebeb;
+  }
+
+  .quote-doc__totals .quote-doc__amount {
+    padding-left: 4mm;
+  }
+
+  .quote-doc__due td {
+    border-top: 0.75pt solid #000;
+    font-weight: 700;
+  }
+
+  .quote-doc__note {
+    margin: 2mm 0 0;
+  }
+
+  .quote-doc__notes {
+    margin-top: 6mm;
+    page-break-inside: avoid;
+  }
+
+  .quote-doc__footer {
+    margin-top: 8mm;
+    padding-top: 2mm;
+    border-top: 0.25pt solid #ebebeb;
+    font-size: 8pt;
+    color: #555;
   }
 }
 
