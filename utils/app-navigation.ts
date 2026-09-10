@@ -12,6 +12,7 @@ export interface AppSectionItem {
  * are a group rather than three peers of Orders.
  */
 export const APP_WORK_SECTION_ITEMS: AppSectionItem[] = [
+  { href: '/glass/dashboard', label: 'Dashboard' },
   { href: '/glass', label: 'Orders' },
   {
     label: 'Calculators',

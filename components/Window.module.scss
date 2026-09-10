@@ -1,0 +1,10 @@
+// Vendored from sacred.computer. Its --theme-window-* tokens are not defined here, so the
+// surface and shadow use this theme's modal background and border.
+.window {
+  display: block;
+  background: var(--theme-background-modal);
+  box-shadow: 1ch calc(var(--theme-line-height-base) * 1rem) 0 0 var(--theme-border);
+  margin: 0;
+  padding: calc(var(--theme-line-height-base) * 1rem) min(2ch, 4vw) calc(var(--theme-line-height-base) * 1rem) min(2ch, 4vw);
+  min-width: min(24ch, 100%);
+}

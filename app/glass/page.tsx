@@ -32,6 +32,7 @@ import QuoteStatusControl from '@components/QuoteStatusControl';
 import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
 import { QUOTE_STATUS_LABELS, QUOTE_STATUS_ORDER, QuoteStatus, setQuoteStatus } from '@utils/quote-status';
 import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
+import { overdueOrders } from '@utils/order-metrics';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
@@ -183,66 +184,9 @@ export default function OrderDashboardPage() {
     });
   }, [quotes, customerFilter, quoteStatusFilter]);
 
-  const openOrdersByCustomer = useMemo(() => {
-    const counts: Record<string, number> = {};
-    ordersInScope.forEach((order) => {
-      if (order.status !== 'open') {
-        return;
-      }
-      counts[order.customer_id] = (counts[order.customer_id] || 0) + 1;
-    });
-
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([customerId, count]) => ({
-        customerId,
-        count,
-        name: customerMap[customerId]?.name || 'Unknown Customer',
-      }));
-  }, [ordersInScope, customerMap]);
-
-  // Past its required date and not finished. Nothing showed these: dueInSevenDays starts at today,
-  // so an order went quiet on the dashboard the moment it became the one worth ringing about.
-  const overdue = useMemo(() => {
-    const today = todayISODate();
-    return ordersInScope.filter((order) => {
-      const requiredDate = normalizeDateValue(order.required_date);
-      if (!requiredDate || order.status === 'fulfilled' || order.status === 'cancelled') {
-        return false;
-      }
-      return requiredDate < today;
-    });
-  }, [ordersInScope]);
+  const overdue = useMemo(() => overdueOrders(ordersInScope, todayISODate()), [ordersInScope]);
 
   const overdueIds = useMemo(() => new Set(overdue.map((order) => order.id)), [overdue]);
-
-  const dueInSevenDays = useMemo(() => {
-    const today = todayISODate();
-    const inSevenDays = new Date();
-    inSevenDays.setDate(inSevenDays.getDate() + 7);
-    const maxDate = localISODate(inSevenDays);
-
-    return ordersInScope.filter((order) => {
-      const requiredDate = normalizeDateValue(order.required_date);
-      if (!requiredDate) {
-        return false;
-      }
-      if (order.status === 'fulfilled' || order.status === 'cancelled') {
-        return false;
-      }
-      return requiredDate >= today && requiredDate <= maxDate;
-    });
-  }, [ordersInScope]);
-
-  const recentOrders = useMemo(() => {
-    return [...ordersInScope]
-      .sort((a, b) => {
-        const aDate = a.updated_at || a.created_at || a.received_date || '';
-        const bDate = b.updated_at || b.created_at || b.received_date || '';
-        return bDate.localeCompare(aDate);
-      })
-      .slice(0, 5);
-  }, [ordersInScope]);
 
   async function loadData() {
     setIsLoading(true);
@@ -372,77 +316,6 @@ export default function OrderDashboardPage() {
       sidebarMobileOrder="top"
       sidebar={
         <>
-          <Card title="ORDER DASHBOARD">
-            <RowSpaceBetween>
-              <Text>OPEN ORDERS</Text>
-              <Text>
-                <span className="status-warning">{ordersInScope.filter((order) => order.status === 'open').length}</span>
-              </Text>
-            </RowSpaceBetween>
-            <RowSpaceBetween>
-              <Text>IN PRODUCTION</Text>
-              <Text>
-                <span className="status-warning">{ordersInScope.filter((order) => order.status === 'in_production').length}</span>
-              </Text>
-            </RowSpaceBetween>
-            <RowSpaceBetween>
-              <Text>DUE WITHIN 7 DAYS</Text>
-              <Text>
-                <span className="status-warning">{dueInSevenDays.length}</span>
-              </Text>
-            </RowSpaceBetween>
-            <RowSpaceBetween>
-              <Text>OVERDUE</Text>
-              <Text>
-                <span className={overdue.length ? 'status-error' : undefined}>{overdue.length}</span>
-              </Text>
-            </RowSpaceBetween>
-
-            <br />
-            <Text>OPEN ORDERS BY CUSTOMER</Text>
-            <Table>
-              <TableRow>
-                <TableColumn style={{ width: '26ch' }}>CUSTOMER</TableColumn>
-                <TableColumn>OPEN ORDERS</TableColumn>
-              </TableRow>
-              {openOrdersByCustomer.map((entry) => (
-                <TableRow key={entry.customerId}>
-                  <TableColumn>{entry.name}</TableColumn>
-                  <TableColumn>{entry.count}</TableColumn>
-                </TableRow>
-              ))}
-              {!openOrdersByCustomer.length && (
-                <TableRow>
-                  <TableColumn colSpan={2} style={{ textAlign: 'center' }}>
-                    No open orders.
-                  </TableColumn>
-                </TableRow>
-              )}
-            </Table>
-
-            <br />
-            <Text>RECENT ORDERS</Text>
-            <Table>
-              <TableRow>
-                <TableColumn style={{ width: '16ch' }}>PO</TableColumn>
-                <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
-                <TableColumn style={{ width: '16ch' }}>STATUS</TableColumn>
-              </TableRow>
-              {recentOrders.map((order) => (
-                <TableRow key={order.id}>
-                  <TableColumn>{order.po_number}</TableColumn>
-                  <TableColumn>{customerMap[order.customer_id]?.name || 'Unknown'}</TableColumn>
-                  <TableColumn>
-                    <>
-                      <span className={orderStatusClassName(order.status)}>{statusLabel(order.status)}</span>
-                      {isOrderArchived(order) ? <span className="status-pill status-pill-warning">ARCHIVED</span> : null}
-                    </>
-                  </TableColumn>
-                </TableRow>
-              ))}
-            </Table>
-          </Card>
-
           <Card title="ORDER LIST FILTERS">
             <Text>CUSTOMER</Text>
             <select value={customerFilter} onChange={(event) => setCustomerFilter(event.target.value)}>
