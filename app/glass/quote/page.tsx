@@ -876,7 +876,7 @@ export default function AdhocQuotePage() {
       </CardDouble>
 
       <CardDouble title="QUOTE">
-        <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} />
+        <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} placeholder="Job reference" />
         <Text>CUSTOMER</Text>
         <select
           value={customerId}
