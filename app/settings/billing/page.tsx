@@ -4,7 +4,6 @@ import '@root/global.scss';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
@@ -18,7 +17,6 @@ import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 import { APP_ACCOUNT_SECTION_ITEMS } from '@utils/app-navigation';
 
-const navigationItems = APP_NAVIGATION_ITEMS;
 
 interface BillingEstimateResponse {
   assumptions: {
@@ -202,8 +200,6 @@ export default function BillingSettingsPage() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⚙"
-      navigationItems={navigationItems}
-      navLabel="BILLING"
       heading="BILLING"
       sectionNavigationItems={APP_ACCOUNT_SECTION_ITEMS}
       badge={badgeLabel}

@@ -18,7 +18,6 @@ import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 
-import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import { Customer, UserRole, formatCurrency, todayISODate } from '@utils/order-management';
 import { createClient } from '@utils/db-client';
 import { AwningQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
@@ -28,7 +27,6 @@ import { AwningRates, DEFAULT_AWNING_RATES, GlazingId, mergeAwningRates } from '
 import { loadAwningRates, loadAwningRatesVersion } from '@utils/awning-costing-store';
 import { saveAwningCosting } from '@utils/awning-quote-store';
 
-const navigationItems = APP_NAVIGATION_ITEMS;
 const BATCH_SIZES = [1, 2, 5, 10];
 
 interface QuoteItem {
@@ -317,8 +315,6 @@ export default function AwningCostingPage() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⬡"
-      navigationItems={navigationItems}
-      navLabel="AWNING COSTING"
       navRight={<ActionButton onClick={() => router.push('/glass')}>ORDER DASHBOARD</ActionButton>}
       heading="AWNING COSTING"
       badge={isLoading ? 'LOADING' : `${role.toUpperCase()} SESSION`}

@@ -4,7 +4,6 @@ import '@root/global.scss';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
@@ -21,7 +20,6 @@ import { CurrentSessionUser, fetchCurrentSessionUser } from '@utils/session-clie
 import { THEME_MODE_OPTIONS, THEME_TINT_OPTIONS } from '@utils/theme-preferences';
 import { APP_ACCOUNT_SECTION_ITEMS } from '@utils/app-navigation';
 
-const navigationItems = APP_NAVIGATION_ITEMS;
 
 function formatRoleLabel(value: string | null | undefined): string {
   if (!value) {
@@ -80,8 +78,6 @@ export default function AccountSettingsPage() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⚙"
-      navigationItems={navigationItems}
-      navLabel="APPEARANCE"
       heading="APPEARANCE"
       sectionNavigationItems={APP_ACCOUNT_SECTION_ITEMS}
       badge={badgeText}

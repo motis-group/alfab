@@ -15,7 +15,6 @@ import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 
-import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import {
   Customer,
   ORDER_STATUS_OPTIONS,
@@ -36,7 +35,6 @@ const TABLE_CUSTOMERS = 'customers';
 const TABLE_PURCHASE_ORDERS = 'purchase_orders';
 const TABLE_PURCHASE_ORDER_LINES = 'purchase_order_lines';
 
-const navigationItems = APP_NAVIGATION_ITEMS;
 
 type ArchiveFilter = 'active' | 'all' | 'archived';
 
@@ -279,8 +277,6 @@ export default function OrderDashboardPage() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⬡"
-      navigationItems={navigationItems}
-      navLabel="ORDER DASHBOARD"
       navRight={<ActionButton onClick={() => router.push('/glass/new')}>NEW ORDER</ActionButton>}
       heading="PURCHASE ORDER DASHBOARD"
       badge={`${ordersInScope.length} TOTAL`}

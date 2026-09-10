@@ -19,7 +19,6 @@ import Text from '@components/Text';
 import WindowCostingGlossary from '@components/WindowCostingGlossary';
 import WindowCostingSheet, { WindowCostingSheetWindow } from '@components/WindowCostingSheet';
 
-import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import { Customer, UserRole, formatCurrency, todayISODate } from '@utils/order-management';
 import { createClient } from '@utils/db-client';
 import { WindowQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
@@ -58,7 +57,6 @@ import { DEFAULT_WINDOW_RATES, GlazingId, WindowRates, mergeWindowRates } from '
 import { loadWindowRates, loadWindowRatesVersion } from '@utils/window-costing-store';
 import { saveWindowCosting } from '@utils/window-quote-store';
 
-const navigationItems = APP_NAVIGATION_ITEMS;
 const FINISH_ORDER: Finish[] = ['mill', 'etch', 'powder'];
 const TRIM_ORDER: TrimMode[] = ['none', 'required', 'extra'];
 const STRUT_ORDER: StrutKind[] = ['none', 'gas', 'manual'];
@@ -419,8 +417,6 @@ export default function WindowCostingPage() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⬡"
-      navigationItems={navigationItems}
-      navLabel="WINDOW COSTING"
       navRight={<ActionButton onClick={() => router.push('/glass')}>ORDER DASHBOARD</ActionButton>}
       heading="WINDOW COSTING"
       badge={isLoading ? 'LOADING' : `${role.toUpperCase()} SESSION`}

@@ -20,7 +20,6 @@ import Text from '@components/Text';
 
 import { usePricing } from '@components/PricingProvider';
 import { GlassSpecification, calculateCost, describeGlassSpecification, getAvailableGlassTypes, getAvailableThicknesses, getEffectiveArea, getEffectivePerimeter, usesMeasuredGeometry } from '@utils/calculations';
-import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import { Customer, UserRole, formatCurrency, todayISODate } from '@utils/order-management';
 import { GlassQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { ExtractedPiece } from '@utils/import/model';
@@ -28,7 +27,6 @@ import { saveGlassQuote } from '@utils/glass-quote-store';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
-const navigationItems = APP_NAVIGATION_ITEMS;
 const TABLE_CUSTOMERS = 'customers';
 
 /** One piece on the quote. A job is usually several sizes, not one. */
@@ -353,8 +351,6 @@ export default function AdhocQuotePage() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⬡"
-      navigationItems={navigationItems}
-      navLabel="AD HOC QUOTE"
       navRight={<ActionButton onClick={() => router.push('/glass')}>ORDER DASHBOARD</ActionButton>}
       heading="AD HOC PRICING CALCULATOR"
       badge={isLoading ? 'LOADING' : `${role.toUpperCase()} SESSION`}
