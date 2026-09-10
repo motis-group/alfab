@@ -1,11 +1,10 @@
 import { GlassSpecification, describeGlassSpecification } from '@utils/calculations';
 import { WindowCostingInput } from '@utils/window-costing';
 import { AwningCostingInput } from '@utils/awning-costing';
-import { JobLine, normalizeJob } from '@utils/job-basket';
 
 const QUOTE_TO_ORDER_STORAGE_KEY = 'adhocQuoteToPurchaseOrderDraft';
 
-export type QuoteToOrderDraftKind = 'glass' | 'window' | 'awning' | 'job';
+export type QuoteToOrderDraftKind = 'glass' | 'window' | 'awning';
 
 /** One window costing on its way to a purchase order line. A quote can carry several. */
 export interface WindowQuoteLine {
@@ -55,11 +54,9 @@ export interface QuoteToOrderDraft {
   windowLines: WindowQuoteLine[];
   /** Awning costings, one per purchase order line. Empty for every other kind. */
   awningLines: AwningQuoteLine[];
-  /** A job spanning more than one product type. One order line per entry, whatever its kind. */
-  jobLines: JobLine[];
 }
 
-export type QuoteToOrderDraftInput = Omit<QuoteToOrderDraft, 'kind' | 'spec' | 'glassLines' | 'windowLines' | 'awningLines' | 'jobLines' | 'quantity' | 'unitPrice' | 'customerId' | 'markupPercent'> & {
+export type QuoteToOrderDraftInput = Omit<QuoteToOrderDraft, 'kind' | 'spec' | 'glassLines' | 'windowLines' | 'awningLines' | 'quantity' | 'unitPrice' | 'customerId' | 'markupPercent'> & {
   kind?: QuoteToOrderDraftKind;
   customerId?: string | null;
   /** Legacy single-piece markup. Each line carries its own. */
@@ -68,7 +65,6 @@ export type QuoteToOrderDraftInput = Omit<QuoteToOrderDraft, 'kind' | 'spec' | '
   glassLines?: GlassQuoteLine[];
   windowLines?: WindowQuoteLine[];
   awningLines?: AwningQuoteLine[];
-  jobLines?: JobLine[];
   quantity?: number;
   unitPrice?: number;
 };
@@ -184,19 +180,15 @@ function isQuoteToOrderDraft(value: unknown): value is QuoteToOrderDraft {
   if (draft.kind === 'awning') {
     return normalizeAwningLines(draft.awningLines).length > 0;
   }
-  if (draft.kind === 'job') {
-    return normalizeJob({ lines: draft.jobLines }).lines.length > 0;
-  }
   return normalizeGlassLines(draft.glassLines).length > 0 || isGlassSpecification(draft.spec);
 }
 
 function normalizeDraft(draft: QuoteToOrderDraftInput | QuoteToOrderDraft): QuoteToOrderDraft {
-  const kind: QuoteToOrderDraftKind = draft.kind === 'window' || draft.kind === 'awning' || draft.kind === 'job' ? draft.kind : 'glass';
-  const windowLines = kind === 'window' ? normalizeWindowLines(draft.windowLines) : [];
-  const awningLines = kind === 'awning' ? normalizeAwningLines(draft.awningLines) : [];
-  const glassLines = kind === 'glass' ? normalizeGlassLines(draft.glassLines) : [];
-  const jobLines = kind === 'job' ? normalizeJob({ lines: draft.jobLines }).lines : [];
-  const firstLine = windowLines[0] || awningLines[0] || glassLines[0] || jobLines[0];
+  const kind: QuoteToOrderDraftKind = draft.kind === 'window' || draft.kind === 'awning' ? draft.kind : 'glass';
+  const windowLines = normalizeWindowLines(draft.windowLines);
+  const awningLines = normalizeAwningLines(draft.awningLines);
+  const glassLines = normalizeGlassLines(draft.glassLines);
+  const firstLine = windowLines[0] || awningLines[0] || glassLines[0];
 
   return {
     kind,
@@ -212,7 +204,6 @@ function normalizeDraft(draft: QuoteToOrderDraftInput | QuoteToOrderDraft): Quot
     glassLines,
     windowLines,
     awningLines,
-    jobLines,
   };
 }
 
@@ -258,11 +249,6 @@ export function buildGlassLineDescription(quoteName: string, line: GlassQuoteLin
 /** Line description for a window costing: the quote name, then the window's own summary. */
 export function buildWindowLineDescription(quoteName: string, line: WindowQuoteLine): string {
   return [quoteName.trim(), line.description.trim()].filter(Boolean).join(' | ') || 'Window Costing Item';
-}
-
-/** Line description for one item on a mixed job: the job name, then the item's own summary. */
-export function buildJobLineDescription(quoteName: string, line: JobLine): string {
-  return [quoteName.trim(), line.description.trim()].filter(Boolean).join(' | ') || 'Job Item';
 }
 
 /** Line description for an awning costing: the quote name, then the awning's own summary. */
