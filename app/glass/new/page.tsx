@@ -21,6 +21,8 @@ import Text from '@components/Text';
 import { usePricing } from '@components/PricingProvider';
 import JobSheet from '@components/JobSheet';
 import { CostBreakdown, GlassSpecification, calculateCost, describeGlassSpecification } from '@utils/calculations';
+import { LineDraft, OrderFormState, createLineDraft, defaultAdhocSpec } from '@utils/order-draft';
+import { OrderSnapshot, applyLineEditResult, calculatorFor, consumeLineEditResult, persistLineEditRequest } from '@utils/line-editing';
 import { Customer, CustomerProduct, ORDER_STATUS_OPTIONS, OrderStatus, ParsedLineNotes, PricingSource, PurchaseOrder, PurchaseOrderLine, UserRole, formatCurrency, parseCustomerProductNotes, parseLineNotes, serializeLineNotes, statusLabel, todayISODate } from '@utils/order-management';
 import { QuoteToOrderDraft, buildAwningLineDescription, buildGlassLineDescription, buildWindowLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
 import { WindowCostingInput, describeWindow } from '@utils/window-costing';
@@ -40,69 +42,6 @@ const TABLE_PURCHASE_ORDER_LINES = 'purchase_order_lines';
 
 const EDGEWORK_OPTIONS: GlassSpecification['edgework'][] = ['ROUGH ARRIS', 'FLAT GRIND - STRAIGHT', 'FLAT GRIND - CURVED', 'FLAT POLISH - STRAIGHT', 'FLAT POLISH - CURVED'];
 
-
-const defaultAdhocSpec: GlassSpecification = {
-  width: 1000,
-  height: 1000,
-  thickness: 4,
-  glassType: 'Clear',
-  edgework: 'ROUGH ARRIS',
-  ceramicBand: false,
-  shape: 'RECTANGLE',
-  holes: false,
-  numHoles: 0,
-  radiusCorners: false,
-  scanning: false,
-};
-
-interface OrderFormState {
-  id: string | null;
-  customerId: string;
-  poNumber: string;
-  receivedDate: string;
-  requiredDate: string;
-  status: OrderStatus;
-  notes: string;
-}
-
-interface LineDraft {
-  localId: string;
-  id?: string;
-  quantityOrdered: number;
-  quantityFulfilled: number;
-  unitPriceAtOrder: number;
-  lineNote: string;
-  pricingSource: PricingSource;
-  customerProductId: string;
-  adhocSpec: GlassSpecification;
-  windowSpec: WindowCostingInput | null;
-  windowRatesUpdatedAt: string | null;
-  awningSpec: AwningCostingInput | null;
-  awningRatesUpdatedAt: string | null;
-  /** Minutes the line really took, for the whole line. Empty until the job is done. */
-  actualMinutes: number | null;
-  markupPercent: number;
-}
-
-function createLineDraft(partial?: Partial<LineDraft>): LineDraft {
-  return {
-    localId: partial?.localId || `line-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-    id: partial?.id,
-    quantityOrdered: partial?.quantityOrdered ?? 1,
-    quantityFulfilled: partial?.quantityFulfilled ?? 0,
-    unitPriceAtOrder: partial?.unitPriceAtOrder ?? 0,
-    lineNote: partial?.lineNote || '',
-    pricingSource: partial?.pricingSource || 'existing_config',
-    customerProductId: partial?.customerProductId || '',
-    adhocSpec: partial?.adhocSpec || { ...defaultAdhocSpec },
-    windowSpec: partial?.windowSpec ?? null,
-    windowRatesUpdatedAt: partial?.windowRatesUpdatedAt ?? null,
-    awningSpec: partial?.awningSpec ?? null,
-    awningRatesUpdatedAt: partial?.awningRatesUpdatedAt ?? null,
-    actualMinutes: partial?.actualMinutes ?? null,
-    markupPercent: partial?.markupPercent ?? 20,
-  };
-}
 
 function numberOrFallback(value: string, fallback = 0): number {
   const parsed = Number(value);
@@ -276,6 +215,20 @@ export default function NewPurchaseOrderPage() {
         setRole(user.effectiveRole as UserRole);
         const { customers: loadedCustomers } = await loadBaseData();
 
+        // A line came back from a calculator. The whole order travelled with it, so the page picks
+        // up where it left off whether or not the order had been saved.
+        const lineResult = consumeLineEditResult();
+        if (lineResult) {
+          restoreOrderSnapshot(applyLineEditResult(lineResult));
+          setActiveLineId(lineResult.localId);
+          if (typeof window !== 'undefined') {
+            const nextUrl = new URL(window.location.href);
+            nextUrl.searchParams.delete('lineEdited');
+            window.history.replaceState({}, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+          }
+          return;
+        }
+
         const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
         const editOrderId = searchParams?.get('orderId');
         if (editOrderId) {
@@ -312,6 +265,31 @@ export default function NewPurchaseOrderPage() {
       setActiveLineId(lineDrafts[0].localId);
     }
   }, [lineDrafts, activeLineId]);
+
+  /** Puts the page back exactly as it was when a line was sent to a calculator. */
+  function restoreOrderSnapshot(snapshot: OrderSnapshot) {
+    setOrderForm(snapshot.orderForm);
+    setLineDrafts(snapshot.lineDrafts.length ? snapshot.lineDrafts : [createLineDraft()]);
+    setLoadedLineIds(snapshot.loadedLineIds);
+    setIsEditingOrder(snapshot.isEditingOrder);
+    setArchivedAt(snapshot.archivedAt);
+  }
+
+  /** Sends one line to the calculator that prices it, carrying the order so nothing is lost. */
+  function editLineInCalculator(line: LineDraft) {
+    const href = calculatorFor(line.pricingSource);
+    if (!href) {
+      setFormError('A customer product is priced on the order, not in a calculator.');
+      return;
+    }
+
+    persistLineEditRequest({
+      order: { orderForm, lineDrafts, loadedLineIds, isEditingOrder, archivedAt },
+      localId: line.localId,
+      returnTo: '/glass/new?lineEdited=1',
+    });
+    router.push(`${href}?editLine=1`);
+  }
 
   function resetOrderForm() {
     const defaultLine = createLineDraft();
@@ -843,11 +821,24 @@ export default function NewPurchaseOrderPage() {
               <TableColumn onClick={() => setActiveLineId(summary.id)}>{summary.qty}</TableColumn>
               <TableColumn onClick={() => setActiveLineId(summary.id)}>{formatCurrency(summary.unitPrice)}</TableColumn>
               <TableColumn onClick={() => setActiveLineId(summary.id)}>{formatCurrency(summary.total)}</TableColumn>
-              <TableColumn>
-                <RowSpaceBetween>
+              <TableColumn style={{ whiteSpace: 'nowrap' }}>
+                {/* A line priced in a calculator is edited there. A customer product is priced on
+                    the order, so it stays here. */}
+                {calculatorFor(lineDrafts.find((line) => line.localId === summary.id)?.pricingSource || 'existing_config') ? (
+                  <ActionButton
+                    onClick={() => {
+                      const line = lineDrafts.find((entry) => entry.localId === summary.id);
+                      if (line) {
+                        editLineInCalculator(line);
+                      }
+                    }}
+                  >
+                    Price
+                  </ActionButton>
+                ) : (
                   <ActionButton onClick={() => setActiveLineId(summary.id)}>Edit</ActionButton>
-                  <ActionButton onClick={() => removeLineDraft(summary.id)}>Remove</ActionButton>
-                </RowSpaceBetween>
+                )}{' '}
+                <ActionButton onClick={() => removeLineDraft(summary.id)}>Remove</ActionButton>
               </TableColumn>
             </TableRow>
           ))}
