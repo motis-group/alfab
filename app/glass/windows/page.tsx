@@ -1052,11 +1052,14 @@ export default function WindowCostingPage() {
           </>
         )}
         {glazingOption?.group === 'laminate' ? <Input label="METRES FLAT GROUND" type="number" name="glazing_flat_ground" value={metreDrafts.flatGroundM ?? String(input.flatGroundM)} onChange={(event) => updateMetres('flatGroundM', event.target.value)} min="0" step="0.01" /> : null}
+        <br />
+        <Input label="WINDOW NAME (OPTIONAL)" name="window_name" value={windowName} onChange={(event) => setWindowName(event.target.value)} placeholder="Kitchen hopper" />
+        <br />
+        <ActionButton onClick={addToQuote}>Add Window To Quote</ActionButton>
       </CardDouble>
 
-      <CardDouble title="QUOTE DETAILS">
-        <Input label="WINDOW NAME" name="window_name" value={windowName} onChange={(event) => setWindowName(event.target.value)} placeholder="Kitchen hopper" />
-        <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} />
+      <CardDouble title="QUOTE">
+        <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} placeholder="Job reference" />
         <Text>CUSTOMER</Text>
         <select
           value={customerId}
@@ -1081,10 +1084,10 @@ export default function WindowCostingPage() {
         {selectedCustomer ? <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text> : <Input label="CUSTOMER NAME" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />}
         <br />
         <Input label="QUOTE DATE" type="date" name="quote_date" value={quoteDate} onChange={(event) => setQuoteDate(event.target.value)} />
-        <Input label="NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
+        <Input label="QUOTE NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
       </CardDouble>
 
-      <CardDouble title={`QUOTE (${quoteLines.length} WINDOW${quoteLines.length === 1 ? '' : 'S'})`}>
+      <CardDouble title={`QUOTE LINES (${quoteLines.length})`}>
         {quoteLines.length ? (
           <>
             <Table>
@@ -1122,7 +1125,7 @@ export default function WindowCostingPage() {
 
       <JobPanel job={job} onChange={setJob} onCreateOrder={createOrderForJob} />
 
-      <CardDouble title="SAVED COSTINGS">
+      <CardDouble title={`SAVED COSTINGS (${savedCostings.length})`}>
         {savedCostings.length ? (
           <Table>
             <TableRow>
