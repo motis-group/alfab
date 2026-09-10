@@ -4,10 +4,14 @@
  * overrides live in the awning_costing_rates table (row id "default") and are merged over
  * DEFAULT_AWNING_RATES by mergeAwningRates().
  *
- * Keep this module free of runtime imports: utils/awning-costing.test.ts runs it under tsx.
+ * Shared rates are chosen in utils/shared-rates.ts, not here.
+ *
+ * Keep this module free of browser and React imports: utils/awning-costing.test.ts runs it under tsx.
  * `null` means the sheet had no usable price; the engine reports such lines as "not priced"
  * instead of failing.
  */
+
+import { DEFAULT_SHARED_AWNING_RATES, applySharedRatesToAwning } from '@utils/shared-rates';
 
 export type GlazingId = 'supergrey_tgn' | 'clear_tgn' | 'grey_tgn';
 
@@ -72,7 +76,11 @@ export interface AwningRates {
 
 export const GLAZING_ORDER: GlazingId[] = ['supergrey_tgn', 'clear_tgn', 'grey_tgn'];
 
-export const DEFAULT_AWNING_RATES: AwningRates = {
+/**
+ * The sheet as transcribed. The app does not cost on these; the golden cases in
+ * utils/awning-costing.test.ts do, which is what proves the transcription is still faithful.
+ */
+export const AWNING_RATES_AS_TRANSCRIBED: AwningRates = {
   parts: {
     frame: 10,
     anchorPlate: 4,
@@ -120,6 +128,12 @@ export const DEFAULT_AWNING_RATES: AwningRates = {
 };
 
 /**
+ * The rates a costing gets. Shared rates come from the glass price list and the window costing
+ * rather than from the transcription above.
+ */
+export const DEFAULT_AWNING_RATES: AwningRates = applySharedRatesToAwning(AWNING_RATES_AS_TRANSCRIBED, DEFAULT_SHARED_AWNING_RATES);
+
+/**
  * Overlay a saved document on the defaults. Keys added to the defaults later keep their default,
  * and unknown keys are dropped. A blank on a rate that has a default price falls back to that
  * price: read as zero it would quote the job short without saying so.
@@ -160,5 +174,6 @@ export function mergeAwningRates(saved: unknown): AwningRates {
   };
 
   merge(base as unknown as Record<string, unknown>, saved as Record<string, unknown>, DEFAULT_AWNING_RATES as unknown as Record<string, unknown>);
-  return base;
+  // A saved awning document cannot set a shared rate to something else. See mergeWindowRates.
+  return applySharedRatesToAwning(base, DEFAULT_SHARED_AWNING_RATES);
 }

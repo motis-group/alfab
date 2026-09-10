@@ -84,13 +84,13 @@ export default function RateDriftReport() {
       sidebar={
         <>
           <Card title="WHAT THIS IS">
-            <Text>Items priced in more than one list, where the lists disagree.</Text>
+            <Text>Items priced in more than one list. Each is chosen once and derived by the others, so this reports zero.</Text>
           </Card>
 
-          <Card title="A GAP IS NOT AUTOMATICALLY WRONG">
-            <Text>The glass calculator price is a base before markup. The window costing price feeds a window that carries margin and uplift.</Text>
+          <Card title="WHY A GAP WOULD MATTER">
+            <Text>The glass calculator price is a base before markup. The window costing price feeds a window that carries margin and uplift, so the same glass reaches a customer through different arithmetic.</Text>
             <Text>
-              <span className="status-warning">Which list is correct is not recorded.</span>
+              <span className="status-warning">A gap here means a list has taken its own price back. It should not appear.</span>
             </Text>
           </Card>
 
@@ -187,19 +187,19 @@ export default function RateDriftReport() {
         </Table>
       </CardDouble>
 
-      <CardDouble title="WHAT TO DO WITH THIS">
+      <CardDouble title="WHERE EACH SHARED RATE IS CHOSEN">
         <Text>
-          <strong>1. Decide what each list means.</strong> Cost in, or price out.
+          <strong>Glass, banding and flat polish</strong> are chosen in the glass price list.
         </Text>
         <Text>
-          <strong>2. Check one item against a supplier invoice.</strong>
+          <strong>The hourly labour rate</strong> is chosen in the window rates.
         </Text>
         <Text>
-          <strong>3. Reconcile.</strong> Merge the lists, or record the reason each differs.
+          <strong>Everything else</strong> — laminate, acrylic, polycarb, the tints — is priced in one list only and has nothing to drift against.
         </Text>
         <br />
         <Text style={{ opacity: 0.7 }}>
-          Equivalences are declared in <code>utils/rate-drift.ts</code>. Uncertain matches (A/P Tint against Grey) are left unmatched.
+          Equivalences are declared in <code>utils/rate-drift.ts</code> and applied by <code>utils/shared-rates.ts</code>. Uncertain matches (A/P Tint against Grey) are left unmatched.
         </Text>
       </CardDouble>
     </AppFrame>

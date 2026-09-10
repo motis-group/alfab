@@ -28,6 +28,7 @@ import WindowCostingGlossary from '@components/WindowCostingGlossary';
 import { WindowCostingInput, costWindow, extrusionRate } from '@utils/window-costing';
 import { WindowRates, mergeWindowRates } from '@utils/window-costing-rates';
 import { loadWindowRates, resetWindowRates, saveWindowRates } from '@utils/window-costing-store';
+import { WINDOW_GLASS_FROM_LIST } from '@utils/shared-rates';
 import { RateIssue, checkRateValue } from '@utils/window-rate-health';
 import { listWindowCostings } from '@utils/window-quote-store';
 
@@ -121,6 +122,12 @@ function unitFor(segments: string[]): string {
     default:
       return '';
   }
+}
+
+/** Glass lines the glass price list chooses. See utils/shared-rates.ts. */
+function isDerived(path: string): boolean {
+  const id = path.startsWith('glass.options.') ? path.split('.')[2] : '';
+  return Boolean(id) && id in WINDOW_GLASS_FROM_LIST;
 }
 
 function collectFields(value: unknown, segments: string[], out: RateField[]): void {
@@ -590,9 +597,21 @@ export default function WindowRatesSettings() {
                     </TableColumn>
                     <TableColumn className={cellClass}>{field.unit}</TableColumn>
                     <TableColumn className={cellClass}>
-                      <Input type="number" name={field.path} value={drafts[field.path] ?? (field.value == null ? '' : String(field.value))} onChange={(event) => updateField(field, event.target.value)} placeholder="not priced" step="0.001" disabled={!canEdit} />
+                      {isDerived(field.path) ? (
+                        <Input type="number" name={field.path} value={field.value == null ? '' : String(field.value)} readOnly disabled />
+                      ) : (
+                        <Input type="number" name={field.path} value={drafts[field.path] ?? (field.value == null ? '' : String(field.value))} onChange={(event) => updateField(field, event.target.value)} placeholder="not priced" step="0.001" disabled={!canEdit} />
+                      )}
                     </TableColumn>
                   </TableRow>
+                  {isDerived(field.path) ? (
+                    <TableRow>
+                      <TableColumn className={cellClass} colSpan={3}>
+                        <span style={{ opacity: 0.7 }}>The same glass is priced in the glass price list. This is that price, less the glass loading where it applies.</span>{' '}
+                        <ActionButton onClick={() => router.push('/settings')}>Open Glass Prices</ActionButton>
+                      </TableColumn>
+                    </TableRow>
+                  ) : null}
                   {field.issue ? (
                     <TableRow>
                       <TableColumn className={cellClass} colSpan={3}>

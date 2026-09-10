@@ -19,6 +19,7 @@ import { formatCurrency } from '@utils/order-management';
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 import { AwningRates, DEFAULT_AWNING_RATES, GLAZING_ORDER, mergeAwningRates } from '@utils/awning-costing-rates';
 import { loadAwningRates, resetAwningRates, saveAwningRates } from '@utils/awning-costing-store';
+import { AWNING_GLASS_FROM_LIST } from '@utils/shared-rates';
 import { costAwning, createAwningInput } from '@utils/awning-costing';
 import EstimateAccuracyCard from '@components/EstimateAccuracyCard';
 import { AccuracySummary, measureAccuracy } from '@utils/estimate-accuracy';
@@ -75,6 +76,17 @@ const GLASS_EXTRAS: RateField[] = [
  * Rates the whole costing leans on. A blank or zero here is not reported as "not priced": it reaches
  * arithmetic as zero and the quote still prints a confident price that is too low.
  */
+/**
+ * Rates chosen in another list. The awning costing derives them, so they are shown and not edited.
+ * See utils/shared-rates.ts.
+ */
+const DERIVED_FIELDS: Record<string, { label: string; href: string }> = {
+  'labour.perHour': { label: 'the window rates', href: '/settings/windows' },
+  'glass.bandingSet': { label: 'the glass price list', href: '/settings' },
+  'glass.flatPolishPerM': { label: 'the glass price list', href: '/settings' },
+  ...Object.fromEntries(Object.keys(AWNING_GLASS_FROM_LIST).map((id) => [`glass.options.${id}.list`, { label: 'the glass price list', href: '/settings' }])),
+};
+
 const SPINE = new Set(['labour.perHour', 'labour.eachMinutes', 'marginRate', 'quantities.anchorPlateM', 'quantities.fixingSets']);
 
 function valueAt(rates: AwningRates, path: string): number | null {
@@ -232,8 +244,22 @@ export default function AwningRatesSettings() {
 
   function renderField(field: RateField) {
     const value = valueAt(rates, field.path);
-    const message = issueFor(field.path, value);
+    const derivedFrom = DERIVED_FIELDS[field.path];
+    const message = derivedFrom ? null : issueFor(field.path, value);
     const tone = message ? (SPINE.has(field.path) || message.startsWith('Below zero') || message.startsWith('A margin') ? 'status-error' : 'status-warning') : null;
+
+    // A derived rate is chosen in one place and shown here. Typing over it would be discarded on
+    // the next load, so the field does not invite it.
+    if (derivedFrom) {
+      return (
+        <div key={field.path} id={`rate-${field.path}`}>
+          <Input label={`${field.label.toUpperCase()} (${field.unit})`} type="number" name={field.path} value={value == null ? '' : String(value)} readOnly disabled />
+          <Text style={{ opacity: 0.7 }}>
+            Set in {derivedFrom.label}. <ActionButton onClick={() => router.push(derivedFrom.href)}>Open</ActionButton>
+          </Text>
+        </div>
+      );
+    }
 
     return (
       <div key={field.path} id={`rate-${field.path}`}>

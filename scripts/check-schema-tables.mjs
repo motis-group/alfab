@@ -57,6 +57,28 @@ for (const table of registries.tables) {
   }
 }
 
+// A column that exists but is not on the gateway's list is refused on every write, silently: the
+// feature that writes it appears to work and saves nothing. Quote outcomes and recorded line minutes
+// both shipped that way. Nothing is legitimately refused today, so anything here is a defect until
+// someone adds it to SERVER_MANAGED_COLUMNS with a reason.
+const SERVER_MANAGED_COLUMNS = {};
+
+for (const table of registries.tables) {
+  if (!present.has(table)) {
+    continue;
+  }
+  const { rows } = await client.query(
+    `select column_name from information_schema.columns where table_schema = 'public' and table_name = $1`,
+    [table]
+  );
+  const exempt = SERVER_MANAGED_COLUMNS[table] || [];
+  for (const row of rows) {
+    if (!registries.columns[table].includes(row.column_name) && !exempt.includes(row.column_name)) {
+      failures.push(`${table}.${row.column_name} exists but the gateway refuses it, so any write of it fails.`);
+    }
+  }
+}
+
 // The rates stores build an archive id from updated_at. Without the trigger the stamp never moves,
 // the second save collides on that id, and every save after the first archives nothing.
 for (const table of registries.tables.filter((name) => name.endsWith('_costing_rates'))) {

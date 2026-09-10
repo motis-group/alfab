@@ -28,6 +28,11 @@ import {
   todayISODate,
   localISODate,
 } from '@utils/order-management';
+import JobPanel, { useJob } from '@components/JobPanel';
+import QuoteStatusControl from '@components/QuoteStatusControl';
+import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, listQuoteRecords } from '@utils/quote-register';
+import { QUOTE_STATUS_LABELS, QUOTE_STATUS_ORDER, QuoteStatus, setQuoteStatus } from '@utils/quote-status';
+import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
@@ -112,6 +117,9 @@ export default function OrderDashboardPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [orderLines, setOrderLines] = useState<PurchaseOrderLine[]>([]);
+  const [quotes, setQuotes] = useState<QuoteRecord[]>([]);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [job, setJob] = useJob();
 
   const [isLoading, setIsLoading] = useState(true);
   const [schemaError, setSchemaError] = useState<string | null>(null);
@@ -160,6 +168,20 @@ export default function OrderDashboardPage() {
       return true;
     });
   }, [ordersInScope, customerFilter, statusFilter, dateFromFilter, dateToFilter]);
+
+  const [quoteStatusFilter, setQuoteStatusFilter] = useState<QuoteStatus | ''>('');
+
+  const filteredQuotes = useMemo(() => {
+    return quotes.filter((quote) => {
+      if (customerFilter && quote.customerId !== customerFilter) {
+        return false;
+      }
+      if (quoteStatusFilter && quote.status !== quoteStatusFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [quotes, customerFilter, quoteStatusFilter]);
 
   const openOrdersByCustomer = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -241,6 +263,7 @@ export default function OrderDashboardPage() {
       setCustomers((customerRes.data as Customer[]) || []);
       setOrders((orderRes.data as PurchaseOrder[]) || []);
       setOrderLines((lineRes.data as PurchaseOrderLine[]) || []);
+      await refreshQuotes();
     } catch (error: any) {
       setSchemaError(error?.message || 'Unable to load order management tables.');
       setCustomers([]);
@@ -249,6 +272,48 @@ export default function OrderDashboardPage() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  /** Saved quotes from all three calculators. A calculator that cannot be read is named, not hidden. */
+  async function refreshQuotes() {
+    const { records, errors } = await listQuoteRecords();
+    setQuotes(records);
+    setQuoteError(errors.length ? errors.join(' ') : null);
+  }
+
+  async function markQuote(id: string, status: QuoteStatus, reason?: string | null) {
+    try {
+      await setQuoteStatus(id, status, reason);
+      await refreshQuotes();
+    } catch (error: any) {
+      setFormError(error?.message || 'Unable to mark the quote.');
+    }
+  }
+
+  /**
+   * A purchase order is an approved quote, so converting is a deliberate act rather than something
+   * that happens when a quote is marked won. It marks the quote won and opens the order for editing.
+   */
+  async function convertQuote(quote: QuoteRecord) {
+    if (!quote.draft) {
+      setFormError('That quote has no priced line to put on an order.');
+      return;
+    }
+
+    if (quote.status !== 'won') {
+      await markQuote(quote.id, 'won');
+    }
+
+    persistQuoteToOrderDraft(quote.draft);
+    router.push('/glass/new?fromQuote=1');
+  }
+
+  function createOrderForJob() {
+    if (!job.lines.length) {
+      return;
+    }
+    persistQuoteToOrderDraft({ kind: 'job', quoteName: job.name, customerName: job.customerName, customerId: job.customerId, quoteDate: '', quoteNotes: job.notes, jobLines: job.lines });
+    router.push('/glass/new?fromQuote=1');
   }
 
   async function loadSessionUser() {
@@ -367,9 +432,20 @@ export default function OrderDashboardPage() {
             </select>
             <br />
 
-            <Text>STATUS</Text>
+            <Text>QUOTE STATUS</Text>
+            <select value={quoteStatusFilter} onChange={(event) => setQuoteStatusFilter(event.target.value as QuoteStatus | '')}>
+              <option value="">All quote statuses</option>
+              {QUOTE_STATUS_ORDER.map((status) => (
+                <option key={status} value={status}>
+                  {QUOTE_STATUS_LABELS[status]}
+                </option>
+              ))}
+            </select>
+            <br />
+
+            <Text>ORDER STATUS</Text>
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as OrderStatus | '')}>
-              <option value="">All statuses</option>
+              <option value="">All order statuses</option>
               {ORDER_STATUS_OPTIONS.map((status) => (
                 <option key={status} value={status}>
                   {statusLabel(status)}
@@ -428,6 +504,58 @@ export default function OrderDashboardPage() {
           </Text>
         </Card>
       )}
+
+      <Card title={`QUOTES (${filteredQuotes.length})`}>
+        {quoteError ? (
+          <Text>
+            <span className="status-warning">{quoteError}</span>
+          </Text>
+        ) : null}
+        {isLoading ? (
+          <Text>Loading quotes...</Text>
+        ) : (
+          <Table>
+            <TableRow>
+              <TableColumn>QUOTE</TableColumn>
+              <TableColumn style={{ width: '10ch' }}>PRODUCT</TableColumn>
+              <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
+              <TableColumn style={{ width: '13ch' }}>DATE</TableColumn>
+              <TableColumn style={{ width: '8ch' }}>LINES</TableColumn>
+              <TableColumn style={{ width: '13ch' }}>TOTAL</TableColumn>
+              <TableColumn style={{ width: '22ch' }}>STATUS</TableColumn>
+              <TableColumn style={{ width: '24ch' }}>ACTIONS</TableColumn>
+            </TableRow>
+
+            {filteredQuotes.map((quote) => (
+              <TableRow key={quote.id}>
+                <TableColumn>{quote.name || 'Untitled'}</TableColumn>
+                <TableColumn>{QUOTE_KIND_LABELS[quote.kind]}</TableColumn>
+                <TableColumn>{quote.customer || 'Walk-in'}</TableColumn>
+                <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
+                <TableColumn>{quote.lineCount}</TableColumn>
+                <TableColumn>{formatCurrency(quote.total)}</TableColumn>
+                <TableColumn>
+                  <QuoteStatusControl status={quote.status} statusReason={quote.statusReason} disabled={role === 'readonly'} onChange={(next, reason) => markQuote(quote.id, next, reason)} />
+                </TableColumn>
+                <TableColumn style={{ whiteSpace: 'nowrap' }}>
+                  <ActionButton onClick={() => router.push(QUOTE_KIND_HREFS[quote.kind])}>Open</ActionButton>{' '}
+                  <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuote(quote)}>Convert</ActionButton>
+                </TableColumn>
+              </TableRow>
+            ))}
+
+            {!filteredQuotes.length && (
+              <TableRow>
+                <TableColumn colSpan={8} style={{ textAlign: 'center' }}>
+                  No quotes match the filters.
+                </TableColumn>
+              </TableRow>
+            )}
+          </Table>
+        )}
+      </Card>
+
+      <JobPanel job={job} onChange={setJob} onCreateOrder={createOrderForJob} />
 
       <Card title="PURCHASE ORDERS">
         {isLoading ? (

@@ -17,18 +17,13 @@ import Table from '@components/Table';
 import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
-import { RateReviewCard } from '@components/RateAgeNotice';
-import QuoteStatusControl, { WinRateCard } from '@components/QuoteStatusControl';
-import { QuoteStatus, setQuoteStatus, winRate } from '@utils/quote-status';
 
 import { usePricing } from '@components/PricingProvider';
 import { GlassSpecification, calculateCost, describeGlassSpecification, getAvailableGlassTypes, getAvailableThicknesses, getEffectiveArea, getEffectivePerimeter, usesMeasuredGeometry } from '@utils/calculations';
 import { Customer, UserRole, formatCurrency, todayISODate } from '@utils/order-management';
 import { GlassQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { ExtractedPiece } from '@utils/import/model';
-import JobPanel, { useJob } from '@components/JobPanel';
-import { addToJob, jobLineId } from '@utils/job-basket';
-import { SavedGlassQuote, deleteGlassQuote, listGlassQuotes, saveGlassQuote } from '@utils/glass-quote-store';
+import { saveGlassQuote } from '@utils/glass-quote-store';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
@@ -89,7 +84,6 @@ export default function AdhocQuotePage() {
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerId, setCustomerId] = useState('');
-  const [savedQuotes, setSavedQuotes] = useState<SavedGlassQuote[]>([]);
   const [status, setStatus] = useState<{ tone: 'success' | 'warning' | 'error'; message: string } | null>(null);
 
   const calculation = useMemo(() => {
@@ -157,7 +151,6 @@ export default function AdhocQuotePage() {
     }
     return totals;
   }, [quoteLines]);
-  const [job, setJob] = useJob();
 
   const quoteSummary = useMemo(() => {
     if (calculation.error) {
@@ -190,7 +183,6 @@ export default function AdhocQuotePage() {
         const db = createClient();
         const { data: customerData } = await db.from(TABLE_CUSTOMERS).select('*').order('name', { ascending: true });
         setCustomers((customerData as Customer[]) || []);
-        setSavedQuotes(await listGlassQuotes());
       } catch (loadError: any) {
         setError(loadError?.message || 'Unable to load quote calculator.');
       } finally {
@@ -306,55 +298,9 @@ export default function AdhocQuotePage() {
         total: quoteTotal,
         ratesUpdatedAt: updatedAt,
       });
-      setSavedQuotes(await listGlassQuotes());
       setStatus({ tone: 'success', message: 'Quote saved.' });
     } catch (saveError: any) {
       setStatus({ tone: 'error', message: saveError?.message || 'Unable to save the quote.' });
-    }
-  }
-
-  /** Reopen a saved quote at the prices it was given, not at today's. */
-  function loadSavedQuote(quote: SavedGlassQuote) {
-    setQuoteName(quote.name);
-    setCustomerName(quote.customer);
-    setCustomerId(quote.customerId || '');
-    setQuoteDate(quote.date ? quote.date.slice(0, 10) : todayISODate());
-    setQuoteNotes(quote.notes);
-    setQuoteItems(
-      quote.items.map((item, index) => ({
-        localId: `saved-${quote.id}-${index}`,
-        name: item.name,
-        spec: item.spec,
-        quantity: item.quantity,
-        markupPercent: item.markupPercent,
-        useRecommendedPrice: false,
-        manualUnitPrice: item.unitPrice,
-      }))
-    );
-    // Null counts: a quote priced before any rates were saved is on different numbers from one
-    // priced after, and that is exactly the case someone would miss.
-    const moved = (quote.ratesUpdatedAt || null) !== (updatedAt || null);
-    setStatus({
-      tone: moved ? 'warning' : 'success',
-      message: moved ? 'Loaded at the quoted prices. Glass rates have changed since.' : 'Loaded at the prices it was quoted at.',
-    });
-  }
-
-  async function markQuote(id: string, status: QuoteStatus, reason?: string | null) {
-    try {
-      await setQuoteStatus(id, status, reason);
-      setSavedQuotes(await listGlassQuotes());
-    } catch (markError: any) {
-      setStatus({ tone: 'error', message: markError?.message || 'Unable to mark the quote.' });
-    }
-  }
-
-  async function handleDeleteSavedQuote(id: string) {
-    try {
-      await deleteGlassQuote(id);
-      setSavedQuotes(await listGlassQuotes());
-    } catch (deleteError: any) {
-      setStatus({ tone: 'error', message: deleteError?.message || 'Unable to delete the quote.' });
     }
   }
 
@@ -369,26 +315,6 @@ export default function AdhocQuotePage() {
     } catch {
       setCopyState('Clipboard copy failed.');
     }
-  }
-
-  function addJobLines() {
-    const lines = quoteLines.length ? quoteLines.filter((line) => !line.error).map((line) => ({ id: jobLineId('glass'), kind: 'glass' as const, description: line.item.name || 'Glass piece', quantity: Math.max(1, line.item.quantity), unitPrice: line.unitPrice, spec: line.item.spec, markupPercent: line.item.markupPercent })) : calculation.error ? [] : [{ id: jobLineId('glass'), kind: 'glass' as const, description: 'Glass piece', quantity: Math.max(1, quantity), unitPrice: calculation.unitPrice, spec, markupPercent }];
-
-    if (!lines.length) {
-      return;
-    }
-
-    setJob(addToJob(lines, { name: quoteName, customerName: selectedCustomer?.name || customerName, customerId: customerId || null, notes: quoteNotes }));
-    setQuoteItems([]);
-    setStatus({ tone: 'success', message: 'Added to the job.' });
-  }
-
-  function createOrderForJob() {
-    if (!job.lines.length) {
-      return;
-    }
-    persistQuoteToOrderDraft({ kind: 'job', quoteName: job.name || quoteName, customerName: job.customerName || customerName, customerId: job.customerId, quoteDate, quoteNotes: job.notes || quoteNotes, jobLines: job.lines });
-    router.push('/glass/new?fromQuote=1');
   }
 
   function handleCreatePurchaseOrder() {
@@ -516,10 +442,6 @@ export default function AdhocQuotePage() {
             ) : null}
           </Card>
 
-          <WinRateCard tally={winRate(savedQuotes.map((quote) => ({ status: quote.status, price: quote.total })))} quotes={savedQuotes} />
-
-          <RateReviewCard asAt={pricingData.asAt} label={(key) => (key === 'basePrices' ? 'Base glass prices' : key === 'edgeworkPrices' ? 'Edgework' : 'Holes, shaping and services')} action={<ActionButton onClick={() => router.push('/settings')}>Review Glass Rates</ActionButton>} />
-
           {/* Cost build-up of the quote when it has pieces; otherwise of the piece in the form. */}
           <Card title={quoteLines.length ? 'PRICE BREAKDOWN (WHOLE QUOTE)' : 'PRICE BREAKDOWN'}>
             {quoteLines.length ? (
@@ -643,7 +565,6 @@ export default function AdhocQuotePage() {
           body: 'Add',
           items: [
             { icon: '⊹', children: 'Add To Quote', onClick: addToQuote },
-            { icon: '⊹', children: 'Add To Job', onClick: addJobLines },
             { icon: '⊹', children: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
           ],
         },
@@ -947,41 +868,6 @@ export default function AdhocQuotePage() {
           </>
         ) : (
           <Text>No pieces on this quote.</Text>
-        )}
-      </CardDouble>
-
-      <JobPanel job={job} onChange={setJob} onCreateOrder={createOrderForJob} />
-
-      <CardDouble title={`SAVED QUOTES (${savedQuotes.length})`}>
-        {savedQuotes.length ? (
-          <Table>
-            <TableRow>
-              <TableColumn>QUOTE</TableColumn>
-              <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
-              <TableColumn style={{ width: '13ch' }}>DATE</TableColumn>
-              <TableColumn style={{ width: '8ch' }}>PIECES</TableColumn>
-              <TableColumn style={{ width: '12ch' }}>TOTAL</TableColumn>
-              <TableColumn style={{ width: '22ch' }}>OUTCOME</TableColumn>
-              <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
-            </TableRow>
-            {savedQuotes.map((quote) => (
-              <TableRow key={quote.id}>
-                <TableColumn>{quote.name}</TableColumn>
-                <TableColumn>{quote.customer}</TableColumn>
-                <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
-                <TableColumn>{quote.items.length}</TableColumn>
-                <TableColumn>{formatCurrency(quote.total)}</TableColumn>
-                <TableColumn>
-                  <QuoteStatusControl status={quote.status} statusReason={quote.statusReason} onChange={(next, reason) => markQuote(quote.id, next, reason)} />
-                </TableColumn>
-                <TableColumn style={{ whiteSpace: 'nowrap' }}>
-                  <ActionButton onClick={() => loadSavedQuote(quote)}>Load</ActionButton> <ActionButton onClick={() => handleDeleteSavedQuote(quote.id)}>Delete</ActionButton>
-                </TableColumn>
-              </TableRow>
-            ))}
-          </Table>
-        ) : (
-          <Text>Nothing saved yet.</Text>
         )}
       </CardDouble>
 

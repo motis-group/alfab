@@ -3,10 +3,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { DEFAULT_WINDOW_RATES, mergeWindowRates } from './window-costing-rates';
+import { DEFAULT_WINDOW_RATES, WINDOW_RATES_AS_TRANSCRIBED, mergeWindowRates } from './window-costing-rates';
 import { GLASS_GROUP_ORDER, GLAZING_ORDER, WINDOW_TYPE_ORDER, WINDOW_TYPES, WindowTypeId, applyWindowOptions, costWindow, costWindowBatches, createWindowInput, describeWindow, glazingFits, switchWindowType, windowOptions } from './window-costing';
 
-const rates = DEFAULT_WINDOW_RATES;
+// The golden cases prove the transcription, so they price on the sheet's own numbers. What the app
+// actually costs on is DEFAULT_WINDOW_RATES, which takes shared glass from the glass price list.
+const rates = WINDOW_RATES_AS_TRANSCRIBED;
 
 function near(actual: number | null | undefined, expected: number, label: string) {
   assert.ok(actual != null && Math.abs(actual - expected) < 0.01, `${label}: got ${actual}, expected ${expected}`);
@@ -175,14 +177,21 @@ test('switching type keeps shared fields and resets type-specific ones', () => {
 });
 
 test('rates merge overlays numeric leaves only', () => {
-  assert.deepEqual(mergeWindowRates({}), rates, 'empty merge equals defaults');
-  assert.deepEqual(mergeWindowRates(null), rates, 'null merge equals defaults');
+  assert.deepEqual(mergeWindowRates({}), DEFAULT_WINDOW_RATES, 'empty merge equals defaults');
+  assert.deepEqual(mergeWindowRates(null), DEFAULT_WINDOW_RATES, 'null merge equals defaults');
   const merged = mergeWindowRates({ labourPerHour: 90, anodising: { etchMin: 12 }, bogus: 1, extrusions: { T5573: { kgPerM: 'x' } } });
   assert.equal(merged.labourPerHour, 90);
   assert.equal(merged.anodising.etchMin, 12);
   assert.equal((merged as { bogus?: unknown }).bogus, undefined);
   assert.deepEqual(merged.extrusions.T5573, rates.extrusions.T5573, 'invalid leaf keeps default');
-  assert.deepEqual({ ...merged, labourPerHour: 85, anodising: { ...merged.anodising, etchMin: 10 } }, rates, 'merge changes only given keys');
+  assert.deepEqual({ ...merged, labourPerHour: 85, anodising: { ...merged.anodising, etchMin: 10 } }, DEFAULT_WINDOW_RATES, 'merge changes only given keys');
+});
+
+test('a saved document cannot put its own price on a shared glass line', () => {
+  const merged = mergeWindowRates({ glass: { options: { ap6_clear: { list: 1 }, acr5_clear: { list: 99 } } } });
+
+  assert.equal(merged.glass.options.ap6_clear.list, DEFAULT_WINDOW_RATES.glass.options.ap6_clear.list, '6 mm clear comes from the glass price list');
+  assert.equal(merged.glass.options.acr5_clear.list, 99, 'acrylic has no glass-list equivalent, so it keeps its own price');
 });
 
 test('rates merge keeps the as-at dates and takes saved ones', () => {
