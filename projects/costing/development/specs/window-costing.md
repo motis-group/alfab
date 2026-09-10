@@ -110,11 +110,15 @@ the glass loading to 15% for every type.
 - **Batch price.** The sidebar prices the same window at batches of 1, 2, 5 and 10. Setup and
   development minutes divide across the batch, so the price per window falls as the run grows.
 - **Quote with several windows.** Add each costed window to the quote. The quote creates one
-  purchase order line per window, and prints one sheet per window.
+  purchase order line per window.
 - **Printing.** Two documents print the quote's windows, or the window on screen when the quote
-  is empty. "Print Quote For Customer" carries the specification and the price only. "Print
-  Costing Sheet (internal)" adds every cost line, the rates used, the labour minutes, margin,
-  packing and uplift. The app hides itself for the printer; only the sheet prints.
+  is empty. "Print Quote For Customer" carries the specification and the price only: one heading,
+  one line per window, one total, on as few pages as the windows fit. "Print Costing Sheet
+  (internal)" adds every cost line, the rates used, the labour minutes, margin, packing and uplift,
+  and starts a new page for each window, because a fabricator carries a sheet to the bench. The
+  sheet is rendered at the end of `<body>`, outside the app, so printing takes the app out of the
+  layout rather than hiding it in place; hidden in place it kept its height and printed as blank
+  pages.
 - **Copying.** "Copy Prices For Customer" is the same split in text. "Copy Cost Build-up
   (internal)" carries the build-up and is marked as not for a customer.
 - **Customer.** Picked from the customer list, so the purchase order does not have to match one by
@@ -198,8 +202,9 @@ lists every one that moves, largest first. A move of 10 percent or more is marke
 used rather than the golden windows because the goldens are fixed reference sizes that a glass price
 barely moves.
 
-The rates table is keyed by a text id the client sets, which is why `/api/db` lists
-`window_costing_rates` in `NATURAL_KEY_TABLES`. Every other table keeps a server-generated id.
+The rates table is keyed by a text id the client sets, which is why `window_costing_rates` is in
+`NATURAL_KEY_TABLES` in `utils/db-tables.ts`, the registry the `/api/db` gateway reads. Every other
+table keeps a server-generated id.
 
 ## Source behaviour kept on purpose
 

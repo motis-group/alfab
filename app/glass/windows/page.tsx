@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
 import Card from '@components/Card';
+import SidebarTabs from '@components/SidebarTabs';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
 import RowSpaceBetween from '@components/RowSpaceBetween';
@@ -513,33 +514,15 @@ export default function WindowCostingPage() {
       sidebarMobileOrder="top"
       sidebar={
         <>
-          <Card title="QUICK ACTIONS">
-            <ActionButton onClick={addToQuote}>Add Window To Quote</ActionButton>
-            <br />
-            <ActionButton onClick={addJobLines}>Add To Job</ActionButton>
-            <br />
-            <ActionButton onClick={handleCreatePurchaseOrder}>Create Purchase Order</ActionButton>
-            <br />
-            <ActionButton onClick={() => printSheet('customer')}>Print Quote For Customer</ActionButton>
-            <br />
-            <ActionButton onClick={() => printSheet('internal')}>Print Costing Sheet (internal)</ActionButton>
-            <br />
-            <ActionButton onClick={copySummary}>Copy Prices For Customer</ActionButton>
-            <br />
-            <ActionButton onClick={copyCostBreakdown}>Copy Cost Build-up (internal)</ActionButton>
-            <br />
-            <ActionButton onClick={canSaveCostings ? handleSaveCosting : undefined}>{canSaveCostings ? 'Save Costing' : 'Saving Needs Access'}</ActionButton>
-            <br />
-            <ActionButton onClick={resetCalculator}>Reset</ActionButton>
-            {status ? (
-              <>
-                <br />
-                <Text>
-                  <span className={status.tone === 'success' ? 'status-success' : 'status-warning'}>{status.message}</span>
-                </Text>
-              </>
-            ) : null}
-          </Card>
+          {/* Every action lives on the toolbar. This card said the same things a second time, and
+              a stack of nine buttons is a list to read rather than a menu to aim at. */}
+          {status ? (
+            <Card title="LAST ACTION">
+              <Text>
+                <span className={status.tone === 'success' ? 'status-success' : 'status-warning'}>{status.message}</span>
+              </Text>
+            </Card>
+          ) : null}
 
           <Card title="PRICE">
             {result.errors.length ? (
@@ -606,113 +589,160 @@ export default function WindowCostingPage() {
             </Card>
           ) : null}
 
-          {batches.length ? (
-            <Card title="BATCH PRICE">
-              <Text>Setup labour is shared across a batch, so a larger run costs less each.</Text>
-              <Table>
-                <TableRow>
-                  <TableColumn style={{ width: '12ch' }}>BATCH</TableColumn>
-                  <TableColumn style={{ width: '16ch' }}>{result.unitLabel.toUpperCase()}</TableColumn>
-                  <TableColumn>SAVING</TableColumn>
-                </TableRow>
-                {batches.map((batch) => (
-                  <TableRow key={batch.batchSize}>
-                    <TableColumn>{batch.batchSize}</TableColumn>
-                    <TableColumn>{formatCurrency(batch.pricePerUnit)}</TableColumn>
-                    <TableColumn>{batch.batchSize === 1 ? '—' : formatCurrency(batch.saving)}</TableColumn>
-                  </TableRow>
-                ))}
-              </Table>
-            </Card>
-          ) : null}
 
-          {extrasList.length ? (
-            <Card title="ADD FOR">
-              {extrasList.map((extra) => (
-                <RowSpaceBetween key={extra.label}>
-                  <Text>{extra.label.toUpperCase()}</Text>
-                  <Text>{formatExtra(extra)}</Text>
-                </RowSpaceBetween>
-              ))}
-            </Card>
-          ) : null}
 
-          <Card title="BREAKDOWN">
-            <Table>
-              <TableRow>
-                <TableColumn style={{ width: '26ch' }}>COMPONENT</TableColumn>
-                <TableColumn style={{ width: '10ch' }}>QTY</TableColumn>
-                <TableColumn style={{ width: '10ch' }}>RATE</TableColumn>
-                <TableColumn>COST</TableColumn>
-              </TableRow>
-              {result.lines.map((line) => (
-                <TableRow key={line.key}>
-                  <TableColumn>{line.label}</TableColumn>
-                  <TableColumn>{formatQty(line)}</TableColumn>
-                  <TableColumn>{formatRate(line.rate)}</TableColumn>
-                  <TableColumn>{formatCurrency(line.cost)}</TableColumn>
-                </TableRow>
-              ))}
-            </Table>
-            <br />
-            <Text>LABOUR MINUTES</Text>
-            <Table>
-              {LABOUR_ORDER.filter((part) => result.minutes[part] !== 0).map((part) => (
-                <TableRow key={part}>
-                  <TableColumn style={{ width: '26ch' }}>{LABOUR_LABELS[part]}</TableColumn>
-                  <TableColumn>{result.minutes[part].toFixed(1)}</TableColumn>
-                </TableRow>
-              ))}
-              <TableRow>
-                <TableColumn>Total charged</TableColumn>
-                <TableColumn>{result.minutes.total.toFixed(1)}</TableColumn>
-              </TableRow>
-            </Table>
-          </Card>
 
-          <Card title="GLAZING">
-            {result.glazing.length ? (
-              <Table>
-                <TableRow>
-                  <TableColumn style={{ width: '26ch' }}>ITEM</TableColumn>
-                  <TableColumn style={{ width: '10ch' }}>QTY</TableColumn>
-                  <TableColumn style={{ width: '10ch' }}>RATE</TableColumn>
-                  <TableColumn>COST</TableColumn>
-                </TableRow>
-                {result.glazing.map((line) => (
-                  <TableRow key={line.key}>
-                    <TableColumn>{line.label}</TableColumn>
-                    <TableColumn>{formatQty(line)}</TableColumn>
-                    <TableColumn>{formatRate(line.rate)}</TableColumn>
-                    <TableColumn>{formatCurrency(line.cost)}</TableColumn>
-                  </TableRow>
-                ))}
-              </Table>
-            ) : (
-              <Text>No glazing selected.</Text>
-            )}
-          </Card>
 
-          {result.reinforcement ? (
-            <Card title={`${result.reinforcement.label} (PER BAR)`}>
-              <Table>
-                {result.reinforcement.lines.map((line) => (
-                  <TableRow key={line.key}>
-                    <TableColumn style={{ width: '26ch' }}>{line.label}</TableColumn>
-                    <TableColumn style={{ width: '10ch' }}>{formatQty(line)}</TableColumn>
-                    <TableColumn>{formatCurrency(line.cost)}</TableColumn>
-                  </TableRow>
-                ))}
-                <TableRow>
-                  <TableColumn>Per bar incl. margin</TableColumn>
-                  <TableColumn>x {result.reinforcement.count}</TableColumn>
-                  <TableColumn>{formatCurrency(result.reinforcement.perBar)}</TableColumn>
-                </TableRow>
-              </Table>
-            </Card>
-          ) : null}
 
-          <WinRateCard tally={outcomes} quotes={savedCostings} />
+
+          {/* The price stays on screen; everything that analyses it is one click away. Six more cards
+              under it made the sidebar three screens tall for a number that moves on every keystroke.
+              Only the open panel is rendered, so the closed ones cost nothing. */}
+          <SidebarTabs
+            aria-label="Costing detail"
+            tabs={[
+              {
+                id: 'breakdown',
+                label: 'Breakdown',
+                content: (
+                  <>
+                    <Card title="BREAKDOWN">
+                      <Table>
+                        <TableRow>
+                          <TableColumn style={{ width: '26ch' }}>COMPONENT</TableColumn>
+                          <TableColumn style={{ width: '10ch' }}>QTY</TableColumn>
+                          <TableColumn style={{ width: '10ch' }}>RATE</TableColumn>
+                          <TableColumn>COST</TableColumn>
+                        </TableRow>
+                        {result.lines.map((line) => (
+                          <TableRow key={line.key}>
+                            <TableColumn>{line.label}</TableColumn>
+                            <TableColumn>{formatQty(line)}</TableColumn>
+                            <TableColumn>{formatRate(line.rate)}</TableColumn>
+                            <TableColumn>{formatCurrency(line.cost)}</TableColumn>
+                          </TableRow>
+                        ))}
+                      </Table>
+                      <br />
+                      <Text>LABOUR MINUTES</Text>
+                      <Table>
+                        {LABOUR_ORDER.filter((part) => result.minutes[part] !== 0).map((part) => (
+                          <TableRow key={part}>
+                            <TableColumn style={{ width: '26ch' }}>{LABOUR_LABELS[part]}</TableColumn>
+                            <TableColumn>{result.minutes[part].toFixed(1)}</TableColumn>
+                          </TableRow>
+                        ))}
+                        <TableRow>
+                          <TableColumn>Total charged</TableColumn>
+                          <TableColumn>{result.minutes.total.toFixed(1)}</TableColumn>
+                        </TableRow>
+                      </Table>
+                    </Card>
+                    <Card title="GLAZING">
+                      {result.glazing.length ? (
+                        <Table>
+                          <TableRow>
+                            <TableColumn style={{ width: '26ch' }}>ITEM</TableColumn>
+                            <TableColumn style={{ width: '10ch' }}>QTY</TableColumn>
+                            <TableColumn style={{ width: '10ch' }}>RATE</TableColumn>
+                            <TableColumn>COST</TableColumn>
+                          </TableRow>
+                          {result.glazing.map((line) => (
+                            <TableRow key={line.key}>
+                              <TableColumn>{line.label}</TableColumn>
+                              <TableColumn>{formatQty(line)}</TableColumn>
+                              <TableColumn>{formatRate(line.rate)}</TableColumn>
+                              <TableColumn>{formatCurrency(line.cost)}</TableColumn>
+                            </TableRow>
+                          ))}
+                        </Table>
+                      ) : (
+                        <Text>No glazing selected.</Text>
+                      )}
+                    </Card>
+                    {result.reinforcement ? (
+                      <Card title={`${result.reinforcement.label} (PER BAR)`}>
+                        <Table>
+                          {result.reinforcement.lines.map((line) => (
+                            <TableRow key={line.key}>
+                              <TableColumn style={{ width: '26ch' }}>{line.label}</TableColumn>
+                              <TableColumn style={{ width: '10ch' }}>{formatQty(line)}</TableColumn>
+                              <TableColumn>{formatCurrency(line.cost)}</TableColumn>
+                            </TableRow>
+                          ))}
+                          <TableRow>
+                            <TableColumn>Per bar incl. margin</TableColumn>
+                            <TableColumn>x {result.reinforcement.count}</TableColumn>
+                            <TableColumn>{formatCurrency(result.reinforcement.perBar)}</TableColumn>
+                          </TableRow>
+                        </Table>
+                      </Card>
+                    ) : null}
+                  </>
+                ),
+              },
+              {
+                id: 'batch',
+                label: 'Batch',
+                content: (
+                  <>
+                    {batches.length ? (
+                      <Card title="BATCH PRICE">
+                        <Text>Setup labour is shared across a batch, so a larger run costs less each.</Text>
+                        <Table>
+                          <TableRow>
+                            <TableColumn style={{ width: '12ch' }}>BATCH</TableColumn>
+                            <TableColumn style={{ width: '16ch' }}>{result.unitLabel.toUpperCase()}</TableColumn>
+                            <TableColumn>SAVING</TableColumn>
+                          </TableRow>
+                          {batches.map((batch) => (
+                            <TableRow key={batch.batchSize}>
+                              <TableColumn>{batch.batchSize}</TableColumn>
+                              <TableColumn>{formatCurrency(batch.pricePerUnit)}</TableColumn>
+                              <TableColumn>{batch.batchSize === 1 ? '—' : formatCurrency(batch.saving)}</TableColumn>
+                            </TableRow>
+                          ))}
+                        </Table>
+                      </Card>
+                    ) : null}
+                    {extrasList.length ? (
+                      <Card title="ADD FOR">
+                        {extrasList.map((extra) => (
+                          <RowSpaceBetween key={extra.label}>
+                            <Text>{extra.label.toUpperCase()}</Text>
+                            <Text>{formatExtra(extra)}</Text>
+                          </RowSpaceBetween>
+                        ))}
+                      </Card>
+                    ) : null}
+                  </>
+                ),
+              },
+              {
+                id: 'quotes',
+                label: 'Quotes',
+                content: <WinRateCard tally={outcomes} quotes={savedCostings} />,
+              },
+              {
+                id: 'rates',
+                label: 'Rates',
+                content: (
+                  <>
+                    <Card title="RATES">
+                      <Text>{ratesSource === 'saved' ? `Using window rates ${ratesLabel}.` : 'Using the default window rates.'}</Text>
+                      {ratesError ? (
+                        <Text>
+                          <span className="status-warning">{ratesError}</span>
+                        </Text>
+                      ) : null}
+                      <br />
+                      <ActionButton onClick={() => router.push('/settings/windows')}>Open Window Rates</ActionButton>
+                    </Card>
+                  </>
+                ),
+              },
+            ]}
+          />
 
           <RateReviewCard
             asAt={rates.asAt}
@@ -733,24 +763,33 @@ export default function WindowCostingPage() {
             action={<ActionButton onClick={() => router.push('/settings/windows')}>Review Window Rates</ActionButton>}
           />
 
-          <Card title="RATES">
-            <Text>{ratesSource === 'saved' ? `Using window rates ${ratesLabel}.` : 'Using the default window rates.'}</Text>
-            {ratesError ? (
-              <Text>
-                <span className="status-warning">{ratesError}</span>
-              </Text>
-            ) : null}
-            <br />
-            <ActionButton onClick={() => router.push('/settings/windows')}>Open Window Rates</ActionButton>
-          </Card>
         </>
       }
       actionItems={[
+        {
+          body: 'Add',
+          items: [
+            { icon: '⊹', children: 'Add Window To Quote', onClick: addToQuote },
+            { icon: '⊹', children: 'Add To Job', onClick: addJobLines },
+            { icon: '⊹', children: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
+          ],
+        },
+        {
+          body: 'Print',
+          items: [
+            { icon: '⊹', children: 'Quote For Customer', onClick: () => printSheet('customer') },
+            { icon: '⊹', children: 'Costing Sheet (internal)', onClick: () => printSheet('internal') },
+          ],
+        },
+        {
+          body: 'Copy',
+          items: [
+            { icon: '⊹', children: 'Prices For Customer', onClick: copySummary },
+            { icon: '⊹', children: 'Cost Build-up (internal)', onClick: copyCostBreakdown },
+          ],
+        },
+        { body: canSaveCostings ? 'Save Costing' : 'Saving Needs Access', onClick: canSaveCostings ? handleSaveCosting : undefined },
         { body: 'Reset', onClick: resetCalculator },
-        { body: 'Add To Quote', onClick: addToQuote },
-        { body: 'Print For Customer', onClick: () => printSheet('customer') },
-        { body: 'Copy Prices', onClick: copySummary },
-        { body: 'New PO', onClick: handleCreatePurchaseOrder },
       ]}
     >
       {error && (
@@ -1149,9 +1188,9 @@ export default function WindowCostingPage() {
       </CardDouble>
 
       <CardDouble title="WHAT THESE TERMS MEAN">
-        <Text>The costing keeps the words the legacy sheet used. These are what they mean, and where each one is applied.</Text>
+        <Text>The costing keeps the words the legacy sheet used. These are what they mean, and where each one is applied. Open the group you need — this is reference, not something to read past on the way to the price.</Text>
         <br />
-        <WindowCostingGlossary openGroup="price" />
+        <WindowCostingGlossary />
       </CardDouble>
 
       <WindowCostingSheet audience={sheetAudience} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} windows={sheetWindows} />

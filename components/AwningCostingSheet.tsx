@@ -1,5 +1,6 @@
 'use client';
 
+import PrintSheet from '@components/PrintSheet';
 import { formatCurrency } from '@utils/order-management';
 import { AwningCostResult, AwningCostingInput, AwningRates, CostLine, describeAwning } from '@utils/awning-costing';
 
@@ -29,32 +30,54 @@ function formatQty(line: CostLine): string {
 }
 
 /**
- * Costing sheet for the printer. Hidden on screen; @media print hides the app around it. Shares the
- * window sheet's class names, so both documents print identically.
+ * Costing sheet for the printer. Hidden on screen; printing hides the app around it. Shares the
+ * window sheet's class names, so both documents print identically, and splits the same way: the
+ * internal sheet is one awning per page, the customer quote is one document with the awnings as its
+ * lines.
  */
 export default function AwningCostingSheet({ audience, quoteName, customerName, quoteDate, notes, ratesLabel, rates, awnings }: AwningCostingSheetProps) {
   const internal = audience === 'internal';
+  const quoteTotal = awnings.reduce((total, entry) => total + (entry.result.price == null ? 0 : entry.result.price * entry.quantity), 0);
+  const anyUnpriced = awnings.some((entry) => entry.result.price == null);
 
   return (
-    <section className="window-costing-sheet" aria-hidden="true">
+    <PrintSheet audience={audience}>
+      {internal ? null : (
+        <header className="window-costing-sheet__heading">
+          <h1 className="window-costing-sheet__title">{quoteName.trim() || 'Quotation'}</h1>
+          <span>{quoteDate}</span>
+        </header>
+      )}
+
+      {internal ? null : (
+        <div className="window-costing-sheet__meta">
+          <span>Customer: {customerName.trim() || 'Walk-in / phone'}</span>
+          <span>
+            {awnings.length} {awnings.length === 1 ? 'awning' : 'awnings'}
+          </span>
+        </div>
+      )}
+
       {awnings.map((awning, index) => {
         const { result } = awning;
         const lineTotal = result.price == null ? null : result.price * awning.quantity;
 
         return (
           <article key={awning.id} className="window-costing-sheet__window">
-            <header className="window-costing-sheet__heading">
-              <h1 className="window-costing-sheet__title">{quoteName.trim() || (internal ? 'Awning costing' : 'Quotation')}</h1>
-              <span>
-                {quoteDate}
-                {awnings.length > 1 ? ` · awning ${index + 1} of ${awnings.length}` : ''}
-              </span>
-            </header>
+            {internal ? (
+              <header className="window-costing-sheet__heading">
+                <h1 className="window-costing-sheet__title">{quoteName.trim() || 'Awning costing'}</h1>
+                <span>
+                  {quoteDate}
+                  {awnings.length > 1 ? ` · awning ${index + 1} of ${awnings.length}` : ''}
+                </span>
+              </header>
+            ) : null}
 
             <div className="window-costing-sheet__meta">
-              <span>Customer: {customerName.trim() || 'Walk-in / phone'}</span>
-              <span>Quantity: {awning.quantity}</span>
+              {internal ? <span>Customer: {customerName.trim() || 'Walk-in / phone'}</span> : null}
               <span>Awning: {awning.name || `Awning ${index + 1}`}</span>
+              <span>Quantity: {awning.quantity}</span>
               {internal ? <span>Rates: {ratesLabel}</span> : null}
             </div>
 
@@ -123,12 +146,24 @@ export default function AwningCostingSheet({ audience, quoteName, customerName, 
               </p>
             ) : null}
             {internal && result.unpriced.length ? <p className="window-costing-sheet__note">Not priced, charged as nil: {result.unpriced.map((entry) => entry.label).join(', ')}.</p> : null}
-            {notes.trim() ? <p className="window-costing-sheet__note">Notes: {notes.trim()}</p> : null}
+            {internal && notes.trim() ? <p className="window-costing-sheet__note">Notes: {notes.trim()}</p> : null}
 
-            <footer className="window-costing-sheet__footer">{internal ? 'Comments:' : 'Prices exclude GST unless stated. Please confirm sizes before manufacture.'}</footer>
+            {internal ? <footer className="window-costing-sheet__footer">Comments:</footer> : null}
           </article>
         );
       })}
-    </section>
+
+      {internal ? null : (
+        <>
+          <div className="window-costing-sheet__total">
+            <span>Quote total</span>
+            <span>{formatCurrency(quoteTotal)}</span>
+          </div>
+          {anyUnpriced ? <p className="window-costing-sheet__note">Some lines are not priced yet and are excluded from the total.</p> : null}
+          {notes.trim() ? <p className="window-costing-sheet__note">Notes: {notes.trim()}</p> : null}
+          <footer className="window-costing-sheet__footer">Prices exclude GST unless stated. Please confirm sizes before manufacture.</footer>
+        </>
+      )}
+    </PrintSheet>
   );
 }

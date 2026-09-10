@@ -1,5 +1,6 @@
 'use client';
 
+import PrintSheet from '@components/PrintSheet';
 import { formatCurrency } from '@utils/order-management';
 import { productFullName } from '@utils/window-catalogue';
 import { CostLine, WindowCostResult, WindowCostingInput, describeWindow } from '@utils/window-costing';
@@ -30,30 +31,56 @@ function formatQty(line: CostLine): string {
   return `${qty} ${line.unit}`;
 }
 
-/** Costing sheet for the printer. Hidden on screen; @media print hides the app around it. */
+/**
+ * Costing sheet for the printer. Hidden on screen; printing hides the app around it.
+ *
+ * The internal sheet repeats the heading on every window, because it prints one window per page for
+ * the bench. The customer quote is one document: the heading, the notes and the total are printed
+ * once, and the windows are its lines.
+ */
 export default function WindowCostingSheet({ audience, quoteName, customerName, quoteDate, notes, ratesLabel, rates, windows }: WindowCostingSheetProps) {
   const internal = audience === 'internal';
+  const quoteTotal = windows.reduce((total, entry) => total + (entry.result.price == null ? 0 : entry.result.price * entry.quantity), 0);
+  const anyUnpriced = windows.some((entry) => entry.result.price == null);
 
   return (
-    <section className="window-costing-sheet" aria-hidden="true">
+    <PrintSheet audience={audience}>
+      {internal ? null : (
+        <header className="window-costing-sheet__heading">
+          <h1 className="window-costing-sheet__title">{quoteName.trim() || 'Quotation'}</h1>
+          <span>{quoteDate}</span>
+        </header>
+      )}
+
+      {internal ? null : (
+        <div className="window-costing-sheet__meta">
+          <span>Customer: {customerName.trim() || 'Walk-in / phone'}</span>
+          <span>
+            {windows.length} {windows.length === 1 ? 'window' : 'windows'}
+          </span>
+        </div>
+      )}
+
       {windows.map((window, index) => {
         const { result } = window;
         const lineTotal = result.price == null ? null : result.price * window.quantity;
 
         return (
           <article key={window.id} className="window-costing-sheet__window">
-            <header className="window-costing-sheet__heading">
-              <h1 className="window-costing-sheet__title">{quoteName.trim() || (internal ? 'Window costing' : 'Quotation')}</h1>
-              <span>
-                {quoteDate}
-                {windows.length > 1 ? ` · window ${index + 1} of ${windows.length}` : ''}
-              </span>
-            </header>
+            {internal ? (
+              <header className="window-costing-sheet__heading">
+                <h1 className="window-costing-sheet__title">{quoteName.trim() || 'Window costing'}</h1>
+                <span>
+                  {quoteDate}
+                  {windows.length > 1 ? ` · window ${index + 1} of ${windows.length}` : ''}
+                </span>
+              </header>
+            ) : null}
 
             <div className="window-costing-sheet__meta">
-              <span>Customer: {customerName.trim() || 'Walk-in / phone'}</span>
-              <span>Quantity: {window.quantity}</span>
+              {internal ? <span>Customer: {customerName.trim() || 'Walk-in / phone'}</span> : null}
               <span>Window: {window.name || `Window ${index + 1}`}</span>
+              <span>Quantity: {window.quantity}</span>
               {internal ? <span>Rates: {ratesLabel}</span> : null}
             </div>
 
@@ -145,12 +172,24 @@ export default function WindowCostingSheet({ audience, quoteName, customerName, 
 
             {internal ? <p className="window-costing-sheet__note">Labour: {result.minutes.total.toFixed(1)} minutes at {formatCurrency(rates.labourPerHour)} per hour.</p> : null}
             {internal && result.unpriced.length ? <p className="window-costing-sheet__note">Not priced, charged as nil: {result.unpriced.map((entry) => entry.label).join(', ')}.</p> : null}
-            {notes.trim() ? <p className="window-costing-sheet__note">Notes: {notes.trim()}</p> : null}
+            {internal && notes.trim() ? <p className="window-costing-sheet__note">Notes: {notes.trim()}</p> : null}
 
-            <footer className="window-costing-sheet__footer">{internal ? 'Comments:' : 'Prices exclude GST unless stated. Please confirm sizes before manufacture.'}</footer>
+            {internal ? <footer className="window-costing-sheet__footer">Comments:</footer> : null}
           </article>
         );
       })}
-    </section>
+
+      {internal ? null : (
+        <>
+          <div className="window-costing-sheet__total">
+            <span>Quote total</span>
+            <span>{formatCurrency(quoteTotal)}</span>
+          </div>
+          {anyUnpriced ? <p className="window-costing-sheet__note">Some lines are not priced yet and are excluded from the total.</p> : null}
+          {notes.trim() ? <p className="window-costing-sheet__note">Notes: {notes.trim()}</p> : null}
+          <footer className="window-costing-sheet__footer">Prices exclude GST unless stated. Please confirm sizes before manufacture.</footer>
+        </>
+      )}
+    </PrintSheet>
   );
 }

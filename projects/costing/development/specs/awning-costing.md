@@ -53,10 +53,12 @@ none of them.
 - **Batch price.** The sidebar prices the same awning at runs of 1, 2, 5 and 10. Setup minutes
   divide across the run, so the price for each falls as the run grows.
 - **Quote with several awnings.** Add each costed awning to the quote. The quote creates one
-  purchase order line per awning, and prints one sheet per awning.
-- **Printing.** "Print Quote For Customer" carries the specification and the price only. "Print
-  Costing Sheet (internal)" adds every cost line, the rates used, the labour minutes and the
-  margin. The screen copy is the customer one, so a browser Cmd+P prints the safe document.
+  purchase order line per awning.
+- **Printing.** "Print Quote For Customer" carries the specification and the price only: one
+  heading, one line per awning, one total. "Print Costing Sheet (internal)" adds every cost line,
+  the rates used, the labour minutes and the margin, and starts a new page for each awning. The
+  screen copy is the customer one, so a browser Cmd+P prints the safe document. Both share the
+  window sheet's print behaviour, described in [window-costing.md](window-costing.md).
 - **Copying.** "Copy Prices For Customer" is the same split in text. "Copy Cost Build-up
   (internal)" carries the build-up and is marked as not for a customer.
 - **Saved costings.** A saved costing keeps the awning, the customer and the price. Load it to
