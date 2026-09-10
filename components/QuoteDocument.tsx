@@ -96,7 +96,7 @@ export default function QuoteDocument({ quoteName, customerName, quoteDate, note
           {QUOTE_ISSUER.email ? <div>{QUOTE_ISSUER.email}</div> : null}
         </div>
         <div>
-          <div className="quote-doc__party-name">Bill to</div>
+          <div className="quote-doc__party-name">Quote for</div>
           <div>{customerName.trim() || 'Walk-in / phone'}</div>
         </div>
       </div>
@@ -146,7 +146,7 @@ export default function QuoteDocument({ quoteName, customerName, quoteDate, note
         </tbody>
       </table>
 
-      {anyUnpriced ? <p className="quote-doc__note">Lines shown as not priced are quoted separately and are excluded from the total.</p> : null}
+      {anyUnpriced ? <p className="quote-doc__note">Lines shown as not priced are excluded from the total.</p> : null}
 
       {notes.trim() ? (
         <div className="quote-doc__notes">
