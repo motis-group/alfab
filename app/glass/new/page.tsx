@@ -20,7 +20,6 @@ import Text from '@components/Text';
 import { usePricing } from '@components/PricingProvider';
 import JobSheet from '@components/JobSheet';
 import { CostBreakdown, GlassSpecification, calculateCost, describeGlassSpecification, getAvailableGlassTypes, getAvailableThicknesses } from '@utils/calculations';
-import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import { Customer, CustomerProduct, ORDER_STATUS_OPTIONS, OrderStatus, ParsedLineNotes, PricingSource, PurchaseOrder, PurchaseOrderLine, UserRole, formatCurrency, parseCustomerProductNotes, parseLineNotes, serializeLineNotes, statusLabel, todayISODate } from '@utils/order-management';
 import { QuoteToOrderDraft, buildAwningLineDescription, buildGlassLineDescription, buildJobLineDescription, buildWindowLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
 import { WindowCostingInput, describeWindow } from '@utils/window-costing';
@@ -40,7 +39,6 @@ const TABLE_PURCHASE_ORDER_LINES = 'purchase_order_lines';
 
 const EDGEWORK_OPTIONS: GlassSpecification['edgework'][] = ['ROUGH ARRIS', 'FLAT GRIND - STRAIGHT', 'FLAT GRIND - CURVED', 'FLAT POLISH - STRAIGHT', 'FLAT POLISH - CURVED'];
 
-const navigationItems = APP_NAVIGATION_ITEMS;
 
 const defaultAdhocSpec: GlassSpecification = {
   width: 1000,
@@ -692,8 +690,6 @@ export default function NewPurchaseOrderPage() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⬡"
-      navigationItems={navigationItems}
-      navLabel={isEditingOrder ? 'EDIT ORDER' : 'NEW ORDER'}
       navRight={<ActionButton onClick={() => router.push('/glass')}>BACK TO DASHBOARD</ActionButton>}
       heading={isEditingOrder ? 'EDIT PURCHASE ORDER' : 'CREATE PURCHASE ORDER'}
       badge={isEditingOrder ? 'EDIT MODE' : 'NEW ORDER'}

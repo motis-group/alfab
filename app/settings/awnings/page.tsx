@@ -14,7 +14,7 @@ import RowSpaceBetween from '@components/RowSpaceBetween';
 import Text from '@components/Text';
 import { RateAgeBadge, RateReviewCard } from '@components/RateAgeNotice';
 
-import { APP_ACCOUNT_SECTION_ITEMS, APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
+import { APP_ACCOUNT_SECTION_ITEMS } from '@utils/app-navigation';
 import { formatCurrency } from '@utils/order-management';
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 import { AwningRates, DEFAULT_AWNING_RATES, GLAZING_ORDER, mergeAwningRates } from '@utils/awning-costing-rates';
@@ -26,7 +26,6 @@ import { AccuracySummary, measureAccuracy } from '@utils/estimate-accuracy';
 import { loadMeasuredLines } from '@utils/estimate-accuracy-store';
 import { DEFAULT_WINDOW_RATES } from '@utils/window-costing-rates';
 
-const navigationItems = APP_NAVIGATION_ITEMS;
 
 const SECTION_TITLES: Record<string, string> = {
   parts: 'Parts',
@@ -280,8 +279,6 @@ export default function AwningRatesSettings() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⚙"
-      navigationItems={navigationItems}
-      navLabel="COSTING"
       navRight={<ActionButton onClick={() => router.push('/glass/awnings')}>BACK TO AWNING COSTING</ActionButton>}
       heading="AWNING RATES"
       sectionNavigationItems={APP_ACCOUNT_SECTION_ITEMS}

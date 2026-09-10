@@ -3,16 +3,22 @@
 import styles from '@components/page/AppSectionNav.module.scss';
 
 import ActionButton from '@components/ActionButton';
+import DropdownMenuTrigger from '@components/DropdownMenuTrigger';
 import { APP_WORK_SECTION_ITEMS, AppSectionItem } from '@utils/app-navigation';
 import { usePathname, useRouter } from 'next/navigation';
 
 function isSelectedPath(pathname: string, item: AppSectionItem): boolean {
-  if (item.href === '/glass') {
-    return pathname === '/glass';
+  if (item.items) {
+    return item.items.some((child) => isSelectedPath(pathname, child));
   }
 
-  if (item.href === '/glass/new') {
-    return pathname === '/glass/new';
+  if (!item.href) {
+    return false;
+  }
+
+  // Orders is the section root, so it would otherwise match every page under it.
+  if (item.href === '/glass') {
+    return pathname === '/glass';
   }
 
   if (item.href === '/account') {
@@ -36,11 +42,30 @@ export default function AppSectionNav({ items = APP_WORK_SECTION_ITEMS }: AppSec
 
   return (
     <section className={styles.root} aria-label="Section navigation">
-      {items.map((item) => (
-        <ActionButton key={item.href} isSelected={isSelectedPath(pathname, item)} onClick={() => router.push(item.href)}>
-          {item.label}
-        </ActionButton>
-      ))}
+      {items.map((item) => {
+        const selected = isSelectedPath(pathname, item);
+
+        if (item.items) {
+          return (
+            <DropdownMenuTrigger
+              key={item.label}
+              items={item.items.map((child) => ({
+                icon: '⊹',
+                children: child.label,
+                onClick: () => (child.href ? router.push(child.href) : undefined),
+              }))}
+            >
+              <ActionButton isSelected={selected}>{item.label}</ActionButton>
+            </DropdownMenuTrigger>
+          );
+        }
+
+        return (
+          <ActionButton key={item.href} isSelected={selected} onClick={() => (item.href ? router.push(item.href) : undefined)}>
+            {item.label}
+          </ActionButton>
+        );
+      })}
     </section>
   );
 }

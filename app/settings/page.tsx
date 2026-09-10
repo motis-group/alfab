@@ -4,7 +4,6 @@ import '@root/global.scss';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 
 import ActionButton from '@components/ActionButton';
 import Card from '@components/Card';
@@ -22,7 +21,6 @@ import { usePricing } from '@components/PricingProvider';
 import { APP_ACCOUNT_SECTION_ITEMS } from '@utils/app-navigation';
 import { EdgeworkType, GlassThickness, GlassType } from '@utils/calculations';
 
-const navigationItems = APP_NAVIGATION_ITEMS;
 
 export default function PricingSettings() {
   const router = useRouter();
@@ -111,8 +109,6 @@ export default function PricingSettings() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⚙"
-      navigationItems={navigationItems}
-      navLabel="COSTING"
       navRight={<ActionButton onClick={() => router.push('/')}>BACK TO COSTING</ActionButton>}
       heading="COSTING"
       sectionNavigationItems={APP_ACCOUNT_SECTION_ITEMS}
