@@ -4,7 +4,6 @@ import '@root/global.scss';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
@@ -47,7 +46,6 @@ interface UserEditorDraft {
   password: string;
 }
 
-const navigationItems = APP_NAVIGATION_ITEMS;
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -342,8 +340,6 @@ export default function TeamAccessPage() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⚙"
-      navigationItems={navigationItems}
-      navLabel="TEAM"
       heading="TEAM"
       sectionNavigationItems={APP_ACCOUNT_SECTION_ITEMS}
       badge={badgeText}

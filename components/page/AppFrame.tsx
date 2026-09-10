@@ -13,14 +13,6 @@ import AppSectionNav from '@components/page/AppSectionNav';
 import AppSessionIndicator from '@components/page/AppSessionIndicator';
 import { AppSectionItem } from '@utils/app-navigation';
 
-interface NavigationItem {
-  icon?: React.ReactNode;
-  children?: React.ReactNode;
-  href?: string;
-  target?: React.HTMLAttributeAnchorTarget;
-  [key: string]: any;
-}
-
 interface FrameActionItem {
   hotkey?: string;
   onClick?: () => void;
@@ -33,8 +25,6 @@ interface FrameActionItem {
 interface AppFrameProps {
   previewPixelSRC: string;
   logo?: React.ReactNode;
-  navigationItems?: NavigationItem[];
-  navLabel?: React.ReactNode;
   navRight?: React.ReactNode;
   heading?: React.ReactNode;
   badge?: React.ReactNode;
@@ -54,8 +44,6 @@ interface AppFrameProps {
 const AppFrame: React.FC<AppFrameProps> = ({
   previewPixelSRC,
   logo = '⬡',
-  navigationItems = [],
-  navLabel,
   navRight,
   actionItems = [],
   showThemeControls = false,
@@ -69,20 +57,6 @@ const AppFrame: React.FC<AppFrameProps> = ({
   sidebarMobileOrder = 'top',
   children,
 }) => {
-  let left: React.ReactNode = null;
-
-  if (navLabel && !showSectionNavigation) {
-    if (navigationItems.length) {
-      left = (
-        <DropdownMenuTrigger items={navigationItems}>
-          <ActionButton>{navLabel}</ActionButton>
-        </DropdownMenuTrigger>
-      );
-    } else {
-      left = <ActionButton>{navLabel}</ActionButton>;
-    }
-  }
-
   const right = navRight || showSessionIndicator ? (
     <div className={styles.navRight}>
       {navRight}
@@ -95,7 +69,7 @@ const AppFrame: React.FC<AppFrameProps> = ({
   return (
     <DefaultLayout previewPixelSRC={previewPixelSRC} variant="wide">
       <Grid className={styles.root}>
-        <Navigation logo={logo} left={left} right={right} />
+        <Navigation logo={logo} right={right} />
 
         {showSectionNavigation ? <AppSectionNav items={sectionNavigationItems} /> : null}
 
