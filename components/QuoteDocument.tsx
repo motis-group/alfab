@@ -21,7 +21,7 @@ export const QUOTE_ISSUER = {
 const GST_RATE = 0.1;
 
 /** Declared in styles/global-fonts.scss, where the app's font picker also reaches it. */
-const QUOTE_FONT = 'TX02Mono-Regular';
+const QUOTE_FONT = 'Berkeley Mono';
 
 export interface QuoteDocumentLine {
   id: string;
@@ -54,7 +54,7 @@ export default function QuoteDocument({ quoteName, customerName, quoteDate, note
   // The sheet is display: none until the print dialog opens, and a hidden element fetches no font.
   // Ask for it on mount, or the first print of a session comes out in the fallback monospace.
   React.useEffect(() => {
-    document.fonts?.load(`9pt ${QUOTE_FONT}`);
+    document.fonts?.load(`9pt "${QUOTE_FONT}"`);
   }, []);
 
   const amounts = lines.map((line) => (line.unitPrice == null ? null : line.unitPrice * line.quantity));

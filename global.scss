@@ -802,7 +802,7 @@ select option {
     padding: 0 16mm;
     /* Berkeley Mono, declared in styles/global-fonts.scss. The quote is set in one face whatever
        font the app is wearing, so a customer's copy does not change with the operator's picker. */
-    font-family: 'TX02Mono-Regular', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: 'Berkeley Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 
   /* Line-printer capitals on the labels and names, the way a printed invoice has always read.
