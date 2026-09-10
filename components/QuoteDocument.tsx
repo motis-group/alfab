@@ -1,5 +1,7 @@
 'use client';
 
+import * as React from 'react';
+
 import PrintSheet from '@components/PrintSheet';
 import { formatCurrency } from '@utils/order-management';
 
@@ -17,6 +19,9 @@ export const QUOTE_ISSUER = {
 
 /** Quoted prices are struck excluding GST; the document states it rather than burying it. */
 const GST_RATE = 0.1;
+
+/** Declared in styles/global-fonts.scss, where the app's font picker also reaches it. */
+const QUOTE_FONT = 'TX02Mono-Regular';
 
 export interface QuoteDocumentLine {
   id: string;
@@ -46,6 +51,12 @@ interface QuoteDocumentProps {
  * Monospace, like the app it comes out of.
  */
 export default function QuoteDocument({ quoteName, customerName, quoteDate, notes, lines }: QuoteDocumentProps) {
+  // The sheet is display: none until the print dialog opens, and a hidden element fetches no font.
+  // Ask for it on mount, or the first print of a session comes out in the fallback monospace.
+  React.useEffect(() => {
+    document.fonts?.load(`9pt ${QUOTE_FONT}`);
+  }, []);
+
   const amounts = lines.map((line) => (line.unitPrice == null ? null : line.unitPrice * line.quantity));
   const subtotal = amounts.reduce<number>((total, amount) => total + (amount ?? 0), 0);
   const gst = subtotal * GST_RATE;
@@ -105,7 +116,7 @@ export default function QuoteDocument({ quoteName, customerName, quoteDate, note
           {lines.map((line, index) => (
             <tr key={line.id} className="quote-doc__line">
               <td>
-                <div>{line.description || `Item ${index + 1}`}</div>
+                <div className="quote-doc__item">{line.description || `Item ${index + 1}`}</div>
                 {line.spec ? <div className="quote-doc__spec">{line.spec}</div> : null}
                 {(line.extras || []).map((extra) => (
                   <div key={extra.label} className="quote-doc__spec">

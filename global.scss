@@ -800,6 +800,19 @@ select option {
      keeps the app's monospace, so the document reads as the calculator's own output. */
   .window-costing-sheet[data-audience='customer'] {
     padding: 0 16mm;
+    /* Berkeley Mono, declared in styles/global-fonts.scss. The quote is set in one face whatever
+       font the app is wearing, so a customer's copy does not change with the operator's picker. */
+    font-family: 'TX02Mono-Regular', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  /* Line-printer capitals on the labels and names, the way a printed invoice has always read.
+     Specifications, notes and the footer stay in sentence case, where the length needs it. */
+  .quote-doc__mark,
+  .quote-doc__item,
+  .quote-doc__party-name,
+  .quote-doc__metadata td:first-child,
+  .quote-doc__totals td:first-child {
+    text-transform: uppercase;
   }
 
   .quote-doc__rule {
@@ -830,11 +843,13 @@ select option {
 
   .quote-doc__metadata td:first-child {
     color: #555;
+    letter-spacing: 0.05em;
   }
 
   .quote-doc__mark {
     font-size: 12pt;
     font-weight: 700;
+    letter-spacing: 0.08em;
     text-align: right;
   }
 
@@ -846,6 +861,7 @@ select option {
 
   .quote-doc__party-name {
     font-weight: 700;
+    letter-spacing: 0.05em;
   }
 
   /* What the customer is being asked to pay, stated once before the detail, as an invoice does. */
@@ -899,6 +915,10 @@ select option {
   .quote-doc__totals td {
     padding: 1mm 0;
     border-top: 0.25pt solid #ebebeb;
+  }
+
+  .quote-doc__totals td:first-child {
+    letter-spacing: 0.05em;
   }
 
   .quote-doc__totals .quote-doc__amount {
