@@ -4,7 +4,6 @@ import '@root/global.scss';
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
 import { GlassSpecification } from '@utils/calculations';
 
 import ActionButton from '@components/ActionButton';
@@ -25,7 +24,6 @@ import { fetchCurrentSessionUser } from '@utils/session-client';
 const TABLE_CUSTOMERS = 'customers';
 const TABLE_CUSTOMER_PRODUCTS = 'customer_products';
 
-const navigationItems = APP_NAVIGATION_ITEMS;
 
 interface CustomerFormState {
   id: string | null;
@@ -313,8 +311,6 @@ export default function CustomersPage() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⬡"
-      navigationItems={navigationItems}
-      navLabel="CUSTOMERS"
       navRight={<ActionButton onClick={() => router.push('/glass')}>ORDER DASHBOARD</ActionButton>}
       heading="CUSTOMER MANAGEMENT"
       badge={`${customers.filter((customer) => customer.is_active !== false).length} ACTIVE`}

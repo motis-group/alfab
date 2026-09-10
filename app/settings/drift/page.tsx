@@ -15,7 +15,7 @@ import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 
 import { usePricing } from '@components/PricingProvider';
-import { APP_ACCOUNT_SECTION_ITEMS, APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
+import { APP_ACCOUNT_SECTION_ITEMS } from '@utils/app-navigation';
 import { formatCurrency } from '@utils/order-management';
 import { AwningRates, DEFAULT_AWNING_RATES } from '@utils/awning-costing-rates';
 import { DEFAULT_WINDOW_RATES, WindowRates } from '@utils/window-costing-rates';
@@ -23,7 +23,6 @@ import { loadAwningRates } from '@utils/awning-costing-store';
 import { loadWindowRates } from '@utils/window-costing-store';
 import { DriftItem, MATERIAL_SPREAD, SOURCE_LABELS, SOURCE_SETTINGS, compareRates, materialDrift } from '@utils/rate-drift';
 
-const navigationItems = APP_NAVIGATION_ITEMS;
 
 function formatSpread(spread: number | null): string {
   return spread == null ? '—' : `${(spread * 100).toFixed(1)}%`;
@@ -76,8 +75,6 @@ export default function RateDriftReport() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⚙"
-      navigationItems={navigationItems}
-      navLabel="COSTING"
       navRight={<ActionButton onClick={() => router.push('/settings')}>BACK TO RATES</ActionButton>}
       heading="PRICE DRIFT"
       sectionNavigationItems={APP_ACCOUNT_SECTION_ITEMS}

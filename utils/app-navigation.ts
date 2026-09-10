@@ -1,31 +1,26 @@
-export interface AppNavigationItem {
-  icon?: string;
-  children: string;
-  href: string;
-  target?: string;
-}
-
-export const APP_NAVIGATION_ITEMS: AppNavigationItem[] = [
-  { icon: '⊹', children: 'Order Dashboard', href: '/glass' },
-  { icon: '⊹', children: 'New Purchase Order', href: '/glass/new' },
-  { icon: '⊹', children: 'Calculator', href: '/glass/quote' },
-  { icon: '⊹', children: 'Window Costing', href: '/glass/windows' },
-  { icon: '⊹', children: 'Awning Costing', href: '/glass/awnings' },
-  { icon: '⊹', children: 'Customers & Products', href: '/glass/clients' },
-  { icon: '⊹', children: 'Component Library', href: '/examples' },
-];
-
 export interface AppSectionItem {
-  href: string;
+  /** Omitted on a group; the group's items carry their own. */
+  href?: string;
   label: string;
+  /** Present on a group. Rendered as a dropdown. */
+  items?: AppSectionItem[];
 }
 
+/**
+ * The work sections. Quotes and purchase orders are the same record at different statuses, so both
+ * live under Orders. The three calculators price different products onto that one quote, so they
+ * are a group rather than three peers of Orders.
+ */
 export const APP_WORK_SECTION_ITEMS: AppSectionItem[] = [
-  { href: '/glass', label: 'Dashboard' },
-  { href: '/glass/new', label: 'New Order' },
-  { href: '/glass/quote', label: 'Calculator' },
-  { href: '/glass/windows', label: 'Windows' },
-  { href: '/glass/awnings', label: 'Awnings' },
+  { href: '/glass', label: 'Orders' },
+  {
+    label: 'Calculators',
+    items: [
+      { href: '/glass/quote', label: 'Glass' },
+      { href: '/glass/windows', label: 'Windows' },
+      { href: '/glass/awnings', label: 'Awnings' },
+    ],
+  },
   { href: '/glass/clients', label: 'Customers' },
 ];
 

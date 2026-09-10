@@ -21,7 +21,7 @@ import { AccuracySummary, measureAccuracy } from '@utils/estimate-accuracy';
 import { loadMeasuredLines } from '@utils/estimate-accuracy-store';
 import { DEFAULT_AWNING_RATES } from '@utils/awning-costing-rates';
 
-import { APP_ACCOUNT_SECTION_ITEMS, APP_NAVIGATION_ITEMS } from '@utils/app-navigation';
+import { APP_ACCOUNT_SECTION_ITEMS } from '@utils/app-navigation';
 import { formatCurrency } from '@utils/order-management';
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 import WindowCostingGlossary from '@components/WindowCostingGlossary';
@@ -31,7 +31,6 @@ import { loadWindowRates, resetWindowRates, saveWindowRates } from '@utils/windo
 import { RateIssue, checkRateValue } from '@utils/window-rate-health';
 import { listWindowCostings } from '@utils/window-quote-store';
 
-const navigationItems = APP_NAVIGATION_ITEMS;
 
 const SECTION_TITLES: Record<string, string> = {
   labourPerHour: 'LABOUR RATE',
@@ -365,8 +364,6 @@ export default function WindowRatesSettings() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⚙"
-      navigationItems={navigationItems}
-      navLabel="WINDOW RATES"
       navRight={<ActionButton onClick={() => router.push('/glass/windows')}>WINDOW COSTING</ActionButton>}
       heading="WINDOW RATES"
       sectionNavigationItems={APP_ACCOUNT_SECTION_ITEMS}
