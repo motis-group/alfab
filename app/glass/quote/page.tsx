@@ -24,6 +24,7 @@ import { GlassSpecification, calculateCost, describeGlassSpecification, getEffec
 import { Customer, UserRole, formatCurrency, todayISODate } from '@utils/order-management';
 import { GlassQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { ExtractedPiece } from '@utils/import/model';
+import { LineEditRequest, clearLineEditRequest, peekLineEditRequest, persistLineEditResult } from '@utils/line-editing';
 import { saveGlassQuote } from '@utils/glass-quote-store';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
@@ -85,6 +86,8 @@ export default function AdhocQuotePage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerId, setCustomerId] = useState('');
   const [status, setStatus] = useState<{ tone: 'success' | 'warning' | 'error'; message: string } | null>(null);
+  // Set when the calculator was opened to price one line of a purchase order.
+  const [lineEdit, setLineEdit] = useState<LineEditRequest | null>(null);
 
   const calculation = useMemo(() => {
     try {
@@ -180,6 +183,24 @@ export default function AdhocQuotePage() {
 
         setRole(user.effectiveRole as UserRole);
 
+        // Opened from an order to price one of its lines: load that line into the form.
+        const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        if (params?.get('editLine') === '1') {
+          const request = peekLineEditRequest();
+          const line = request?.order.lineDrafts.find((entry) => entry.localId === request.localId);
+          if (request && line) {
+            setLineEdit(request);
+            setSpec({ ...line.adhocSpec });
+            setQuantity(Math.max(1, line.quantityOrdered));
+            setMarkupPercent(line.markupPercent);
+            setItemName(line.lineNote);
+            setUseRecommendedPrice(false);
+            setManualUnitPrice(line.unitPriceAtOrder);
+            setCustomerName(request.order.orderForm.customerId ? '' : '');
+            setCustomerId(request.order.orderForm.customerId);
+          }
+        }
+
         const db = createClient();
         const { data: customerData } = await db.from(TABLE_CUSTOMERS).select('*').order('name', { ascending: true });
         setCustomers((customerData as Customer[]) || []);
@@ -190,6 +211,43 @@ export default function AdhocQuotePage() {
       }
     })();
   }, [router]);
+
+  /** Hands the priced line back to the order it came from. */
+  function saveLineToOrder() {
+    if (!lineEdit) {
+      return;
+    }
+    if (calculation.error) {
+      setStatus({ tone: 'error', message: calculation.error });
+      return;
+    }
+
+    persistLineEditResult({
+      order: lineEdit.order,
+      localId: lineEdit.localId,
+      line: {
+        quantityOrdered: Math.max(1, quantity),
+        unitPriceAtOrder: calculation.unitPrice,
+        lineNote: itemName.trim(),
+        markupPercent,
+        adhocSpec: { ...spec },
+        windowSpec: null,
+        windowRatesUpdatedAt: null,
+        awningSpec: null,
+        awningRatesUpdatedAt: null,
+      },
+    });
+    router.push(lineEdit.returnTo);
+  }
+
+  /** Leaves the line as the order had it. */
+  function cancelLineEdit() {
+    if (!lineEdit) {
+      return;
+    }
+    clearLineEditRequest();
+    router.push(lineEdit.returnTo);
+  }
 
   function resetCalculator() {
     setQuoteName('');
@@ -352,7 +410,7 @@ export default function AdhocQuotePage() {
       previewPixelSRC="/pixel.gif"
       logo="⬡"
       navRight={<ActionButton onClick={() => router.push('/glass')}>ORDER DASHBOARD</ActionButton>}
-      heading="AD HOC PRICING CALCULATOR"
+      heading={lineEdit ? `PRICING A LINE OF ${(lineEdit.order.orderForm.poNumber || 'A NEW ORDER').toUpperCase()}` : 'AD HOC PRICING CALCULATOR'}
       badge={isLoading ? 'LOADING' : `${role.toUpperCase()} SESSION`}
       sidebarWidthCh={44}
       sidebarMobileOrder="top"
@@ -595,7 +653,19 @@ export default function AdhocQuotePage() {
         </Card>
       ) : null}
 
-      <CardDouble title="PIECE">
+      {/* Opened from an order. The quote below is not what is being edited, so the way back is the
+          first thing on the page. */}
+      {lineEdit ? (
+        <CardDouble title="EDITING AN ORDER LINE">
+          <Text>
+            Line {(lineEdit.order.lineDrafts.findIndex((line) => line.localId === lineEdit.localId) + 1) || 1} of {lineEdit.order.orderForm.poNumber || 'a new order'}. Changing the piece below changes that line.
+          </Text>
+          <br />
+          <ActionButton onClick={saveLineToOrder}>Save To Order</ActionButton> <ActionButton onClick={cancelLineEdit}>Cancel</ActionButton>
+        </CardDouble>
+      ) : null}
+
+      <CardDouble title={lineEdit ? 'THE LINE' : 'PIECE'}>
         <GlassSpecificationFields spec={spec} onChange={setSpec} basePrices={pricingData.basePrices} />
         <br />
         <Input label="QUANTITY" type="number" name="quote_quantity" value={String(quantity)} onChange={(event) => setQuantity(Math.max(1, numberOrFallback(event.target.value, 1)))} min="1" />
@@ -609,87 +679,91 @@ export default function AdhocQuotePage() {
 
         <Input label="PIECE NAME (OPTIONAL)" name="item_name" value={itemName} onChange={(event) => setItemName(event.target.value)} placeholder="Front window, side panel..." />
         <br />
-        <ActionButton onClick={addToQuote}>Add Piece To Quote</ActionButton>
+        {lineEdit ? null : <ActionButton onClick={addToQuote}>Add Piece To Quote</ActionButton>}
       </CardDouble>
 
-      <CardDouble title="QUOTE">
-        <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} placeholder="Job reference" />
-        <Text>CUSTOMER</Text>
-        <select
-          value={customerId}
-          onChange={(event) => {
-            const nextId = event.target.value;
-            setCustomerId(nextId);
-            const picked = customers.find((entry) => entry.id === nextId);
-            if (picked) {
-              setCustomerName(picked.name);
-            }
-          }}
-        >
-          <option value="">Walk-in / not on file</option>
-          {customers
-            .filter((customer) => customer.is_active !== false)
-            .map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.name}
-              </option>
-            ))}
-        </select>
-        {selectedCustomer ? <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text> : <Input label="CUSTOMER NAME" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />}
-        <br />
-        <Input label="QUOTE DATE" type="date" name="quote_date" value={quoteDate} onChange={(event) => setQuoteDate(event.target.value)} />
-        <Input label="QUOTE NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
-      </CardDouble>
-
-      <CardDouble title={`QUOTE LINES (${quoteLines.length})`}>
-        {quoteLines.length ? (
-          <>
-            <Table>
-              <TableRow>
-                <TableColumn>PIECE</TableColumn>
-                <TableColumn style={{ width: '6ch' }}>QTY</TableColumn>
-                <TableColumn style={{ width: '12ch' }}>UNIT</TableColumn>
-                <TableColumn style={{ width: '12ch' }}>TOTAL</TableColumn>
-                <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
-              </TableRow>
-              {quoteLines.map((line) => (
-                <TableRow key={line.item.localId}>
-                  <TableColumn>
-                    {line.item.name ? `${line.item.name}: ` : ''}
-                    {describeGlassSpecification(line.item.spec)}
-                    {line.error ? (
-                      <>
-                        <br />
-                        <span className="status-error">{line.error}</span>
-                      </>
-                    ) : null}
-                  </TableColumn>
-                  <TableColumn>{line.item.quantity}</TableColumn>
-                  <TableColumn>{formatCurrency(line.unitPrice)}</TableColumn>
-                  <TableColumn>{formatCurrency(line.total)}</TableColumn>
-                  <TableColumn style={{ whiteSpace: 'nowrap' }}>
-                    <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton> <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
-                  </TableColumn>
-                </TableRow>
+      {lineEdit ? null : (
+        <CardDouble title="QUOTE">
+          <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} placeholder="Job reference" />
+          <Text>CUSTOMER</Text>
+          <select
+            value={customerId}
+            onChange={(event) => {
+              const nextId = event.target.value;
+              setCustomerId(nextId);
+              const picked = customers.find((entry) => entry.id === nextId);
+              if (picked) {
+                setCustomerName(picked.name);
+              }
+            }}
+          >
+            <option value="">Walk-in / not on file</option>
+            {customers
+              .filter((customer) => customer.is_active !== false)
+              .map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
               ))}
-            </Table>
-            <br />
-            <RowSpaceBetween>
-              <Text>QUOTE TOTAL</Text>
-              <Text>
-                <span className="status-pill status-pill-success">{formatCurrency(quoteTotal)}</span>
-              </Text>
-            </RowSpaceBetween>
-            <br />
-            <RowSpaceBetween>
-              <ActionButton onClick={handleSaveQuote}>Save Quote</ActionButton>
-              <ActionButton onClick={() => setQuoteItems([])}>Clear Quote</ActionButton>
-            </RowSpaceBetween>
-          </>
-        ) : (
-          <Text>No pieces on this quote.</Text>
-        )}
-      </CardDouble>
+          </select>
+          {selectedCustomer ? <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text> : <Input label="CUSTOMER NAME" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />}
+          <br />
+          <Input label="QUOTE DATE" type="date" name="quote_date" value={quoteDate} onChange={(event) => setQuoteDate(event.target.value)} />
+          <Input label="QUOTE NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
+        </CardDouble>
+      )}
+
+      {lineEdit ? null : (
+        <CardDouble title={`QUOTE LINES (${quoteLines.length})`}>
+          {quoteLines.length ? (
+            <>
+              <Table>
+                <TableRow>
+                  <TableColumn>PIECE</TableColumn>
+                  <TableColumn style={{ width: '6ch' }}>QTY</TableColumn>
+                  <TableColumn style={{ width: '12ch' }}>UNIT</TableColumn>
+                  <TableColumn style={{ width: '12ch' }}>TOTAL</TableColumn>
+                  <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
+                </TableRow>
+                {quoteLines.map((line) => (
+                  <TableRow key={line.item.localId}>
+                    <TableColumn>
+                      {line.item.name ? `${line.item.name}: ` : ''}
+                      {describeGlassSpecification(line.item.spec)}
+                      {line.error ? (
+                        <>
+                          <br />
+                          <span className="status-error">{line.error}</span>
+                        </>
+                      ) : null}
+                    </TableColumn>
+                    <TableColumn>{line.item.quantity}</TableColumn>
+                    <TableColumn>{formatCurrency(line.unitPrice)}</TableColumn>
+                    <TableColumn>{formatCurrency(line.total)}</TableColumn>
+                    <TableColumn style={{ whiteSpace: 'nowrap' }}>
+                      <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton> <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
+                    </TableColumn>
+                  </TableRow>
+                ))}
+              </Table>
+              <br />
+              <RowSpaceBetween>
+                <Text>QUOTE TOTAL</Text>
+                <Text>
+                  <span className="status-pill status-pill-success">{formatCurrency(quoteTotal)}</span>
+                </Text>
+              </RowSpaceBetween>
+              <br />
+              <RowSpaceBetween>
+                <ActionButton onClick={handleSaveQuote}>Save Quote</ActionButton>
+                <ActionButton onClick={() => setQuoteItems([])}>Clear Quote</ActionButton>
+              </RowSpaceBetween>
+            </>
+          ) : (
+            <Text>No pieces on this quote.</Text>
+          )}
+        </CardDouble>
+      )}
 
       <CardDouble title="READ A CUSTOMER'S ORDER OR DRAWING">
         <ImportPanel
