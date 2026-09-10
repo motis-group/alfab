@@ -131,6 +131,24 @@ jobs:
           grep -qi '^HTTP/.* 200' /tmp/prod-login.headers
           grep -qi '<form' /tmp/prod-login.html
 
+      # nginx defaults to a 1 MB body, which silently refuses a scanned order before the app sees
+      # it. The directive that raises it lives in a config that certbot and ec2-deploy.sh both
+      # rewrite, so it is asserted on every release rather than assumed to have survived.
+      - name: Smoke test upload size limit
+        run: |
+          set -euo pipefail
+
+          head -c 1500000 /dev/urandom > /tmp/oversize.bin
+          status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
+            -F "file=@/tmp/oversize.bin" "https://${DEPLOY_DOMAIN}/api/import")
+          rm -f /tmp/oversize.bin
+
+          echo "1.5 MB upload returned HTTP ${status}"
+          if [ "${status}" = "413" ]; then
+            echo "nginx is refusing bodies over its default 1 MB; client_max_body_size is missing." >&2
+            exit 1
+          fi
+
       - name: Remove deploy SSH key
         if: ${{ always() }}
         run: rm -f ~/.ssh/alfab_deploy_key
