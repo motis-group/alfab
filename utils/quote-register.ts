@@ -147,3 +147,53 @@ export async function listQuoteRecords(): Promise<{ records: QuoteRecord[]; erro
   records.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   return { records, errors };
 }
+
+export interface MergedQuoteDraft {
+  draft: QuoteToOrderDraftInput;
+  /** What the estimator has to look at before saving the order. */
+  warnings: string[];
+}
+
+/**
+ * Several quotes as one purchase order.
+ *
+ * A boat needs windows, awnings and cut glass, each priced on its own page and saved as its own
+ * quote. Converting them together concatenates their lines into one draft, so the customer gets one
+ * order and one number. Quotes written against different customers are still merged — the estimator
+ * is told, because it is usually a mistake and occasionally not.
+ */
+export function mergeQuotesForOrder(records: QuoteRecord[]): MergedQuoteDraft | null {
+  const priced = records.filter((record) => record.draft);
+  if (!priced.length) {
+    return null;
+  }
+
+  const warnings: string[] = [];
+  for (const record of records) {
+    if (!record.draft) {
+      warnings.push(`${record.name || QUOTE_KIND_LABELS[record.kind]} has no priced line and is not on the order.`);
+    }
+  }
+
+  const customers = new Set(priced.map((record) => record.customer.trim()).filter(Boolean));
+  if (customers.size > 1) {
+    warnings.push(`These quotes name ${customers.size} different customers: ${Array.from(customers).join(', ')}. Check the order is for one of them.`);
+  }
+
+  const withCustomerId = priced.find((record) => record.customerId);
+  const notes = priced.map((record) => record.draft!.quoteNotes).filter((note) => note && note.trim());
+
+  return {
+    draft: {
+      quoteName: priced.length === 1 ? priced[0].name : priced.map((record) => record.name).filter(Boolean).join(' + '),
+      customerName: withCustomerId?.customer || priced[0].customer,
+      customerId: withCustomerId?.customerId || null,
+      quoteDate: priced[0].draft!.quoteDate,
+      quoteNotes: Array.from(new Set(notes)).join('\n'),
+      glassLines: priced.flatMap((record) => record.draft!.glassLines || []),
+      windowLines: priced.flatMap((record) => record.draft!.windowLines || []),
+      awningLines: priced.flatMap((record) => record.draft!.awningLines || []),
+    },
+    warnings,
+  };
+}

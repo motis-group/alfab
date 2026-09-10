@@ -28,9 +28,8 @@ import {
   todayISODate,
   localISODate,
 } from '@utils/order-management';
-import JobPanel, { useJob } from '@components/JobPanel';
 import QuoteStatusControl from '@components/QuoteStatusControl';
-import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, listQuoteRecords } from '@utils/quote-register';
+import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
 import { QUOTE_STATUS_LABELS, QUOTE_STATUS_ORDER, QuoteStatus, setQuoteStatus } from '@utils/quote-status';
 import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { createClient } from '@utils/db-client';
@@ -119,7 +118,8 @@ export default function OrderDashboardPage() {
   const [orderLines, setOrderLines] = useState<PurchaseOrderLine[]>([]);
   const [quotes, setQuotes] = useState<QuoteRecord[]>([]);
   const [quoteError, setQuoteError] = useState<string | null>(null);
-  const [job, setJob] = useJob();
+  // Quotes ticked for one order. A boat's windows, awnings and cut glass are three quotes.
+  const [selectedQuotes, setSelectedQuotes] = useState<Set<string>>(new Set());
 
   const [isLoading, setIsLoading] = useState(true);
   const [schemaError, setSchemaError] = useState<string | null>(null);
@@ -292,29 +292,44 @@ export default function OrderDashboardPage() {
 
   /**
    * A purchase order is an approved quote, so converting is a deliberate act rather than something
-   * that happens when a quote is marked won. It marks the quote won and opens the order for editing.
+   * that happens when a quote is marked won. Several quotes convert into one order, which is how a
+   * boat's windows, awnings and cut glass reach the customer as one number. Each is marked won.
    */
-  async function convertQuote(quote: QuoteRecord) {
-    if (!quote.draft) {
-      setFormError('That quote has no priced line to put on an order.');
+  async function convertQuotes(records: QuoteRecord[]) {
+    const merged = mergeQuotesForOrder(records);
+    if (!merged) {
+      setFormError('Those quotes have no priced line to put on an order.');
       return;
     }
 
-    if (quote.status !== 'won') {
-      await markQuote(quote.id, 'won');
+    setFormError(merged.warnings.length ? merged.warnings.join(' ') : null);
+
+    for (const record of records) {
+      if (record.draft && record.status !== 'won') {
+        await markQuote(record.id, 'won');
+      }
     }
 
-    persistQuoteToOrderDraft(quote.draft);
+    persistQuoteToOrderDraft(merged.draft);
     router.push('/glass/new?fromQuote=1');
   }
 
-  function createOrderForJob() {
-    if (!job.lines.length) {
-      return;
-    }
-    persistQuoteToOrderDraft({ kind: 'job', quoteName: job.name, customerName: job.customerName, customerId: job.customerId, quoteDate: '', quoteNotes: job.notes, jobLines: job.lines });
-    router.push('/glass/new?fromQuote=1');
+  const selectedRecords = quotes.filter((quote) => selectedQuotes.has(quote.id));
+  const selectedCount = selectedRecords.length;
+  const selectedTotal = selectedRecords.reduce((sum, quote) => sum + quote.total, 0);
+
+  function toggleQuote(id: string) {
+    setSelectedQuotes((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   }
+
 
   async function loadSessionUser() {
     const nextUser = await fetchCurrentSessionUser();
@@ -506,6 +521,17 @@ export default function OrderDashboardPage() {
       )}
 
       <Card title={`QUOTES (${filteredQuotes.length})`}>
+        <RowSpaceBetween>
+          <Text>{selectedCount ? `${selectedCount} ticked${selectedTotal ? ` · ${formatCurrency(selectedTotal)}` : ''}` : 'Tick more than one to put them on a single order.'}</Text>
+          <Text>
+            {selectedCount > 1 ? (
+              <>
+                <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuotes(selectedRecords)}>Convert {selectedCount} To One Order</ActionButton>{' '}
+              </>
+            ) : null}
+            {selectedCount ? <ActionButton onClick={() => setSelectedQuotes(new Set())}>Clear</ActionButton> : null}
+          </Text>
+        </RowSpaceBetween>
         {quoteError ? (
           <Text>
             <span className="status-warning">{quoteError}</span>
@@ -516,6 +542,7 @@ export default function OrderDashboardPage() {
         ) : (
           <Table>
             <TableRow>
+              <TableColumn style={{ width: '4ch' }}>ON</TableColumn>
               <TableColumn>QUOTE</TableColumn>
               <TableColumn style={{ width: '10ch' }}>PRODUCT</TableColumn>
               <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
@@ -528,6 +555,9 @@ export default function OrderDashboardPage() {
 
             {filteredQuotes.map((quote) => (
               <TableRow key={quote.id}>
+                <TableColumn>
+                  <input type="checkbox" checked={selectedQuotes.has(quote.id)} disabled={!quote.draft} aria-label={`Put ${quote.name || 'this quote'} on an order`} onChange={() => toggleQuote(quote.id)} />
+                </TableColumn>
                 <TableColumn>{quote.name || 'Untitled'}</TableColumn>
                 <TableColumn>{QUOTE_KIND_LABELS[quote.kind]}</TableColumn>
                 <TableColumn>{quote.customer || 'Walk-in'}</TableColumn>
@@ -539,14 +569,14 @@ export default function OrderDashboardPage() {
                 </TableColumn>
                 <TableColumn style={{ whiteSpace: 'nowrap' }}>
                   <ActionButton onClick={() => router.push(QUOTE_KIND_HREFS[quote.kind])}>Open</ActionButton>{' '}
-                  <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuote(quote)}>Convert</ActionButton>
+                  <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuotes([quote])}>Convert</ActionButton>
                 </TableColumn>
               </TableRow>
             ))}
 
             {!filteredQuotes.length && (
               <TableRow>
-                <TableColumn colSpan={8} style={{ textAlign: 'center' }}>
+                <TableColumn colSpan={9} style={{ textAlign: 'center' }}>
                   No quotes match the filters.
                 </TableColumn>
               </TableRow>
@@ -555,7 +585,6 @@ export default function OrderDashboardPage() {
         )}
       </Card>
 
-      <JobPanel job={job} onChange={setJob} onCreateOrder={createOrderForJob} />
 
       <Card title="PURCHASE ORDERS">
         {isLoading ? (

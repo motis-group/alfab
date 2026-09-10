@@ -21,7 +21,7 @@ import { usePricing } from '@components/PricingProvider';
 import JobSheet from '@components/JobSheet';
 import { CostBreakdown, GlassSpecification, calculateCost, describeGlassSpecification, getAvailableGlassTypes, getAvailableThicknesses } from '@utils/calculations';
 import { Customer, CustomerProduct, ORDER_STATUS_OPTIONS, OrderStatus, ParsedLineNotes, PricingSource, PurchaseOrder, PurchaseOrderLine, UserRole, formatCurrency, parseCustomerProductNotes, parseLineNotes, serializeLineNotes, statusLabel, todayISODate } from '@utils/order-management';
-import { QuoteToOrderDraft, buildAwningLineDescription, buildGlassLineDescription, buildJobLineDescription, buildWindowLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
+import { QuoteToOrderDraft, buildAwningLineDescription, buildGlassLineDescription, buildWindowLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
 import { WindowCostingInput, describeWindow } from '@utils/window-costing';
 import { AwningCostingInput, describeAwning } from '@utils/awning-costing';
 import { AwningRates, mergeAwningRates } from '@utils/awning-costing-rates';
@@ -389,48 +389,31 @@ export default function NewPurchaseOrderPage() {
       })
     );
 
-    // A job carries more than one product type, so each entry picks its own pricing source.
-    const jobDraftLines = quoteDraft.jobLines.map((line) =>
-      createLineDraft({
-        pricingSource: line.kind === 'window' ? 'window_calculator' : line.kind === 'awning' ? 'awning_calculator' : 'adhoc_calculator',
-        quantityOrdered: line.quantity,
-        unitPriceAtOrder: line.unitPrice,
-        lineNote: buildJobLineDescription(quoteDraft.quoteName, line),
-        windowSpec: line.kind === 'window' ? line.windowSpec : null,
-        windowRatesUpdatedAt: line.kind === 'window' ? line.ratesUpdatedAt : null,
-        awningSpec: line.kind === 'awning' ? line.awningSpec : null,
-        awningRatesUpdatedAt: line.kind === 'awning' ? line.ratesUpdatedAt : null,
-        adhocSpec: line.kind === 'glass' ? { ...line.spec } : undefined,
-        markupPercent: line.kind === 'glass' ? line.markupPercent : undefined,
-      })
-    );
-
-    const draftLines =
-      quoteDraft.kind === 'job'
-        ? jobDraftLines
-        : quoteDraft.kind === 'awning'
-          ? awningDraftLines
-          : quoteDraft.kind === 'window'
-            ? quoteDraft.windowLines.map((line) =>
-                createLineDraft({
-                  pricingSource: 'window_calculator',
-                  quantityOrdered: line.quantity,
-                  unitPriceAtOrder: line.unitPrice,
-                  lineNote: buildWindowLineDescription(quoteDraft.quoteName, line),
-                  windowSpec: line.windowSpec,
-                  windowRatesUpdatedAt: line.ratesUpdatedAt,
-                })
-              )
-            : glassLines.map((line) =>
-                createLineDraft({
-                  pricingSource: 'adhoc_calculator',
-                  quantityOrdered: line.quantity,
-                  unitPriceAtOrder: line.unitPrice,
-                  lineNote: buildGlassLineDescription(quoteDraft.quoteName, line),
-                  adhocSpec: { ...line.spec },
-                  markupPercent: line.markupPercent,
-                })
-              );
+    // A draft carries whatever it was built from: one quote of one kind, or several quotes of
+    // several kinds converted together. Each array contributes its own lines.
+    const draftLines = [
+      ...glassLines.map((line) =>
+        createLineDraft({
+          pricingSource: 'adhoc_calculator',
+          quantityOrdered: line.quantity,
+          unitPriceAtOrder: line.unitPrice,
+          lineNote: buildGlassLineDescription(quoteDraft.quoteName, line),
+          adhocSpec: { ...line.spec },
+          markupPercent: line.markupPercent,
+        })
+      ),
+      ...quoteDraft.windowLines.map((line) =>
+        createLineDraft({
+          pricingSource: 'window_calculator',
+          quantityOrdered: line.quantity,
+          unitPriceAtOrder: line.unitPrice,
+          lineNote: buildWindowLineDescription(quoteDraft.quoteName, line),
+          windowSpec: line.windowSpec,
+          windowRatesUpdatedAt: line.ratesUpdatedAt,
+        })
+      ),
+      ...awningDraftLines,
+    ];
 
     if (!draftLines.length) {
       return;
