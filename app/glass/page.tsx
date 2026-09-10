@@ -32,6 +32,7 @@ import QuoteStatusControl from '@components/QuoteStatusControl';
 import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
 import { QUOTE_STATUS_LABELS, QUOTE_STATUS_ORDER, QuoteStatus, setQuoteStatus } from '@utils/quote-status';
 import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
+import { openOrdersByCustomer as openOrdersByCustomerMetric, ordersDueWithin, overdueOrders, recentOrders as recentOrdersMetric } from '@utils/order-metrics';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
@@ -183,66 +184,15 @@ export default function OrderDashboardPage() {
     });
   }, [quotes, customerFilter, quoteStatusFilter]);
 
-  const openOrdersByCustomer = useMemo(() => {
-    const counts: Record<string, number> = {};
-    ordersInScope.forEach((order) => {
-      if (order.status !== 'open') {
-        return;
-      }
-      counts[order.customer_id] = (counts[order.customer_id] || 0) + 1;
-    });
+  const openOrdersByCustomer = useMemo(() => openOrdersByCustomerMetric(ordersInScope, (id) => customerMap[id]?.name || 'Unknown Customer'), [ordersInScope, customerMap]);
 
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([customerId, count]) => ({
-        customerId,
-        count,
-        name: customerMap[customerId]?.name || 'Unknown Customer',
-      }));
-  }, [ordersInScope, customerMap]);
-
-  // Past its required date and not finished. Nothing showed these: dueInSevenDays starts at today,
-  // so an order went quiet on the dashboard the moment it became the one worth ringing about.
-  const overdue = useMemo(() => {
-    const today = todayISODate();
-    return ordersInScope.filter((order) => {
-      const requiredDate = normalizeDateValue(order.required_date);
-      if (!requiredDate || order.status === 'fulfilled' || order.status === 'cancelled') {
-        return false;
-      }
-      return requiredDate < today;
-    });
-  }, [ordersInScope]);
+  const overdue = useMemo(() => overdueOrders(ordersInScope, todayISODate()), [ordersInScope]);
 
   const overdueIds = useMemo(() => new Set(overdue.map((order) => order.id)), [overdue]);
 
-  const dueInSevenDays = useMemo(() => {
-    const today = todayISODate();
-    const inSevenDays = new Date();
-    inSevenDays.setDate(inSevenDays.getDate() + 7);
-    const maxDate = localISODate(inSevenDays);
+  const dueInSevenDays = useMemo(() => ordersDueWithin(ordersInScope, todayISODate(), 7), [ordersInScope]);
 
-    return ordersInScope.filter((order) => {
-      const requiredDate = normalizeDateValue(order.required_date);
-      if (!requiredDate) {
-        return false;
-      }
-      if (order.status === 'fulfilled' || order.status === 'cancelled') {
-        return false;
-      }
-      return requiredDate >= today && requiredDate <= maxDate;
-    });
-  }, [ordersInScope]);
-
-  const recentOrders = useMemo(() => {
-    return [...ordersInScope]
-      .sort((a, b) => {
-        const aDate = a.updated_at || a.created_at || a.received_date || '';
-        const bDate = b.updated_at || b.created_at || b.received_date || '';
-        return bDate.localeCompare(aDate);
-      })
-      .slice(0, 5);
-  }, [ordersInScope]);
+  const recentOrders = useMemo(() => recentOrdersMetric(ordersInScope, 5), [ordersInScope]);
 
   async function loadData() {
     setIsLoading(true);
