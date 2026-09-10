@@ -136,6 +136,29 @@ export default function AdhocQuotePage() {
   }, [pricingData, quoteItems]);
 
   const quoteTotal = quoteLines.reduce((sum, line) => sum + line.total, 0);
+  const quotePieceCount = quoteLines.reduce((sum, line) => sum + Math.max(1, line.item.quantity), 0);
+  const quoteArea = quoteLines.reduce((sum, line) => sum + getEffectiveArea(line.item.spec) * Math.max(1, line.item.quantity), 0);
+  const quoteEdge = quoteLines.reduce((sum, line) => sum + getEffectivePerimeter(line.item.spec) * Math.max(1, line.item.quantity), 0);
+
+  // The cost build-up for the whole quote: every line's breakdown, times how many of that piece.
+  const quoteBreakdown = useMemo(() => {
+    const totals = { baseGlass: 0, edgework: 0, holes: 0, shape: 0, ceramic: 0, scanning: 0, minimumTopUp: 0, cost: 0 };
+    for (const line of quoteLines) {
+      if (!line.breakdown) {
+        continue;
+      }
+      const qty = Math.max(1, line.item.quantity);
+      totals.baseGlass += line.breakdown.baseGlass * qty;
+      totals.edgework += line.breakdown.edgework * qty;
+      totals.holes += line.breakdown.holes * qty;
+      totals.shape += line.breakdown.shape * qty;
+      totals.ceramic += line.breakdown.ceramic * qty;
+      totals.scanning += line.breakdown.scanning * qty;
+      totals.minimumTopUp += line.breakdown.minimumTopUp * qty;
+      totals.cost += line.breakdown.total * qty;
+    }
+    return totals;
+  }, [quoteLines]);
   const [job, setJob] = useJob();
 
   const quoteSummary = useMemo(() => {
@@ -417,8 +440,42 @@ export default function AdhocQuotePage() {
       sidebar={
         <>
           {/* Every action lives on the toolbar. This card repeated it. */}
-          <Card title="QUOTE SUMMARY">
-            {calculation.error ? (
+          {/* Once the quote holds pieces it is the quote that gets summarised, not whatever is left in
+              the form. Reading an order puts 43 pieces on a quote and leaves the form untouched, so a
+              card headed QUOTE SUMMARY was reporting the default 1000 x 1000 piece and calling its
+              price the quote total. The form's own numbers are below it, under PRICE BREAKDOWN. */}
+          <Card title={quoteLines.length ? `QUOTE SUMMARY (${quoteLines.length} LINE${quoteLines.length === 1 ? '' : 'S'})` : 'THIS PIECE'}>
+            {quoteLines.length ? (
+              <>
+                <RowSpaceBetween>
+                  <Text>PIECES</Text>
+                  <Text>{quotePieceCount}</Text>
+                </RowSpaceBetween>
+                <RowSpaceBetween>
+                  <Text>AREA</Text>
+                  <Text>{quoteArea.toFixed(3)} m²</Text>
+                </RowSpaceBetween>
+                <RowSpaceBetween>
+                  <Text>EDGE LENGTH</Text>
+                  <Text>{quoteEdge.toFixed(2)} m</Text>
+                </RowSpaceBetween>
+                {quoteLines.some((line) => line.error) ? (
+                  <Text>
+                    <span className="status-error">
+                      {quoteLines.filter((line) => line.error).length} line{quoteLines.filter((line) => line.error).length === 1 ? '' : 's'} cannot be priced and {quoteLines.filter((line) => line.error).length === 1 ? 'is' : 'are'} not in this total.
+                    </span>
+                  </Text>
+                ) : null}
+                <RowSpaceBetween>
+                  <Text>QUOTE TOTAL</Text>
+                  <Text>
+                    <span className="status-pill status-pill-success">{formatCurrency(quoteTotal)}</span>
+                  </Text>
+                </RowSpaceBetween>
+                <br />
+                <ActionButton onClick={copyQuoteToClipboard}>Copy Quote Summary</ActionButton>
+              </>
+            ) : calculation.error ? (
               <Text>
                 <span className="status-error">{calculation.error}</span>
               </Text>
@@ -473,8 +530,59 @@ export default function AdhocQuotePage() {
 
           <RateReviewCard asAt={pricingData.asAt} label={(key) => (key === 'basePrices' ? 'Base glass prices' : key === 'edgeworkPrices' ? 'Edgework' : 'Holes, shaping and services')} action={<ActionButton onClick={() => router.push('/settings')}>Review Glass Rates</ActionButton>} />
 
-          <Card title="PRICE BREAKDOWN">
-            {calculation.error ? (
+          {/* Like the summary above: once the quote holds pieces this is the quote's cost build-up,
+              because a build-up of the piece left in the form is not what the estimator is reading. */}
+          <Card title={quoteLines.length ? 'PRICE BREAKDOWN (WHOLE QUOTE)' : 'PRICE BREAKDOWN'}>
+            {quoteLines.length ? (
+              <Table>
+                <TableRow>
+                  <TableColumn style={{ width: '24ch' }}>COMPONENT</TableColumn>
+                  <TableColumn>COST</TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn>Base Glass</TableColumn>
+                  <TableColumn>{formatCurrency(quoteBreakdown.baseGlass)}</TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn>Edgework</TableColumn>
+                  <TableColumn>{formatCurrency(quoteBreakdown.edgework)}</TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn>Holes</TableColumn>
+                  <TableColumn>{formatCurrency(quoteBreakdown.holes)}</TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn>Shape</TableColumn>
+                  <TableColumn>{formatCurrency(quoteBreakdown.shape)}</TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn>Ceramic</TableColumn>
+                  <TableColumn>{formatCurrency(quoteBreakdown.ceramic)}</TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn>Scanning</TableColumn>
+                  <TableColumn>{formatCurrency(quoteBreakdown.scanning)}</TableColumn>
+                </TableRow>
+                {quoteBreakdown.minimumTopUp ? (
+                  <TableRow>
+                    <TableColumn>Minimum charge top-up</TableColumn>
+                    <TableColumn>{formatCurrency(quoteBreakdown.minimumTopUp)}</TableColumn>
+                  </TableRow>
+                ) : null}
+                <TableRow>
+                  <TableColumn>Cost</TableColumn>
+                  <TableColumn>{formatCurrency(quoteBreakdown.cost)}</TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn>Markup</TableColumn>
+                  <TableColumn>{formatCurrency(quoteTotal - quoteBreakdown.cost)}</TableColumn>
+                </TableRow>
+                <TableRow>
+                  <TableColumn>Quote Total ({quotePieceCount} pieces)</TableColumn>
+                  <TableColumn>{formatCurrency(quoteTotal)}</TableColumn>
+                </TableRow>
+              </Table>
+            ) : calculation.error ? (
               <Text>
                 <span className="status-error">{calculation.error}</span>
               </Text>
