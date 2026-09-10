@@ -25,6 +25,8 @@ interface OrderImportPanelProps {
   file?: File | null;
   /** Off when a parent owns the drop zone, so the page does not show two of them. */
   showDropZone?: boolean;
+  /** Told when a read starts and stops, so a parent's drop zone can say so. */
+  onBusyChange?: (busy: boolean) => void;
 }
 
 interface PanelError {
@@ -40,7 +42,7 @@ interface ReviewRow {
   costError: string | null;
 }
 
-export default function OrderImportPanel({ onAdd, disabled = false, file = null, showDropZone = true }: OrderImportPanelProps) {
+export default function OrderImportPanel({ onAdd, disabled = false, file = null, showDropZone = true, onBusyChange }: OrderImportPanelProps) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const { pricingData } = usePricing();
 
@@ -77,6 +79,7 @@ export default function OrderImportPanel({ onAdd, disabled = false, file = null,
     }
 
     setIsReading(true);
+    onBusyChange?.(true);
     setError(null);
     setReading(null);
     setRows([]);
@@ -99,6 +102,7 @@ export default function OrderImportPanel({ onAdd, disabled = false, file = null,
       setError({ message: fetchError?.message || 'The order could not be read.', hint: 'Check the connection and try again.' });
     } finally {
       setIsReading(false);
+      onBusyChange?.(false);
     }
   }
 

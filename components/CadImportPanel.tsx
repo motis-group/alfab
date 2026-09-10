@@ -30,6 +30,8 @@ interface CadImportPanelProps {
   file?: File | null;
   /** Off when a parent owns the drop zone, so the page does not show two of them. */
   showDropZone?: boolean;
+  /** Told when a read starts and stops, so a parent's drop zone can say so. */
+  onBusyChange?: (busy: boolean) => void;
 }
 
 interface PanelError {
@@ -55,7 +57,7 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function CadImportPanel({ spec, onApply, onClear, disabled = false, file = null, showDropZone = true }: CadImportPanelProps) {
+export default function CadImportPanel({ spec, onApply, onClear, disabled = false, file = null, showDropZone = true, onBusyChange }: CadImportPanelProps) {
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const specRef = React.useRef(spec);
   const onApplyRef = React.useRef(onApply);
@@ -103,6 +105,7 @@ export default function CadImportPanel({ spec, onApply, onClear, disabled = fals
       return;
     }
     setIsLoading(true);
+    onBusyChange?.(true);
     setError(null);
     setAnalysis(null);
     setApplied([]);
@@ -116,6 +119,7 @@ export default function CadImportPanel({ spec, onApply, onClear, disabled = fals
       setError(toPanelError(loadError));
     } finally {
       setIsLoading(false);
+      onBusyChange?.(false);
     }
   }
 
