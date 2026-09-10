@@ -200,8 +200,7 @@ export default function AwningRatesSettings() {
       return;
     }
     try {
-      await saveAwningRates(rates, updatedAt);
-      const loaded = await loadAwningRates();
+      const loaded = await saveAwningRates(rates, updatedAt);
       setRates(loaded.rates);
       setSavedRates(loaded.rates);
       setSource(loaded.source);
