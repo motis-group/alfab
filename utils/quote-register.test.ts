@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { GlassSpecification } from './calculations';
-import { MergedQuoteDraft, QuoteRecord, isMergeRefusal, mergeQuotesForOrder } from './quote-register';
+import { EMPTY_QUOTE_DRAFT, quoteDraftKinds } from './quote-draft';
+import { MergedQuoteDraft, QuoteRecord, describeQuoteRecordProducts, isMergeRefusal, mergeQuotesForOrder } from './quote-register';
 
 /** Narrows a merge that is expected to succeed, so a refusal fails the test rather than the types. */
 function merged(records: QuoteRecord[]): MergedQuoteDraft {
@@ -30,6 +31,7 @@ function glassQuote(over: Partial<QuoteRecord> = {}): QuoteRecord {
   return {
     id: 'g1',
     kind: 'glass',
+    kinds: ['glass'],
     name: 'Cut glass',
     customer: 'Status Houseboats',
     customerId: 'c1',
@@ -47,6 +49,7 @@ function windowQuote(over: Partial<QuoteRecord> = {}): QuoteRecord {
   return {
     id: 'w1',
     kind: 'window',
+    kinds: ['window'],
     name: 'Kitchen hopper',
     customer: 'Status Houseboats',
     customerId: null,
@@ -59,6 +62,47 @@ function windowQuote(over: Partial<QuoteRecord> = {}): QuoteRecord {
     ...over,
   };
 }
+
+/** A quote priced on more than one calculator: one row, one document, several products. */
+function combinedQuote(over: Partial<QuoteRecord> = {}): QuoteRecord {
+  const glassLines = [{ description: 'Windscreen', quantity: 1, unitPrice: 400, markupPercent: 20, spec }];
+  const awningLines = [{ description: 'Cabin awning', quantity: 2, unitPrice: 150, awningSpec: { heightMm: 400, widthMm: 900, qty: 2 } as never, ratesUpdatedAt: null }];
+  const kinds = quoteDraftKinds({ ...EMPTY_QUOTE_DRAFT, glassLines, awningLines });
+
+  return {
+    id: 'q1',
+    kind: kinds[0],
+    kinds,
+    name: 'Boat 12',
+    customer: 'Status Houseboats',
+    customerId: 'c1',
+    date: '2026-09-11',
+    lineCount: 2,
+    total: 700,
+    status: 'open',
+    statusReason: null,
+    draft: { quoteName: 'Boat 12', customerName: 'Status Houseboats', customerId: 'c1', quoteDate: '2026-09-11', quoteNotes: '', glassLines, awningLines },
+    ...over,
+  };
+}
+
+test('one quote holding several products names them all', () => {
+  const record = combinedQuote();
+
+  assert.deepEqual(record.kinds, ['glass', 'awning']);
+  assert.equal(record.kind, record.kinds[0], 'a list with room for one product shows the first');
+  assert.equal(describeQuoteRecordProducts(record), 'Glass + Awning');
+});
+
+test('a combined quote and a single-product quote become one order', () => {
+  const result = merged([combinedQuote(), windowQuote()]);
+
+  assert.equal(result.draft.glassLines?.length, 1);
+  assert.equal(result.draft.awningLines?.length, 1);
+  assert.equal(result.draft.windowLines?.length, 1);
+  assert.equal(result.draft.quoteName, 'Boat 12 + Kitchen hopper');
+  assert.deepEqual(result.warnings, []);
+});
 
 test('a boat that needs glass and a window becomes one order', () => {
   const result = merged([glassQuote(), windowQuote()]);

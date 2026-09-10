@@ -12,6 +12,7 @@ import Card from '@components/Card';
 import SidebarTabs from '@components/SidebarTabs';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
+import QuoteSheet from '@components/QuoteSheet';
 import RowSpaceBetween from '@components/RowSpaceBetween';
 import Table from '@components/Table';
 import TableColumn from '@components/TableColumn';
@@ -25,9 +26,11 @@ import { createClient } from '@utils/db-client';
 import { AwningQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 import { AwningCostingInput, CostLine, GLAZING_ORDER, costAwning, costAwningBatches, createAwningInput, describeAwning } from '@utils/awning-costing';
-import { AwningRates, DEFAULT_AWNING_RATES, GlazingId, mergeAwningRates } from '@utils/awning-costing-rates';
-import { loadAwningRates, loadAwningRatesVersion } from '@utils/awning-costing-store';
-import { saveAwningCosting } from '@utils/awning-quote-store';
+import { AwningRates, DEFAULT_AWNING_RATES, GlazingId } from '@utils/awning-costing-rates';
+import { loadAwningRates } from '@utils/awning-costing-store';
+import { EMPTY_QUOTE_DRAFT, QuoteDraft, clearQuoteDraft, clearQuoteDraftIfUnchanged, describeQuoteProducts, quoteDraftKinds, quoteDraftLineCount, quoteDraftTotal, readQuoteDraft, replaceQuoteDraftLines, subscribeToQuoteDraft } from '@utils/quote-draft';
+import { quoteEmailBody, quoteEmailTruncated, quoteMailtoHref } from '@utils/quote-email';
+import { saveQuote } from '@utils/quote-store';
 
 const BATCH_SIZES = [1, 2, 5, 10];
 
@@ -35,6 +38,12 @@ interface QuoteItem {
   localId: string;
   name: string;
   input: AwningCostingInput;
+  /**
+   * The price this line came back from the quote at, and the rates it was calculated on. Null for an
+   * awning priced on this visit. A quote holds the number the customer was given, so a rate changed
+   * since is not allowed to move it.
+   */
+  quoted: { unitPrice: number; ratesUpdatedAt: string | null } | null;
 }
 
 function numberOrFallback(value: string, fallback = 0): number {
@@ -67,7 +76,7 @@ export default function AwningCostingPage() {
   const router = useRouter();
 
   const [role, setRole] = useState<UserRole>('readonly');
-  const [canSaveCostings, setCanSaveCostings] = useState(false);
+  const [canSaveQuotes, setCanSaveQuotes] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<{ tone: 'success' | 'warning'; message: string } | null>(null);
@@ -91,7 +100,10 @@ export default function AwningCostingPage() {
   // Customer by default, so a browser Cmd+P prints the safe document. The internal button raises it
   // for one print and `afterprint` puts it back.
   const [sheetAudience, setSheetAudience] = useState<'internal' | 'customer'>('customer');
-  const [comparison, setComparison] = useState<{ id: string; quoted: number | null; today: number | null; onOriginal: number | null } | null>(null);
+  // The quote being worked on, holding whatever the other two calculators have already priced.
+  const [workingDraft, setWorkingDraft] = useState<QuoteDraft>(EMPTY_QUOTE_DRAFT);
+  // Mirroring begins only once the stored draft has been read, or the first render overwrites it.
+  const [draftLoaded, setDraftLoaded] = useState(false);
 
   const describe = useCallback((forInput: AwningCostingInput) => describeAwning(forInput, rates), [rates]);
   const result = useMemo(() => costAwning(input, rates), [input, rates]);
@@ -102,28 +114,50 @@ export default function AwningCostingPage() {
     () =>
       quoteItems.map((item) => {
         const itemResult = costAwning(item.input, rates);
-        return { item, result: itemResult, total: itemResult.runTotal };
+        const unitPrice = item.quoted ? item.quoted.unitPrice : itemResult.price;
+        return { item, result: itemResult, unitPrice, total: unitPrice == null ? null : unitPrice * itemResult.qty };
       }),
     [quoteItems, rates]
   );
-  const quoteTotal = quoteLines.reduce((sum, line) => sum + (line.total ?? 0), 0);
 
-  // The quote prints the awnings it holds; a quote with none prints the awning on screen.
+  // The costing sheet prints the awnings the quote holds; a quote with none prints the awning on
+  // screen. The customer's quotation is the quote itself and is refused when it holds nothing.
   const sheetAwnings: AwningCostingSheetAwning[] = quoteLines.length ? quoteLines.map((line) => ({ id: line.item.localId, name: line.item.name, quantity: line.result.qty, input: line.item.input, result: line.result })) : [{ id: 'current', name: awningName, quantity: result.qty, input, result }];
 
-  const summary = useMemo(() => {
-    if (result.price == null) {
-      return '';
+  /** This page's lines as the shared quote holds them. */
+  const awningQuoteLines = useMemo<AwningQuoteLine[]>(
+    () =>
+      quoteLines
+        .filter((line) => line.unitPrice != null)
+        .map((line) => ({
+          description: line.item.name || describe(line.item.input),
+          quantity: line.result.qty,
+          unitPrice: line.unitPrice as number,
+          awningSpec: line.item.input,
+          ratesUpdatedAt: line.item.quoted ? line.item.quoted.ratesUpdatedAt : ratesUpdatedAt,
+        })),
+    [describe, quoteLines, ratesUpdatedAt]
+  );
+
+  const workingQuoteLineCount = quoteDraftLineCount(workingDraft);
+  const workingQuoteTotal = quoteDraftTotal(workingDraft);
+  const workingQuoteProducts = describeQuoteProducts(quoteDraftKinds(workingDraft));
+
+  /** What the other calculators have put on this quote. */
+  const otherProducts = useMemo(() => {
+    const withoutAwnings: QuoteDraft = { ...workingDraft, awningLines: [] };
+    const counted = [
+      { count: withoutAwnings.glassLines.length, noun: 'glass line' },
+      { count: withoutAwnings.windowLines.length, noun: 'window line' },
+    ].filter((entry) => entry.count > 0);
+
+    if (!counted.length) {
+      return null;
     }
 
-    const header = [`${quoteName.trim() || 'Awning quote'}`, `Customer: ${customerName.trim() || 'Walk-in / Phone'}`, `Date: ${quoteDate}`];
-
-    if (quoteLines.length) {
-      return [...header, ...quoteLines.map((line, index) => `${index + 1}. ${line.item.name || describe(line.item.input)} | ${line.result.qty} x ${formatCurrency(line.result.price)} = ${formatCurrency(line.total)}`), `Quote total: ${formatCurrency(quoteTotal)}`, quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : ''].filter(Boolean).join('\n');
-    }
-
-    return [...header, `Awning: ${describe(input)}`, `Price each: ${formatCurrency(result.price)}`, `Qty: ${result.qty} | Total: ${formatCurrency(result.runTotal)}`, quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : ''].filter(Boolean).join('\n');
-  }, [customerName, describe, input, quoteDate, quoteLines, quoteName, quoteNotes, quoteTotal, result]);
+    const listed = counted.map((entry) => `${entry.count} ${entry.noun}${entry.count === 1 ? '' : 's'}`).join(' and ');
+    return `${listed} on this quote. ${formatCurrency(quoteDraftTotal(withoutAwnings))}.`;
+  }, [workingDraft]);
 
   // Put the sheet back to the customer copy once a print finishes, so the next Cmd+P is safe.
   useEffect(() => {
@@ -132,13 +166,65 @@ export default function AwningCostingPage() {
     return () => window.removeEventListener('afterprint', restore);
   }, []);
 
-
   const selectedCustomer = customers.find((entry) => entry.id === customerId) || null;
+
+  // A second tab writing the quote leaves this page holding an older heading, which the mirror
+  // below would put back over it.
+  useEffect(() => {
+    if (!draftLoaded || lineEdit) {
+      return;
+    }
+
+    return subscribeToQuoteDraft((draft) => {
+      setWorkingDraft(draft);
+      setQuoteName(draft.name);
+      setCustomerName(draft.customer);
+      setCustomerId(draft.customerId || '');
+      setQuoteNotes(draft.notes);
+      if (draft.date) {
+        setQuoteDate(draft.date);
+      }
+    });
+  }, [draftLoaded, lineEdit]);
+
+  // Awnings are this page's to write; the glass and windows on the quote belong to the other two.
+  useEffect(() => {
+    if (!draftLoaded || lineEdit) {
+      return;
+    }
+
+    setWorkingDraft(
+      replaceQuoteDraftLines('awning', awningQuoteLines, {
+        name: quoteName,
+        customer: selectedCustomer?.name || customerName,
+        customerId: customerId || null,
+        date: quoteDate,
+        notes: quoteNotes,
+      })
+    );
+  }, [awningQuoteLines, customerId, customerName, draftLoaded, lineEdit, quoteDate, quoteName, quoteNotes, selectedCustomer]);
 
   useEffect(() => {
     (async () => {
       setIsLoading(true);
       setError(null);
+
+      // Read before writing: the quote may already hold glass or windows priced elsewhere, and the
+      // awnings on it were put there by this page on an earlier visit. The parameter is read here
+      // rather than from lineEdit because that state arrives one load later, by which time the quote
+      // would already be on screen. Pricing an order line is not quoting.
+      if (new URLSearchParams(window.location.search).get('editLine') !== '1') {
+        const draft = readQuoteDraft();
+        setWorkingDraft(draft);
+        setQuoteName(draft.name);
+        setCustomerName(draft.customer);
+        setCustomerId(draft.customerId || '');
+        setQuoteNotes(draft.notes);
+        if (draft.date) {
+          setQuoteDate(draft.date);
+        }
+        setQuoteItems(draft.awningLines.map((line, index) => ({ localId: `awning-held-${index}`, name: line.description, input: { ...line.awningSpec }, quoted: { unitPrice: line.unitPrice, ratesUpdatedAt: line.ratesUpdatedAt } })));
+      }
 
       try {
         const user = await fetchCurrentSessionUser();
@@ -148,7 +234,7 @@ export default function AwningCostingPage() {
         }
 
         setRole(user.effectiveRole as UserRole);
-        setCanSaveCostings(userCan(user, 'quotes:write'));
+        setCanSaveQuotes(userCan(user, 'quotes:write'));
 
         // Opened from an order to price one of its lines: load that line into the form.
         const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -173,11 +259,11 @@ export default function AwningCostingPage() {
         setRatesSource(loaded.source);
         setRatesUpdatedAt(loaded.updatedAt);
         setRatesError(loaded.error);
-
       } catch (loadError: any) {
         setError(loadError?.message || 'Unable to load awning costing.');
       } finally {
         setIsLoading(false);
+        setDraftLoaded(true);
       }
     })();
   }, [router]);
@@ -227,16 +313,23 @@ export default function AwningCostingPage() {
     router.push(lineEdit.returnTo);
   }
 
+  /** The awning in the form. The quote it is being added to is left alone. */
   function resetCalculator() {
     setInput(createAwningInput());
     setAwningName('');
+    setStatus(null);
+  }
+
+  /** Empties the whole quote: this page's awnings, its heading, and the other calculators' lines. */
+  function clearQuote() {
     setQuoteName('');
     setCustomerName('');
     setCustomerId('');
     setQuoteDate(todayISODate());
     setQuoteNotes('');
     setQuoteItems([]);
-    setStatus(null);
+    setWorkingDraft(EMPTY_QUOTE_DRAFT);
+    clearQuoteDraft();
   }
 
   function addToQuote() {
@@ -250,9 +343,10 @@ export default function AwningCostingPage() {
         localId: `awning-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         name: awningName.trim() || describe(input),
         input: { ...input },
+        quoted: null,
       },
     ]);
-    setStatus({ tone: 'success', message: `Added to the quote. ${quoteItems.length + 1} awning${quoteItems.length ? 's' : ''} on this quote.` });
+    setStatus({ tone: 'success', message: 'Added to the quote.' });
   }
 
   function editQuoteItem(localId: string) {
@@ -272,12 +366,13 @@ export default function AwningCostingPage() {
   }
 
   async function copySummary() {
-    if (!summary) {
+    if (!workingQuoteLineCount) {
+      setStatus({ tone: 'warning', message: 'Nothing on this quote to copy.' });
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(summary);
+      await navigator.clipboard.writeText(quoteEmailBody(workingDraft));
       setStatus({ tone: 'success', message: 'Copied. Prices only, safe to send to a customer.' });
     } catch {
       setStatus({ tone: 'warning', message: 'Clipboard copy failed.' });
@@ -301,6 +396,11 @@ export default function AwningCostingPage() {
   }
 
   function printSheet(audience: 'internal' | 'customer') {
+    if (audience === 'customer' && !workingQuoteLineCount) {
+      setStatus({ tone: 'warning', message: 'Nothing on this quote to print.' });
+      return;
+    }
+
     setSheetAudience(audience);
     if (typeof window !== 'undefined') {
       // Let the sheet re-render for the chosen audience before the print dialog reads the page.
@@ -308,37 +408,66 @@ export default function AwningCostingPage() {
     }
   }
 
-  async function handleSaveCosting() {
-    if (!canSaveCostings || result.price == null) {
+  /** Saves the whole quote, not the awnings alone. */
+  async function handleSaveQuote() {
+    if (!canSaveQuotes) {
+      return;
+    }
+    // What is stored rather than this page's copy of it: a line another calculator wrote after the
+    // last mirror belongs on the quote that is filed.
+    const stored = readQuoteDraft();
+    if (!quoteDraftLineCount(stored)) {
+      setStatus({ tone: 'warning', message: 'Nothing on this quote to save.' });
       return;
     }
 
     try {
-      await saveAwningCosting({
-        name: awningName.trim() || quoteName.trim() || describe(input),
-        customer: selectedCustomer?.name || customerName,
-        input,
-        result,
+      await saveQuote({
+        name: stored.name,
+        customer: stored.customer,
+        customerId: stored.customerId,
+        date: stored.date,
+        notes: stored.notes,
+        glassLines: stored.glassLines,
+        windowLines: stored.windowLines,
+        awningLines: stored.awningLines,
+        total: quoteDraftTotal(stored),
         ratesUpdatedAt,
       });
-      setStatus({ tone: 'success', message: 'Costing saved. Load it again from Saved costings.' });
+
+      if (clearQuoteDraftIfUnchanged(stored)) {
+        resetCalculator();
+        clearQuote();
+        setStatus({ tone: 'success', message: 'Quote saved.' });
+      } else {
+        setWorkingDraft(readQuoteDraft());
+        setStatus({ tone: 'success', message: 'Quote saved. The working quote changed while it saved and was kept.' });
+      }
     } catch (saveError: any) {
-      setStatus({ tone: 'warning', message: saveError?.message || 'Unable to save the costing.' });
+      setStatus({ tone: 'warning', message: saveError?.message || 'Unable to save the quote.' });
     }
   }
 
+  function emailQuote() {
+    if (!workingQuoteLineCount) {
+      setStatus({ tone: 'warning', message: 'Nothing on this quote to send.' });
+      return;
+    }
+
+    if (quoteEmailTruncated(workingDraft)) {
+      setStatus({ tone: 'warning', message: 'The quote is longer than the message body holds. Attach the printed quote.' });
+    }
+
+    if (typeof window !== 'undefined') {
+      window.location.href = quoteMailtoHref(workingDraft, selectedCustomer?.contact_email || '');
+    }
+  }
+
+  /** The whole quote goes on the order; a quote with nothing on it sends the awning on screen. */
   function handleCreatePurchaseOrder() {
-    const lines: AwningQuoteLine[] = quoteLines.length
-      ? quoteLines
-          .filter((line) => line.result.price != null)
-          .map((line) => ({
-            description: line.item.name || describe(line.item.input),
-            quantity: line.result.qty,
-            unitPrice: line.result.price as number,
-            awningSpec: line.item.input,
-            ratesUpdatedAt,
-          }))
-      : result.price == null
+    const awningLines: AwningQuoteLine[] = workingDraft.awningLines.length
+      ? workingDraft.awningLines
+      : workingQuoteLineCount || result.price == null
         ? []
         : [
             {
@@ -350,19 +479,20 @@ export default function AwningCostingPage() {
             },
           ];
 
-    if (!lines.length) {
+    if (!awningLines.length && !workingDraft.glassLines.length && !workingDraft.windowLines.length) {
       router.push('/glass/new');
       return;
     }
 
     persistQuoteToOrderDraft({
-      kind: 'awning',
       quoteName,
       customerName: selectedCustomer?.name || customerName,
       customerId: customerId || null,
       quoteDate,
       quoteNotes,
-      awningLines: lines,
+      glassLines: workingDraft.glassLines,
+      windowLines: workingDraft.windowLines,
+      awningLines,
     });
     router.push('/glass/new?fromQuote=1');
   }
@@ -422,6 +552,26 @@ export default function AwningCostingPage() {
                 <span className="status-warning">{message}</span>
               </Text>
             ))}
+
+          </Card>
+
+          <Card title={workingQuoteLineCount ? `QUOTE SUMMARY (${workingQuoteLineCount} LINE${workingQuoteLineCount === 1 ? '' : 'S'})` : 'QUOTE SUMMARY'}>
+            {workingQuoteLineCount ? (
+              <>
+                <RowSpaceBetween>
+                  <Text>PRODUCTS</Text>
+                  <Text>{workingQuoteProducts}</Text>
+                </RowSpaceBetween>
+                <RowSpaceBetween>
+                  <Text>QUOTE TOTAL</Text>
+                  <Text>
+                    <span className="status-pill status-pill-success">{formatCurrency(workingQuoteTotal)}</span>
+                  </Text>
+                </RowSpaceBetween>
+              </>
+            ) : (
+              <Text>Nothing on this quote yet.</Text>
+            )}
           </Card>
 
           {result.unpriced.length ? (
@@ -439,10 +589,6 @@ export default function AwningCostingPage() {
               </Table>
             </Card>
           ) : null}
-
-
-
-
 
           {/* Analysis cards are tabbed; only the open panel is rendered. */}
           <SidebarTabs
@@ -572,15 +718,13 @@ export default function AwningCostingPage() {
               },
             ]}
           />
-
-
         </>
       }
       actionItems={[
         {
           body: 'Add',
           items: [
-            { icon: '⊹', children: 'Add Awning To Quote', onClick: addToQuote },
+            { icon: '⊹', children: 'Add To Quote', onClick: addToQuote },
             { icon: '⊹', children: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
           ],
         },
@@ -588,17 +732,21 @@ export default function AwningCostingPage() {
           body: 'Print',
           items: [
             { icon: '⊹', children: 'Quote For Customer', onClick: () => printSheet('customer') },
-            { icon: '⊹', children: 'Costing Sheet (internal)', onClick: () => printSheet('internal') },
+            { icon: '⊹', children: 'Costing Sheet (Internal)', onClick: () => printSheet('internal') },
           ],
+        },
+        {
+          body: 'Send',
+          items: [{ icon: '⊹', children: 'Electronic Mail To Customer', onClick: emailQuote }],
         },
         {
           body: 'Copy',
           items: [
             { icon: '⊹', children: 'Prices For Customer', onClick: copySummary },
-            { icon: '⊹', children: 'Cost Build-up (internal)', onClick: copyCostBreakdown },
+            { icon: '⊹', children: 'Cost Build-up (Internal)', onClick: copyCostBreakdown },
           ],
         },
-        { body: canSaveCostings ? 'Save Costing' : 'Saving Needs Access', onClick: canSaveCostings ? handleSaveCosting : undefined },
+        { body: canSaveQuotes ? 'Save Quote' : 'Saving Needs Access', onClick: canSaveQuotes ? handleSaveQuote : undefined },
         { body: 'Reset', onClick: resetCalculator },
       ]}
     >
@@ -615,7 +763,7 @@ export default function AwningCostingPage() {
       {lineEdit ? (
         <CardDouble title="EDITING AN ORDER LINE">
           <Text>
-            Line {(lineEdit.order.lineDrafts.findIndex((line) => line.localId === lineEdit.localId) + 1) || 1} of {lineEdit.order.orderForm.poNumber || 'a new order'}. Changing the awning below changes that line.
+            Line {lineEdit.order.lineDrafts.findIndex((line) => line.localId === lineEdit.localId) + 1 || 1} of {lineEdit.order.orderForm.poNumber || 'a new order'}. Changing the awning below changes that line.
           </Text>
           <br />
           <ActionButton onClick={saveLineToOrder}>Save To Order</ActionButton> <ActionButton onClick={cancelLineEdit}>Cancel</ActionButton>
@@ -664,7 +812,7 @@ export default function AwningCostingPage() {
         <br />
         <Input label="AWNING NAME (OPTIONAL)" name="awning_name" value={awningName} onChange={(event) => setAwningName(event.target.value)} placeholder="Port side, cabin window..." />
         <br />
-        <ActionButton onClick={addToQuote}>Add Awning To Quote</ActionButton>
+        <ActionButton onClick={addToQuote}>Add To Quote</ActionButton>
       </CardDouble>
 
       {lineEdit ? null : (
@@ -690,44 +838,57 @@ export default function AwningCostingPage() {
       )}
 
       {lineEdit ? null : (
-        <CardDouble title={`QUOTE LINES (${quoteLines.length})`}>
+        <CardDouble title={`QUOTE LINES (${workingQuoteLineCount})`}>
           {quoteLines.length ? (
-            <>
-              <Table>
-                <TableRow>
-                  <TableColumn>AWNING</TableColumn>
-                  <TableColumn style={{ width: '8ch' }}>QTY</TableColumn>
-                  <TableColumn style={{ width: '14ch' }}>EACH</TableColumn>
-                  <TableColumn style={{ width: '14ch' }}>TOTAL</TableColumn>
-                  <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
+            <Table>
+              <TableRow>
+                <TableColumn>AWNING</TableColumn>
+                <TableColumn style={{ width: '8ch' }}>QTY</TableColumn>
+                <TableColumn style={{ width: '14ch' }}>EACH</TableColumn>
+                <TableColumn style={{ width: '14ch' }}>TOTAL</TableColumn>
+                <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
+              </TableRow>
+              {quoteLines.map((line) => (
+                <TableRow key={line.item.localId}>
+                  <TableColumn>{line.item.name}</TableColumn>
+                  <TableColumn>{line.result.qty}</TableColumn>
+                  <TableColumn>{formatCurrency(line.unitPrice)}</TableColumn>
+                  <TableColumn>{formatCurrency(line.total)}</TableColumn>
+                  <TableColumn style={{ whiteSpace: 'nowrap' }}>
+                    <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton> <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
+                  </TableColumn>
                 </TableRow>
-                {quoteLines.map((line) => (
-                  <TableRow key={line.item.localId}>
-                    <TableColumn>{line.item.name}</TableColumn>
-                    <TableColumn>{line.result.qty}</TableColumn>
-                    <TableColumn>{formatCurrency(line.result.price)}</TableColumn>
-                    <TableColumn>{formatCurrency(line.total)}</TableColumn>
-                    <TableColumn style={{ whiteSpace: 'nowrap' }}>
-                      <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton> <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
-                    </TableColumn>
-                  </TableRow>
-                ))}
-              </Table>
+              ))}
+            </Table>
+          ) : (
+            <Text>No awning lines on this quote.</Text>
+          )}
+
+          {otherProducts ? (
+            <>
+              <br />
+              <Text>{otherProducts}</Text>
+            </>
+          ) : null}
+
+          {workingQuoteLineCount ? (
+            <>
               <br />
               <RowSpaceBetween>
                 <Text>QUOTE TOTAL</Text>
                 <Text>
-                  <span className="status-pill status-pill-success">{formatCurrency(quoteTotal)}</span>
+                  <span className="status-pill status-pill-success">{formatCurrency(workingQuoteTotal)}</span>
                 </Text>
               </RowSpaceBetween>
+              <br />
+              <ActionButton onClick={clearQuote}>Clear Quote</ActionButton>
             </>
-          ) : (
-            <Text>No awnings on this quote.</Text>
-          )}
+          ) : null}
         </CardDouble>
       )}
 
-      <AwningCostingSheet audience={sheetAudience} quoteName={quoteName} customerName={selectedCustomer?.name || customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} awnings={sheetAwnings} />
+      {/* Both sheets print themselves into the page, so only the chosen one is mounted. */}
+      {sheetAudience === 'internal' ? <AwningCostingSheet quoteName={quoteName} customerName={selectedCustomer?.name || customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} awnings={sheetAwnings} /> : <QuoteSheet quote={workingDraft} />}
     </AppFrame>
   );
 }

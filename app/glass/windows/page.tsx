@@ -11,6 +11,7 @@ import Card from '@components/Card';
 import SidebarTabs from '@components/SidebarTabs';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
+import QuoteSheet from '@components/QuoteSheet';
 import RowSpaceBetween from '@components/RowSpaceBetween';
 import Table from '@components/Table';
 import TableColumn from '@components/TableColumn';
@@ -23,6 +24,21 @@ import { Customer, UserRole, formatCurrency, todayISODate } from '@utils/order-m
 import { defaultAdhocSpec } from '@utils/order-draft';
 import { LineEditRequest, clearLineEditRequest, peekLineEditRequest, persistLineEditResult } from '@utils/line-editing';
 import { createClient } from '@utils/db-client';
+import {
+  EMPTY_QUOTE_DRAFT,
+  QuoteDraft,
+  clearQuoteDraft,
+  clearQuoteDraftIfUnchanged,
+  describeQuoteProducts,
+  quoteDraftKinds,
+  quoteDraftLineCount,
+  quoteDraftTotal,
+  readQuoteDraft,
+  replaceQuoteDraftLines,
+  subscribeToQuoteDraft,
+} from '@utils/quote-draft';
+import { quoteEmailBody, quoteEmailTruncated, quoteMailtoHref } from '@utils/quote-email';
+import { saveQuote } from '@utils/quote-store';
 import { WindowQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 import {
@@ -57,7 +73,6 @@ import {
 import { WINDOW_SERIES, WindowProduct, findProduct, productFullName, productLabel, productForInput, seriesOfProduct, visibleSeries } from '@utils/window-catalogue';
 import { DEFAULT_WINDOW_RATES, GlazingId, WindowRates, mergeWindowRates } from '@utils/window-costing-rates';
 import { loadWindowRates, loadWindowRatesVersion } from '@utils/window-costing-store';
-import { saveWindowCosting } from '@utils/window-quote-store';
 
 const FINISH_ORDER: Finish[] = ['mill', 'etch', 'powder'];
 const TRIM_ORDER: TrimMode[] = ['none', 'required', 'extra'];
@@ -81,6 +96,12 @@ interface QuoteItem {
   name: string;
   quantity: number;
   input: WindowCostingInput;
+  /**
+   * The price this line came back from the quote at, and the rates it was calculated on. Null for a
+   * window priced on this visit. A quote holds the number the customer was given, so a rate changed
+   * since is not allowed to move it.
+   */
+  quoted: { unitPrice: number; ratesUpdatedAt: string | null } | null;
 }
 
 function numberOrFallback(value: string, fallback = 0): number {
@@ -105,6 +126,17 @@ function formatExtra(extra: CostExtra): string {
   return extra.total == null ? 'not priced' : formatCurrency(extra.total);
 }
 
+/** The lines this page does not price, counted for a sentence: "2 glass lines and 1 awning line". */
+function describeOtherLines(draft: QuoteDraft): string {
+  return [
+    { count: draft.glassLines.length, noun: 'glass line' },
+    { count: draft.awningLines.length, noun: 'awning line' },
+  ]
+    .filter((entry) => entry.count > 0)
+    .map((entry) => `${entry.count} ${entry.noun}${entry.count === 1 ? '' : 's'}`)
+    .join(' and ');
+}
+
 function formatStamp(stamp: string | null): string {
   if (!stamp) {
     return 'code defaults';
@@ -117,7 +149,7 @@ export default function WindowCostingPage() {
   const router = useRouter();
 
   const [role, setRole] = useState<UserRole>('readonly');
-  const [canSaveCostings, setCanSaveCostings] = useState(false);
+  const [canSaveQuotes, setCanSaveQuotes] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<{ tone: 'success' | 'warning'; message: string } | null>(null);
@@ -140,6 +172,10 @@ export default function WindowCostingPage() {
   const [quoteDate, setQuoteDate] = useState(todayISODate());
   const [quoteNotes, setQuoteNotes] = useState('');
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
+  // The whole quote, windows and the other two calculators' products alike. This page owns the
+  // window lines and mirrors them in; it reads the rest.
+  const [workingDraft, setWorkingDraft] = useState<QuoteDraft>(EMPTY_QUOTE_DRAFT);
+  const [isDraftRead, setIsDraftRead] = useState(false);
   // Customer by default, so a browser Cmd+P prints the safe document. The internal button raises it
   // for one print and `afterprint` puts it back.
   const [sheetAudience, setSheetAudience] = useState<'internal' | 'customer'>('customer');
@@ -166,32 +202,94 @@ export default function WindowCostingPage() {
     () =>
       quoteItems.map((item) => {
         const itemResult = costWindow(item.input, rates);
+        const unitPrice = item.quoted ? item.quoted.unitPrice : itemResult.price;
         return {
           item,
           result: itemResult,
-          total: itemResult.price == null ? null : itemResult.price * item.quantity,
+          unitPrice,
+          total: unitPrice == null ? null : unitPrice * item.quantity,
         };
       }),
     [quoteItems, rates]
   );
-  const quoteTotal = quoteLines.reduce((sum, line) => sum + (line.total ?? 0), 0);
 
-  // The quote prints the windows it holds; a quote with none prints the window on screen.
+  // The costing sheet prints the windows the quote holds; a quote with none prints the window on
+  // screen. The customer's quotation is the quote itself and is refused when it holds nothing.
   const sheetWindows: WindowCostingSheetWindow[] = quoteLines.length ? quoteLines.map((line) => ({ id: line.item.localId, name: line.item.name, quantity: line.item.quantity, input: line.item.input, result: line.result })) : [{ id: 'current', name: windowName, quantity: orderQuantity, input, result }];
 
-  const summary = useMemo(() => {
-    if (result.price == null) {
-      return '';
+  /** This page's lines in the shape the shared quote stores. An unpriced window is not a line. */
+  const draftWindowLines: WindowQuoteLine[] = useMemo(
+    () =>
+      quoteLines
+        .filter((line) => line.unitPrice != null)
+        .map((line) => ({
+          description: line.item.name || describe(line.item.input),
+          quantity: line.item.quantity,
+          unitPrice: line.unitPrice as number,
+          windowSpec: line.item.input,
+          ratesUpdatedAt: line.item.quoted ? line.item.quoted.ratesUpdatedAt : ratesUpdatedAt,
+        })),
+    [describe, quoteLines, ratesUpdatedAt]
+  );
+
+  const draftLineCount = quoteDraftLineCount(workingDraft);
+  const draftTotal = quoteDraftTotal(workingDraft);
+  const draftProducts = describeQuoteProducts(quoteDraftKinds(workingDraft));
+  const otherLineCount = workingDraft.glassLines.length + workingDraft.awningLines.length;
+  const otherLinesTotal = quoteDraftTotal({ ...workingDraft, windowLines: [] });
+
+  // The quote another calculator started, read before the mirror below is allowed to write. Writing
+  // first would replace that quote's window lines with this page's empty list.
+  useEffect(() => {
+    // Pricing an order line is not quoting, so it neither reads nor writes the shared quote. The
+    // parameter is read here rather than from lineEdit because that state arrives one load later,
+    // by which time the mirror below would already have emptied the quote's window lines.
+    if (new URLSearchParams(window.location.search).get('editLine') === '1') {
+      return;
     }
 
-    const header = [`${quoteName.trim() || 'Window quote'}`, `Customer: ${customerName.trim() || 'Walk-in / Phone'}`, `Date: ${quoteDate}`];
+    const draft = readQuoteDraft();
+    setWorkingDraft(draft);
+    setQuoteName((previous) => previous || draft.name);
+    setCustomerName((previous) => previous || draft.customer);
+    setCustomerId((previous) => previous || draft.customerId || '');
+    setQuoteDate((previous) => draft.date || previous);
+    setQuoteNotes((previous) => previous || draft.notes);
+    // The windows the quote already holds come back as quote items, because the mirror below
+    // writes this list over them and an unread quote would leave the estimator with nothing.
+    setQuoteItems(draft.windowLines.map((line, index) => ({ localId: `window-held-${index}`, name: line.description, quantity: Math.max(1, line.quantity), input: { ...line.windowSpec }, quoted: { unitPrice: line.unitPrice, ratesUpdatedAt: line.ratesUpdatedAt } })));
+    setIsDraftRead(true);
+  }, []);
 
-    if (quoteLines.length) {
-      return [...header, ...quoteLines.map((line, index) => `${index + 1}. ${line.item.name || describe(line.item.input)} | ${line.item.quantity} x ${formatCurrency(line.result.price)} = ${formatCurrency(line.total)}`), `Quote total: ${formatCurrency(quoteTotal)}`, quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : ''].filter(Boolean).join('\n');
+  // Mirrors the window lines into the shared quote, leaving the glass and awning lines alone. The
+  // saved rates arrive with the rest of the page, and a window priced on the code defaults before
+  // then is not the price the shop quotes.
+  useEffect(() => {
+    if (!isDraftRead || isLoading) {
+      return;
     }
 
-    return [...header, `Window: ${describe(input)}`, `Price (${result.unitLabel.toLowerCase()}): ${formatCurrency(result.price)}`, `Qty: ${orderQuantity} | Total: ${formatCurrency(currentTotal)}`, ...extrasList.map((extra) => `${extra.label}: ${formatExtra(extra)}`), quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : ''].filter(Boolean).join('\n');
-  }, [currentTotal, customerName, extrasList, input, orderQuantity, quoteDate, quoteLines, quoteName, quoteNotes, quoteTotal, rates, ratesLabel, result]);
+    setWorkingDraft(replaceQuoteDraftLines('window', draftWindowLines, { name: quoteName, customer: customerName, customerId: customerId || null, date: quoteDate, notes: quoteNotes }));
+  }, [customerId, customerName, draftWindowLines, isDraftRead, isLoading, quoteDate, quoteName, quoteNotes]);
+
+  // A second tab writing the quote leaves this page holding an older heading, which the mirror
+  // above would put back over it.
+  useEffect(() => {
+    if (!isDraftRead) {
+      return;
+    }
+
+    return subscribeToQuoteDraft((draft) => {
+      setWorkingDraft(draft);
+      setQuoteName(draft.name);
+      setCustomerName(draft.customer);
+      setCustomerId(draft.customerId || '');
+      setQuoteNotes(draft.notes);
+      if (draft.date) {
+        setQuoteDate(draft.date);
+      }
+    });
+  }, [isDraftRead]);
 
   // Put the sheet back to the customer copy once a print finishes, so the next Cmd+P is safe.
   useEffect(() => {
@@ -216,7 +314,7 @@ export default function WindowCostingPage() {
         }
 
         setRole(user.effectiveRole as UserRole);
-        setCanSaveCostings(userCan(user, 'quotes:write'));
+        setCanSaveQuotes(userCan(user, 'quotes:write'));
 
         // Opened from an order to price one of its lines: load that line into the form.
         const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -323,17 +421,25 @@ export default function WindowCostingPage() {
     router.push(lineEdit.returnTo);
   }
 
+  /** The window in the form. The quote it is being added to is left alone. */
   function resetCalculator() {
     setInput({ ...createWindowInput('T5573'), productId: '500-5573' });
     setSeriesId('500');
     setMetreDrafts({});
     setWindowName('');
+    setStatus(null);
+  }
+
+  /** Empties the whole quote: this page's windows, its heading, and the other calculators' lines. */
+  function clearQuote() {
     setQuoteName('');
     setCustomerName('');
+    setCustomerId('');
     setQuoteDate(todayISODate());
     setQuoteNotes('');
     setQuoteItems([]);
-    setStatus(null);
+    setWorkingDraft(EMPTY_QUOTE_DRAFT);
+    clearQuoteDraft();
   }
 
   function addToQuote() {
@@ -346,10 +452,11 @@ export default function WindowCostingPage() {
       name: windowName.trim() || describe(input),
       quantity: orderQuantity,
       input: { ...input },
+      quoted: null,
     };
 
     setQuoteItems((prev) => [...prev, item]);
-    setStatus({ tone: 'success', message: `Added to the quote. ${quoteItems.length + 1} window${quoteItems.length ? 's' : ''} on this quote.` });
+    setStatus({ tone: 'success', message: 'Added to the quote.' });
   }
 
   function editQuoteItem(localId: string) {
@@ -374,12 +481,13 @@ export default function WindowCostingPage() {
   }
 
   async function copySummary() {
-    if (!summary) {
+    if (!draftLineCount) {
+      setStatus({ tone: 'warning', message: 'Nothing on this quote to copy.' });
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(summary);
+      await navigator.clipboard.writeText(quoteEmailBody(workingDraft));
       setStatus({ tone: 'success', message: 'Copied. Prices only, safe to send to a customer.' });
     } catch {
       setStatus({ tone: 'warning', message: 'Clipboard copy failed.' });
@@ -403,6 +511,11 @@ export default function WindowCostingPage() {
   }
 
   function printSheet(audience: 'internal' | 'customer') {
+    if (audience === 'customer' && !draftLineCount) {
+      setStatus({ tone: 'warning', message: 'Nothing on this quote to print.' });
+      return;
+    }
+
     setSheetAudience(audience);
     if (typeof window !== 'undefined') {
       // Let the sheet re-render for the chosen audience before the print dialog reads the page.
@@ -410,37 +523,70 @@ export default function WindowCostingPage() {
     }
   }
 
-  async function handleSaveCosting() {
-    if (!canSaveCostings || result.price == null) {
+  /** Opens the estimator's own mail client with the whole quote already written. */
+  function emailQuote() {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (!draftLineCount) {
+      setStatus({ tone: 'warning', message: 'Nothing on this quote to send.' });
+      return;
+    }
+
+    if (quoteEmailTruncated(workingDraft)) {
+      setStatus({ tone: 'warning', message: 'The quote is longer than the message body holds. Attach the printed quote.' });
+    }
+
+    window.location.href = quoteMailtoHref(workingDraft, selectedCustomer?.contact_email || '');
+  }
+
+  /** Saves every product on the quote as one row, then leaves the working quote empty. */
+  async function handleSaveQuote() {
+    if (!canSaveQuotes) {
+      return;
+    }
+
+    // What is stored rather than this page's copy of it: a line another calculator wrote after the
+    // last mirror belongs on the quote that is filed.
+    const stored = readQuoteDraft();
+    if (!quoteDraftLineCount(stored)) {
+      setStatus({ tone: 'warning', message: 'Nothing on this quote to save.' });
       return;
     }
 
     try {
-      await saveWindowCosting({
-        name: windowName.trim() || quoteName.trim() || describe(input),
-        customer: customerName,
-        input,
-        result,
+      await saveQuote({
+        name: stored.name.trim() || windowName.trim() || describe(input),
+        customer: stored.customer,
+        customerId: stored.customerId,
+        date: stored.date,
+        notes: stored.notes,
+        glassLines: stored.glassLines,
+        windowLines: stored.windowLines,
+        awningLines: stored.awningLines,
+        total: quoteDraftTotal(stored),
         ratesUpdatedAt,
       });
-      setStatus({ tone: 'success', message: 'Costing saved. Load it again from Saved costings.' });
+
+      if (clearQuoteDraftIfUnchanged(stored)) {
+        clearQuote();
+        resetCalculator();
+        setStatus({ tone: 'success', message: 'Quote saved.' });
+      } else {
+        setWorkingDraft(readQuoteDraft());
+        setStatus({ tone: 'success', message: 'Quote saved. The working quote changed while it saved and was kept.' });
+      }
     } catch (saveError: any) {
-      setStatus({ tone: 'warning', message: saveError?.message || 'Unable to save the costing.' });
+      setStatus({ tone: 'warning', message: saveError?.message || 'Unable to save the quote.' });
     }
   }
 
+  /** The whole quote goes on the order; a quote with nothing on it sends the window on screen. */
   function handleCreatePurchaseOrder() {
-    const lines: WindowQuoteLine[] = quoteLines.length
-      ? quoteLines
-          .filter((line) => line.result.price != null)
-          .map((line) => ({
-            description: line.item.name || describe(line.item.input),
-            quantity: line.item.quantity,
-            unitPrice: line.result.price as number,
-            windowSpec: line.item.input,
-            ratesUpdatedAt,
-          }))
-      : result.price == null
+    const windowLines: WindowQuoteLine[] = workingDraft.windowLines.length
+      ? workingDraft.windowLines
+      : draftLineCount || result.price == null
         ? []
         : [
             {
@@ -452,19 +598,20 @@ export default function WindowCostingPage() {
             },
           ];
 
-    if (!lines.length) {
+    if (!windowLines.length && !workingDraft.glassLines.length && !workingDraft.awningLines.length) {
       router.push('/glass/new');
       return;
     }
 
     persistQuoteToOrderDraft({
-      kind: 'window',
       quoteName,
       customerName: selectedCustomer?.name || customerName,
       customerId: customerId || null,
       quoteDate,
       quoteNotes,
-      windowLines: lines,
+      glassLines: workingDraft.glassLines,
+      windowLines,
+      awningLines: workingDraft.awningLines,
     });
     router.push('/glass/new?fromQuote=1');
   }
@@ -536,6 +683,26 @@ export default function WindowCostingPage() {
                 <span className="status-warning">{message}</span>
               </Text>
             ))}
+
+          </Card>
+
+          <Card title={draftLineCount ? `QUOTE SUMMARY (${draftLineCount} LINE${draftLineCount === 1 ? '' : 'S'})` : 'QUOTE SUMMARY'}>
+            {draftLineCount ? (
+              <>
+                <RowSpaceBetween>
+                  <Text>PRODUCTS</Text>
+                  <Text>{draftProducts}</Text>
+                </RowSpaceBetween>
+                <RowSpaceBetween>
+                  <Text>QUOTE TOTAL</Text>
+                  <Text>
+                    <span className="status-pill status-pill-success">{formatCurrency(draftTotal)}</span>
+                  </Text>
+                </RowSpaceBetween>
+              </>
+            ) : (
+              <Text>Nothing on this quote yet.</Text>
+            )}
           </Card>
 
           {result.unpriced.length ? (
@@ -709,7 +876,7 @@ export default function WindowCostingPage() {
         {
           body: 'Add',
           items: [
-            { icon: '⊹', children: 'Add Window To Quote', onClick: addToQuote },
+            { icon: '⊹', children: 'Add To Quote', onClick: addToQuote },
             { icon: '⊹', children: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
           ],
         },
@@ -717,17 +884,21 @@ export default function WindowCostingPage() {
           body: 'Print',
           items: [
             { icon: '⊹', children: 'Quote For Customer', onClick: () => printSheet('customer') },
-            { icon: '⊹', children: 'Costing Sheet (internal)', onClick: () => printSheet('internal') },
+            { icon: '⊹', children: 'Costing Sheet (Internal)', onClick: () => printSheet('internal') },
           ],
+        },
+        {
+          body: 'Send',
+          items: [{ icon: '⊹', children: 'Electronic Mail To Customer', onClick: emailQuote }],
         },
         {
           body: 'Copy',
           items: [
             { icon: '⊹', children: 'Prices For Customer', onClick: copySummary },
-            { icon: '⊹', children: 'Cost Build-up (internal)', onClick: copyCostBreakdown },
+            { icon: '⊹', children: 'Cost Build-up (Internal)', onClick: copyCostBreakdown },
           ],
         },
-        { body: canSaveCostings ? 'Save Costing' : 'Saving Needs Access', onClick: canSaveCostings ? handleSaveCosting : undefined },
+        { body: canSaveQuotes ? 'Save Quote' : 'Saving Needs Access', onClick: canSaveQuotes ? handleSaveQuote : undefined },
         { body: 'Reset', onClick: resetCalculator },
       ]}
     >
@@ -1009,7 +1180,7 @@ export default function WindowCostingPage() {
         <br />
         <Input label="WINDOW NAME (OPTIONAL)" name="window_name" value={windowName} onChange={(event) => setWindowName(event.target.value)} placeholder="Kitchen hopper" />
         <br />
-        <ActionButton onClick={addToQuote}>Add Window To Quote</ActionButton>
+        <ActionButton onClick={addToQuote}>Add To Quote</ActionButton>
       </CardDouble>
 
       {lineEdit ? null : (
@@ -1044,40 +1215,51 @@ export default function WindowCostingPage() {
       )}
 
       {lineEdit ? null : (
-        <CardDouble title={`QUOTE LINES (${quoteLines.length})`}>
+        <CardDouble title={`QUOTE LINES (${draftLineCount})`}>
           {quoteLines.length ? (
-            <>
-              <Table>
-                <TableRow>
-                  <TableColumn>WINDOW</TableColumn>
-                  <TableColumn style={{ width: '8ch' }}>QTY</TableColumn>
-                  <TableColumn style={{ width: '14ch' }}>UNIT</TableColumn>
-                  <TableColumn style={{ width: '14ch' }}>TOTAL</TableColumn>
-                  <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
+            <Table>
+              <TableRow>
+                <TableColumn>WINDOW</TableColumn>
+                <TableColumn style={{ width: '8ch' }}>QTY</TableColumn>
+                <TableColumn style={{ width: '14ch' }}>UNIT</TableColumn>
+                <TableColumn style={{ width: '14ch' }}>TOTAL</TableColumn>
+                <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
+              </TableRow>
+              {quoteLines.map((line) => (
+                <TableRow key={line.item.localId}>
+                  <TableColumn>{line.item.name}</TableColumn>
+                  <TableColumn>{line.item.quantity}</TableColumn>
+                  <TableColumn>{formatCurrency(line.unitPrice)}</TableColumn>
+                  <TableColumn>{formatCurrency(line.total)}</TableColumn>
+                  <TableColumn style={{ whiteSpace: 'nowrap' }}>
+                    <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton> <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
+                  </TableColumn>
                 </TableRow>
-                {quoteLines.map((line) => (
-                  <TableRow key={line.item.localId}>
-                    <TableColumn>{line.item.name}</TableColumn>
-                    <TableColumn>{line.item.quantity}</TableColumn>
-                    <TableColumn>{formatCurrency(line.result.price)}</TableColumn>
-                    <TableColumn>{formatCurrency(line.total)}</TableColumn>
-                    <TableColumn style={{ whiteSpace: 'nowrap' }}>
-                      <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton> <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
-                    </TableColumn>
-                  </TableRow>
-                ))}
-              </Table>
+              ))}
+            </Table>
+          ) : (
+            <Text>No window lines on this quote.</Text>
+          )}
+
+          {otherLineCount ? (
+            <Text>
+              {describeOtherLines(workingDraft)} on this quote. {formatCurrency(otherLinesTotal)}.
+            </Text>
+          ) : null}
+
+          {draftLineCount ? (
+            <>
               <br />
               <RowSpaceBetween>
                 <Text>QUOTE TOTAL</Text>
                 <Text>
-                  <span className="status-pill status-pill-success">{formatCurrency(quoteTotal)}</span>
+                  <span className="status-pill status-pill-success">{formatCurrency(draftTotal)}</span>
                 </Text>
               </RowSpaceBetween>
+              <br />
+              <ActionButton onClick={clearQuote}>Clear Quote</ActionButton>
             </>
-          ) : (
-            <Text>No windows on this quote.</Text>
-          )}
+          ) : null}
         </CardDouble>
       )}
 
@@ -1087,7 +1269,9 @@ export default function WindowCostingPage() {
         <WindowCostingGlossary />
       </CardDouble>
 
-      <WindowCostingSheet audience={sheetAudience} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} windows={sheetWindows} />
+      {/* One sheet at a time: both portal into the body, and the print stylesheet shows whatever is
+          mounted. */}
+      {sheetAudience === 'internal' ? <WindowCostingSheet quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} windows={sheetWindows} /> : <QuoteSheet quote={workingDraft} />}
     </AppFrame>
   );
 }
