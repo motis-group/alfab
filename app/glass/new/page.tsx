@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
 import CadImportPanel from '@components/CadImportPanel';
+import GlassSpecificationFields from '@components/GlassSpecificationFields';
 import Card from '@components/Card';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
@@ -19,7 +20,7 @@ import Text from '@components/Text';
 
 import { usePricing } from '@components/PricingProvider';
 import JobSheet from '@components/JobSheet';
-import { CostBreakdown, GlassSpecification, calculateCost, describeGlassSpecification, getAvailableGlassTypes, getAvailableThicknesses } from '@utils/calculations';
+import { CostBreakdown, GlassSpecification, calculateCost, describeGlassSpecification } from '@utils/calculations';
 import { Customer, CustomerProduct, ORDER_STATUS_OPTIONS, OrderStatus, ParsedLineNotes, PricingSource, PurchaseOrder, PurchaseOrderLine, UserRole, formatCurrency, parseCustomerProductNotes, parseLineNotes, serializeLineNotes, statusLabel, todayISODate } from '@utils/order-management';
 import { QuoteToOrderDraft, buildAwningLineDescription, buildGlassLineDescription, buildWindowLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
 import { WindowCostingInput, describeWindow } from '@utils/window-costing';
@@ -953,218 +954,12 @@ export default function NewPurchaseOrderPage() {
                 />
                 <br />
 
-                <Text>GLASS THICKNESS (MM)</Text>
-                <select
-                  value={String(activeLine.adhocSpec.thickness)}
+                <GlassSpecificationFields
+                  spec={activeLine.adhocSpec}
+                  onChange={(next) => updateLineDraft(activeLine.localId, (current) => ({ ...current, adhocSpec: next }))}
+                  basePrices={pricingData.basePrices}
                   disabled={!canEditOrders}
-                  onChange={(event) => {
-                    const nextThickness = Number(event.target.value) as GlassSpecification['thickness'];
-                    updateLineDraft(activeLine.localId, (current) => {
-                      const nextAvailableTypes = getAvailableGlassTypes(nextThickness);
-                      const currentType = nextAvailableTypes.includes(current.adhocSpec.glassType) ? current.adhocSpec.glassType : nextAvailableTypes[0];
-
-                      return {
-                        ...current,
-                        adhocSpec: {
-                          ...current.adhocSpec,
-                          thickness: nextThickness,
-                          glassType: currentType,
-                        },
-                      };
-                    });
-                  }}
-                >
-                  {getAvailableThicknesses(activeLine.adhocSpec.glassType, pricingData.basePrices).map((thickness) => (
-                    <option key={thickness} value={thickness}>
-                      {thickness}
-                    </option>
-                  ))}
-                </select>
-                <br />
-
-                <Text>GLASS TYPE</Text>
-                <select
-                  value={activeLine.adhocSpec.glassType}
-                  disabled={!canEditOrders}
-                  onChange={(event) =>
-                    updateLineDraft(activeLine.localId, (current) => ({
-                      ...current,
-                      adhocSpec: {
-                        ...current.adhocSpec,
-                        glassType: event.target.value as GlassSpecification['glassType'],
-                      },
-                    }))
-                  }
-                >
-                  {getAvailableGlassTypes(activeLine.adhocSpec.thickness).map((glassType) => (
-                    <option key={glassType} value={glassType}>
-                      {glassType}
-                    </option>
-                  ))}
-                </select>
-                <br />
-
-                <Text>DIMENSIONS</Text>
-                <Input
-                  label="HEIGHT (MM)"
-                  type="number"
-                  name={`height_${activeLine.localId}`}
-                  value={String(activeLine.adhocSpec.height)}
-                  onChange={(event) =>
-                    updateLineDraft(activeLine.localId, (current) => ({
-                      ...current,
-                      adhocSpec: {
-                        ...current.adhocSpec,
-                        height: Math.max(0, numberOrFallback(event.target.value, 0)),
-                      },
-                    }))
-                  }
-                  disabled={!canEditOrders}
-                />
-                <Input
-                  label="WIDTH (MM)"
-                  type="number"
-                  name={`width_${activeLine.localId}`}
-                  value={String(activeLine.adhocSpec.width)}
-                  onChange={(event) =>
-                    updateLineDraft(activeLine.localId, (current) => ({
-                      ...current,
-                      adhocSpec: {
-                        ...current.adhocSpec,
-                        width: Math.max(0, numberOrFallback(event.target.value, 0)),
-                      },
-                    }))
-                  }
-                  disabled={!canEditOrders}
-                />
-
-                <Text>PRICING</Text>
-                <Input
-                  label="MARKUP (%)"
-                  type="number"
-                  name={`markup_${activeLine.localId}`}
-                  value={String(activeLine.markupPercent)}
-                  onChange={(event) =>
-                    updateLineDraft(activeLine.localId, (current) => ({
-                      ...current,
-                      markupPercent: Math.max(0, numberOrFallback(event.target.value, 0)),
-                    }))
-                  }
-                  disabled={!canEditOrders}
-                />
-                <br />
-
-                <Text>EDGEWORK</Text>
-                <select
-                  value={activeLine.adhocSpec.edgework}
-                  disabled={!canEditOrders}
-                  onChange={(event) =>
-                    updateLineDraft(activeLine.localId, (current) => ({
-                      ...current,
-                      adhocSpec: {
-                        ...current.adhocSpec,
-                        edgework: event.target.value as GlassSpecification['edgework'],
-                      },
-                    }))
-                  }
-                >
-                  {EDGEWORK_OPTIONS.map((edgework) => (
-                    <option key={edgework} value={edgework}>
-                      {edgework}
-                    </option>
-                  ))}
-                </select>
-                <br />
-
-                <Text>ADDITIONAL OPTIONS</Text>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={activeLine.adhocSpec.ceramicBand}
-                    disabled={!canEditOrders}
-                    onChange={(event) =>
-                      updateLineDraft(activeLine.localId, (current) => ({
-                        ...current,
-                        adhocSpec: {
-                          ...current.adhocSpec,
-                          ceramicBand: event.target.checked,
-                        },
-                      }))
-                    }
-                  />{' '}
-                  Ceramic Banding
-                </label>
-                <br />
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={activeLine.adhocSpec.holes}
-                    disabled={!canEditOrders}
-                    onChange={(event) =>
-                      updateLineDraft(activeLine.localId, (current) => ({
-                        ...current,
-                        adhocSpec: {
-                          ...current.adhocSpec,
-                          holes: event.target.checked,
-                          numHoles: event.target.checked ? Math.max(1, current.adhocSpec.numHoles || 4) : 0,
-                        },
-                      }))
-                    }
-                  />{' '}
-                  Include Holes
-                </label>
-                <br />
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={activeLine.adhocSpec.scanning}
-                    disabled={!canEditOrders}
-                    onChange={(event) =>
-                      updateLineDraft(activeLine.localId, (current) => ({
-                        ...current,
-                        adhocSpec: {
-                          ...current.adhocSpec,
-                          scanning: event.target.checked,
-                        },
-                      }))
-                    }
-                  />{' '}
-                  Scanning
-                </label>
-                <br />
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={activeLine.adhocSpec.radiusCorners}
-                    disabled={!canEditOrders}
-                    onChange={(event) =>
-                      updateLineDraft(activeLine.localId, (current) => ({
-                        ...current,
-                        adhocSpec: {
-                          ...current.adhocSpec,
-                          radiusCorners: event.target.checked,
-                        },
-                      }))
-                    }
-                  />{' '}
-                  Radius Corners
-                </label>
-
-                <Input
-                  label="NUMBER OF HOLES"
-                  type="number"
-                  name={`num_holes_${activeLine.localId}`}
-                  value={String(activeLine.adhocSpec.numHoles)}
-                  onChange={(event) =>
-                    updateLineDraft(activeLine.localId, (current) => ({
-                      ...current,
-                      adhocSpec: {
-                        ...current.adhocSpec,
-                        numHoles: Math.max(0, numberOrFallback(event.target.value, 0)),
-                      },
-                    }))
-                  }
-                  disabled={!canEditOrders || !activeLine.adhocSpec.holes}
+                  namePrefix={`line_${activeLine.localId}`}
                 />
 
                 <Text>SHAPE TYPE</Text>
