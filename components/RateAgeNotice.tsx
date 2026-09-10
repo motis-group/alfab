@@ -18,7 +18,6 @@ export function RateAgeBadge({ text }: { text: string }) {
     <Text>
       <span className={TONE[age.freshness]}>
         {describeAge(age)}
-        {age.freshness === 'stale' ? '' : ''}
         {age.freshness === 'unknown' ? ' — never dated' : ''}
       </span>
     </Text>
