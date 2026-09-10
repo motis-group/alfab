@@ -652,7 +652,6 @@ export default function AwningCostingPage() {
         </Text>
         <br />
 
-        <Input label="AWNING NAME (OPTIONAL)" name="awning_name" value={awningName} onChange={(event) => setAwningName(event.target.value)} placeholder="Port side, cabin window..." />
         <Input label="SUNDRY LABOUR (MINUTES)" type="number" name="awning_sundry" value={String(input.sundryMinutes)} onChange={(event) => updateNumber('sundryMinutes', event.target.value)} min="0" />
       </CardDouble>
 
@@ -681,14 +680,18 @@ export default function AwningCostingPage() {
           <input type="checkbox" checked={input.flyscreen} onChange={(event) => update({ flyscreen: event.target.checked })} /> Flyscreen and clips
         </label>
         <Text style={{ opacity: 0.7 }}>Flyscreen is a selling price in the source sheet and is marked up again. Kept as the sheet had it.</Text>
+        <br />
+        <Input label="AWNING NAME (OPTIONAL)" name="awning_name" value={awningName} onChange={(event) => setAwningName(event.target.value)} placeholder="Port side, cabin window..." />
+        <br />
+        <ActionButton onClick={addToQuote}>Add Awning To Quote</ActionButton>
       </CardDouble>
 
-      <CardDouble title="QUOTE DETAILS">
-        <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} placeholder="Boat name, job reference..." />
+      <CardDouble title="QUOTE">
+        <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} placeholder="Job reference" />
         <br />
         <Text>CUSTOMER</Text>
         <select value={customerId} onChange={(event) => setCustomerId(event.target.value)}>
-          <option value="">Walk-in / phone (type a name)</option>
+          <option value="">Walk-in / not on file</option>
           {customers
             .filter((customer) => customer.is_active !== false)
             .map((customer) => (
@@ -700,10 +703,10 @@ export default function AwningCostingPage() {
         {selectedCustomer ? <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text> : <Input label="CUSTOMER NAME" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />}
         <br />
         <Input label="QUOTE DATE" type="date" name="quote_date" value={quoteDate} onChange={(event) => setQuoteDate(event.target.value)} />
-        <Input label="NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
+        <Input label="QUOTE NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
       </CardDouble>
 
-      <CardDouble title={`QUOTE (${quoteLines.length} AWNING${quoteLines.length === 1 ? '' : 'S'})`}>
+      <CardDouble title={`QUOTE LINES (${quoteLines.length})`}>
         {quoteLines.length ? (
           <>
             <Table>
@@ -741,7 +744,7 @@ export default function AwningCostingPage() {
 
       <JobPanel job={job} onChange={setJob} onCreateOrder={createOrderForJob} />
 
-      <CardDouble title="SAVED COSTINGS">
+      <CardDouble title={`SAVED COSTINGS (${savedCostings.length})`}>
         {savedCostings.length ? (
           <Table>
             <TableRow>
