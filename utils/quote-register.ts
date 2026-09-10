@@ -154,18 +154,48 @@ export interface MergedQuoteDraft {
   warnings: string[];
 }
 
+/** Why a set of quotes cannot become one order. */
+export interface MergeRefusal {
+  reason: string;
+}
+
 /**
  * Several quotes as one purchase order.
  *
  * A boat needs windows, awnings and cut glass, each priced on its own page and saved as its own
  * quote. Converting them together concatenates their lines into one draft, so the customer gets one
- * order and one number. Quotes written against different customers are still merged — the estimator
- * is told, because it is usually a mistake and occasionally not.
+ * order and one number.
+ *
+ * One order goes to one customer, so quotes naming different customers are refused. A purchase
+ * order carries a single customer id and a single delivery address, and a line carries no customer
+ * of its own, so nothing downstream would catch one customer's glass on another's order.
  */
-export function mergeQuotesForOrder(records: QuoteRecord[]): MergedQuoteDraft | null {
+export function mergeQuotesForOrder(records: QuoteRecord[]): MergedQuoteDraft | MergeRefusal | null {
   const priced = records.filter((record) => record.draft);
   if (!priced.length) {
     return null;
+  }
+
+  // Names are matched the way the order editor matches a walk-in typed by hand, so two spellings of
+  // one name are one customer. A quote that knows the customer id and one that does not are still
+  // the same customer, which is why the two are counted separately rather than as one key.
+  const names = new Map<string, string>();
+  const ids = new Set<string>();
+  for (const record of priced) {
+    const name = record.customer.trim();
+    if (name) {
+      names.set(name.toLowerCase().replace(/\s+/g, ' '), name);
+    }
+    if (record.customerId) {
+      ids.add(record.customerId);
+    }
+  }
+
+  if (names.size > 1) {
+    return { reason: `One order goes to one customer. These quotes name ${names.size}: ${Array.from(names.values()).join(', ')}.` };
+  }
+  if (ids.size > 1) {
+    return { reason: 'One order goes to one customer. These quotes are written against different customer records with the same name.' };
   }
 
   const warnings: string[] = [];
@@ -173,11 +203,6 @@ export function mergeQuotesForOrder(records: QuoteRecord[]): MergedQuoteDraft | 
     if (!record.draft) {
       warnings.push(`${record.name || QUOTE_KIND_LABELS[record.kind]} has no priced line and is not on the order.`);
     }
-  }
-
-  const customers = new Set(priced.map((record) => record.customer.trim()).filter(Boolean));
-  if (customers.size > 1) {
-    warnings.push(`These quotes name ${customers.size} different customers: ${Array.from(customers).join(', ')}. Check the order is for one of them.`);
   }
 
   const withCustomerId = priced.find((record) => record.customerId);
@@ -196,4 +221,9 @@ export function mergeQuotesForOrder(records: QuoteRecord[]): MergedQuoteDraft | 
     },
     warnings,
   };
+}
+
+/** Whether a merge came back refused. */
+export function isMergeRefusal(result: MergedQuoteDraft | MergeRefusal | null): result is MergeRefusal {
+  return result !== null && 'reason' in result;
 }

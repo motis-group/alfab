@@ -29,7 +29,7 @@ import {
   localISODate,
 } from '@utils/order-management';
 import QuoteStatusControl from '@components/QuoteStatusControl';
-import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
+import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
 import { QUOTE_STATUS_LABELS, QUOTE_STATUS_ORDER, QuoteStatus, setQuoteStatus } from '@utils/quote-status';
 import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { createClient } from '@utils/db-client';
@@ -301,6 +301,10 @@ export default function OrderDashboardPage() {
       setFormError('Those quotes have no priced line to put on an order.');
       return;
     }
+    if (isMergeRefusal(merged)) {
+      setFormError(merged.reason);
+      return;
+    }
 
     setFormError(merged.warnings.length ? merged.warnings.join(' ') : null);
 
@@ -317,6 +321,10 @@ export default function OrderDashboardPage() {
   const selectedRecords = quotes.filter((quote) => selectedQuotes.has(quote.id));
   const selectedCount = selectedRecords.length;
   const selectedTotal = selectedRecords.reduce((sum, quote) => sum + quote.total, 0);
+  // Checked before the button is offered, so a selection that cannot become one order says why
+  // instead of failing on the click.
+  const selectionMerge = selectedCount > 1 ? mergeQuotesForOrder(selectedRecords) : null;
+  const selectionRefusal = selectionMerge && isMergeRefusal(selectionMerge) ? selectionMerge.reason : null;
 
   function toggleQuote(id: string) {
     setSelectedQuotes((previous) => {
@@ -522,9 +530,11 @@ export default function OrderDashboardPage() {
 
       <Card title={`QUOTES (${filteredQuotes.length})`}>
         <RowSpaceBetween>
-          <Text>{selectedCount ? `${selectedCount} ticked${selectedTotal ? ` · ${formatCurrency(selectedTotal)}` : ''}` : 'Tick more than one to put them on a single order.'}</Text>
           <Text>
-            {selectedCount > 1 ? (
+            {selectionRefusal ? <span className="status-warning">{selectionRefusal}</span> : selectedCount ? `${selectedCount} ticked${selectedTotal ? ` · ${formatCurrency(selectedTotal)}` : ''}` : 'Tick more than one to put them on a single order. They must be for the same customer.'}
+          </Text>
+          <Text>
+            {selectedCount > 1 && !selectionRefusal ? (
               <>
                 <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuotes(selectedRecords)}>Convert {selectedCount} To One Order</ActionButton>{' '}
               </>

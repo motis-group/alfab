@@ -3,7 +3,14 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { GlassSpecification } from './calculations';
-import { QuoteRecord, mergeQuotesForOrder } from './quote-register';
+import { MergedQuoteDraft, QuoteRecord, isMergeRefusal, mergeQuotesForOrder } from './quote-register';
+
+/** Narrows a merge that is expected to succeed, so a refusal fails the test rather than the types. */
+function merged(records: QuoteRecord[]): MergedQuoteDraft {
+  const result = mergeQuotesForOrder(records);
+  assert.ok(result && !isMergeRefusal(result), 'expected a draft');
+  return result;
+}
 
 const spec: GlassSpecification = {
   width: 1200,
@@ -54,38 +61,46 @@ function windowQuote(over: Partial<QuoteRecord> = {}): QuoteRecord {
 }
 
 test('a boat that needs glass and a window becomes one order', () => {
-  const merged = mergeQuotesForOrder([glassQuote(), windowQuote()]);
+  const result = merged([glassQuote(), windowQuote()]);
 
-  assert.ok(merged);
-  assert.equal(merged.draft.glassLines?.length, 1);
-  assert.equal(merged.draft.windowLines?.length, 1);
-  assert.equal(merged.draft.quoteName, 'Cut glass + Kitchen hopper');
-  assert.equal(merged.draft.customerId, 'c1', 'the quote that knows the customer supplies the id');
-  assert.deepEqual(merged.warnings, []);
+  assert.equal(result.draft.glassLines?.length, 1);
+  assert.equal(result.draft.windowLines?.length, 1);
+  assert.equal(result.draft.quoteName, 'Cut glass + Kitchen hopper');
+  assert.equal(result.draft.customerId, 'c1', 'the quote that knows the customer supplies the id');
+  assert.deepEqual(result.warnings, []);
 });
 
 test('converting one quote keeps its own name', () => {
-  const merged = mergeQuotesForOrder([glassQuote()]);
+  const result = merged([glassQuote()]);
 
-  assert.equal(merged?.draft.quoteName, 'Cut glass');
-  assert.equal(merged?.draft.quoteNotes, 'deliver to Eildon');
+  assert.equal(result.draft.quoteName, 'Cut glass');
+  assert.equal(result.draft.quoteNotes, 'deliver to Eildon');
 });
 
-test('quotes for different customers are merged, and the difference is reported', () => {
-  const merged = mergeQuotesForOrder([glassQuote(), windowQuote({ customer: 'Gippsland Marine' })]);
+/**
+ * One order carries one customer id and one delivery address, so two customers' work on one order
+ * would put one customer's glass on the other's paperwork with nothing downstream to catch it.
+ */
+test('quotes for different customers are refused, not merged', () => {
+  const result = mergeQuotesForOrder([glassQuote(), windowQuote({ customer: 'Gippsland Marine', customerId: 'c2' })]);
 
-  assert.ok(merged);
-  assert.equal(merged.warnings.length, 1);
-  assert.match(merged.warnings[0], /2 different customers/);
+  assert.ok(result && isMergeRefusal(result));
+  assert.match(result.reason, /One order goes to one customer/);
+  assert.match(result.reason, /Gippsland Marine/);
+});
+
+test('two spellings of one customer are one customer', () => {
+  const result = merged([glassQuote({ customerId: null, customer: 'Status Houseboats' }), windowQuote({ customerId: null, customer: '  status   houseboats ' })]);
+
+  assert.equal(result.draft.windowLines?.length, 1, 'both quotes are on the order');
 });
 
 test('a quote with no priced line is left off the order and reported', () => {
-  const merged = mergeQuotesForOrder([glassQuote(), windowQuote({ draft: null, name: 'Not priced' })]);
+  const result = merged([glassQuote(), windowQuote({ draft: null, name: 'Not priced' })]);
 
-  assert.ok(merged);
-  assert.equal(merged.draft.windowLines?.length, 0, 'nothing to contribute');
-  assert.equal(merged.draft.glassLines?.length, 1);
-  assert.match(merged.warnings[0], /Not priced has no priced line/);
+  assert.equal(result.draft.windowLines?.length, 0, 'nothing to contribute');
+  assert.equal(result.draft.glassLines?.length, 1);
+  assert.match(result.warnings[0], /Not priced has no priced line/);
 });
 
 test('nothing priced means no order', () => {
@@ -94,7 +109,7 @@ test('nothing priced means no order', () => {
 });
 
 test('notes from every quote are carried once', () => {
-  const merged = mergeQuotesForOrder([glassQuote(), windowQuote({ draft: { ...windowQuote().draft!, quoteNotes: 'deliver to Eildon' } })]);
+  const result = merged([glassQuote(), windowQuote({ draft: { ...windowQuote().draft!, quoteNotes: 'deliver to Eildon' } })]);
 
-  assert.equal(merged?.draft.quoteNotes, 'deliver to Eildon', 'the same note twice is one note');
+  assert.equal(result.draft.quoteNotes, 'deliver to Eildon', 'the same note twice is one note');
 });
