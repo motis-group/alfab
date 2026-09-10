@@ -36,15 +36,15 @@ interface JobPanelProps {
 }
 
 /**
- * Everything on the job, whichever calculator priced it. Shown on all three so the running total is
- * visible from wherever the estimator happens to be working.
+ * Items assembled for one purchase order, whichever calculator priced them. Shown on the order list,
+ * which is where the order it becomes is created.
  */
 export default function JobPanel({ job, onChange, onCreateOrder }: JobPanelProps) {
   const breakdown = jobBreakdown(job.lines);
   const total = jobTotal(job.lines);
 
   return (
-    <CardDouble title={`THIS JOB — ${describeJob(job.lines).toUpperCase()}`}>
+    <CardDouble title={`ORDER IN PROGRESS — ${describeJob(job.lines).toUpperCase()}`}>
       {job.lines.length ? (
         <>
           <Text>One purchase order, one line per item.</Text>
