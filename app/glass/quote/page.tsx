@@ -724,11 +724,11 @@ export default function AdhocQuotePage() {
           <>
             <Table>
               <TableRow>
-                <TableColumn style={{ width: '38ch' }}>PIECE</TableColumn>
+                <TableColumn>PIECE</TableColumn>
                 <TableColumn style={{ width: '6ch' }}>QTY</TableColumn>
                 <TableColumn style={{ width: '12ch' }}>UNIT</TableColumn>
                 <TableColumn style={{ width: '12ch' }}>TOTAL</TableColumn>
-                <TableColumn>ACTIONS</TableColumn>
+                <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
               </TableRow>
               {quoteLines.map((line) => (
                 <TableRow key={line.item.localId}>
@@ -745,11 +745,8 @@ export default function AdhocQuotePage() {
                   <TableColumn>{line.item.quantity}</TableColumn>
                   <TableColumn>{formatCurrency(line.unitPrice)}</TableColumn>
                   <TableColumn>{formatCurrency(line.total)}</TableColumn>
-                  <TableColumn>
-                    <RowSpaceBetween>
-                      <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton>
-                      <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
-                    </RowSpaceBetween>
+                  <TableColumn style={{ whiteSpace: 'nowrap' }}>
+                    <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton> <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
                   </TableColumn>
                 </TableRow>
               ))}
@@ -778,13 +775,13 @@ export default function AdhocQuotePage() {
         {savedQuotes.length ? (
           <Table>
             <TableRow>
-              <TableColumn style={{ width: '26ch' }}>QUOTE</TableColumn>
+              <TableColumn>QUOTE</TableColumn>
               <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
               <TableColumn style={{ width: '13ch' }}>DATE</TableColumn>
               <TableColumn style={{ width: '8ch' }}>PIECES</TableColumn>
               <TableColumn style={{ width: '12ch' }}>TOTAL</TableColumn>
               <TableColumn style={{ width: '22ch' }}>OUTCOME</TableColumn>
-              <TableColumn>ACTIONS</TableColumn>
+              <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
             </TableRow>
             {savedQuotes.map((quote) => (
               <TableRow key={quote.id}>
@@ -796,11 +793,8 @@ export default function AdhocQuotePage() {
                 <TableColumn>
                   <QuoteStatusControl status={quote.status} statusReason={quote.statusReason} onChange={(next, reason) => markQuote(quote.id, next, reason)} />
                 </TableColumn>
-                <TableColumn>
-                  <RowSpaceBetween>
-                    <ActionButton onClick={() => loadSavedQuote(quote)}>Load</ActionButton>
-                    <ActionButton onClick={() => handleDeleteSavedQuote(quote.id)}>Delete</ActionButton>
-                  </RowSpaceBetween>
+                <TableColumn style={{ whiteSpace: 'nowrap' }}>
+                  <ActionButton onClick={() => loadSavedQuote(quote)}>Load</ActionButton> <ActionButton onClick={() => handleDeleteSavedQuote(quote.id)}>Delete</ActionButton>
                 </TableColumn>
               </TableRow>
             ))}

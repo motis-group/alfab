@@ -491,7 +491,7 @@ export default function TeamAccessPage() {
               <TableColumn style={{ width: '14ch' }}>ROLE</TableColumn>
               <TableColumn style={{ width: '12ch' }}>STATUS</TableColumn>
               <TableColumn style={{ width: '18ch', whiteSpace: 'nowrap' }}>CREATED</TableColumn>
-              <TableColumn>ACTIONS</TableColumn>
+              <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
             </TableRow>
 
             {users.map((user) => (
