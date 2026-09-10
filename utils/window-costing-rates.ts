@@ -3,10 +3,15 @@
  * (docs/legacy/WINDOWS.12M). Saved overrides live in the window_costing_rates table (row id
  * "default") and are merged over DEFAULT_WINDOW_RATES by mergeWindowRates().
  *
- * Keep this module free of runtime imports: utils/window-costing.test.ts runs it under tsx.
+ * Shared glass prices are chosen in utils/shared-rates.ts, not here.
+ *
+ * Keep this module free of browser and React imports: utils/window-costing.test.ts runs it under tsx.
  * `null` means the source sheet had no usable price (ERR / N/A); the engine reports such lines as
  * "not priced" instead of failing.
  */
+
+import { defaultBasePrices } from '@utils/calculations';
+import { applySharedRatesToWindow } from '@utils/shared-rates';
 
 export type WindowTypeId = 'T5573' | 'T5836' | 'T4633' | 'T8610' | 'T2482' | 'U6567' | 'AFB008' | 'AFB035' | 'TSF' | 'SF';
 
@@ -212,7 +217,12 @@ const DEFAULT_ANOD_FACTOR = {
 const DEFAULT_TRIM_ETCH = { T5574: 1.8, U6566: 1.725, flat40x3: 1.8, flat80x3: 3.1125 };
 
 
-export const DEFAULT_WINDOW_RATES: WindowRates = {
+/**
+ * The sheet as transcribed, including the glass prices it held. The app does not cost on these —
+ * shared glass comes from the glass price list — but utils/window-costing.test.ts prices the golden
+ * cases against them, which is what proves the transcription is still faithful.
+ */
+export const WINDOW_RATES_AS_TRANSCRIBED: WindowRates = {
   state: 'VIC',
   // Dates the legacy sheet recorded against each price list. "unknown" means the sheet gave none.
   asAt: {
@@ -401,6 +411,15 @@ function cloneValue<T>(value: T): T {
  * as-at text are taken from the saved document. Unknown keys are dropped, missing keys keep
  * their default, so a rates document saved before a new rate existed still loads.
  */
+/**
+ * The rates a costing gets. Shared glass prices come from the glass price list rather than from the
+ * transcription above, so the defaults agree with the glass calculator before anything is saved.
+ */
+export const DEFAULT_WINDOW_RATES: WindowRates = applySharedRatesToWindow(WINDOW_RATES_AS_TRANSCRIBED, defaultBasePrices);
+
 export function mergeWindowRates(saved: unknown): WindowRates {
-  return mergeValue(DEFAULT_WINDOW_RATES, saved) as WindowRates;
+  // A saved window document cannot set a shared glass price to something else: the glass price list
+  // chooses it. The store overlays the shop's saved glass list; the code defaults apply here, which
+  // is what a costing gets before any glass rate has been saved.
+  return applySharedRatesToWindow(mergeValue(DEFAULT_WINDOW_RATES, saved) as WindowRates, defaultBasePrices);
 }

@@ -3,10 +3,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { DEFAULT_AWNING_RATES, mergeAwningRates } from './awning-costing-rates';
+import { AWNING_RATES_AS_TRANSCRIBED, DEFAULT_AWNING_RATES, mergeAwningRates } from './awning-costing-rates';
 import { costAwning, costAwningBatches, createAwningInput, describeAwning } from './awning-costing';
 
-const rates = DEFAULT_AWNING_RATES;
+// The golden cases prove the transcription. See utils/window-costing.test.ts.
+const rates = AWNING_RATES_AS_TRANSCRIBED;
 
 function near(actual: number | null | undefined, expected: number, label: string) {
   assert.ok(actual != null && Math.abs(actual - expected) < 0.01, `${label}: got ${actual}, expected ${expected}`);
@@ -120,7 +121,20 @@ test('a blank on a rate that has a default price falls back to that price', () =
 
   assert.equal(merged.parts.frame, 10);
   assert.equal(merged.parts.winder, 60);
-  assert.equal(merged.labour.perHour, 75);
+  // Labour is shared with the window costing, so a saved awning value never applies either way.
+  assert.equal(merged.labour.perHour, DEFAULT_AWNING_RATES.labour.perHour);
+});
+
+test('a saved document cannot put its own price on a shared rate', () => {
+  const merged = mergeAwningRates({
+    labour: { perHour: 40 },
+    glass: { options: { supergrey_tgn: { list: 1 } }, bandingSet: 2, flatPolishPerM: 3 },
+  });
+
+  assert.equal(merged.labour.perHour, DEFAULT_AWNING_RATES.labour.perHour, 'labour comes from the window costing');
+  assert.equal(merged.glass.options.supergrey_tgn.list, DEFAULT_AWNING_RATES.glass.options.supergrey_tgn.list, 'glass comes from the glass price list');
+  assert.equal(merged.glass.bandingSet, DEFAULT_AWNING_RATES.glass.bandingSet);
+  assert.equal(merged.glass.flatPolishPerM, DEFAULT_AWNING_RATES.glass.flatPolishPerM);
 });
 
 test('a rate that is blank by default may be saved blank, and unknown keys are dropped', () => {

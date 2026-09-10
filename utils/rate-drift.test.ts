@@ -22,27 +22,29 @@ test('only items held in more than one list are reported', () => {
   }
 });
 
-test('the three Super Grey prices are all found', () => {
+test('the three Super Grey prices are all found, and all agree', () => {
   const superGrey = item('glass_super_grey_6');
 
   assert.deepEqual(
     superGrey.prices.map((price) => price.source),
     ['glass', 'window', 'awning']
   );
-  assert.equal(superGrey.prices[0].value, 198.12);
-  assert.equal(superGrey.prices[1].value, 170);
-  assert.equal(superGrey.prices[2].value, 198);
-  assert.equal(superGrey.low, 170);
-  assert.equal(superGrey.high, 198.12);
+  // One price, chosen in the glass list and derived by the other two. It was 198.12, 170 and 198.
+  for (const price of superGrey.prices) {
+    assert.ok(Math.abs(price.effective - 198.12) < 0.01, `${price.source} is ${price.effective}`);
+  }
+  assert.equal(superGrey.spread, 0);
 });
 
 test('window glass carrying the loading is compared on the loaded price, not the list', () => {
   const clear8 = item('glass_clear_8');
   const windowPrice = clear8.prices.find((price) => price.source === 'window');
+  const glassPrice = clear8.prices.find((price) => price.source === 'glass');
 
-  assert.equal(windowPrice?.value, 145.02);
-  // 145.02 plus the 20 percent glass loading.
-  assert.ok(Math.abs((windowPrice?.effective ?? 0) - 174.024) < 0.01);
+  // The window costing loads this line, so its list price is the shared price divided by the
+  // loading. The two lists hold different numbers and charge the same price, which is the point.
+  assert.ok(Math.abs((windowPrice?.value ?? 0) - 167.19) < 0.01, `list is ${windowPrice?.value}`);
+  assert.ok(Math.abs((windowPrice?.effective ?? 0) - (glassPrice?.effective ?? 0)) < 0.01, 'loaded price matches the glass list');
   assert.match(windowPrice?.note || '', /20% glass loading/);
 });
 
@@ -50,17 +52,19 @@ test('glass with no loading is compared on the list price itself', () => {
   const clear6 = item('glass_clear_6');
   const windowPrice = clear6.prices.find((price) => price.source === 'window');
 
-  assert.equal(windowPrice?.value, 80);
-  assert.equal(windowPrice?.effective, 80);
+  // Unloaded, so the list price is the shared price unchanged. It was 80 against the glass list's 92.47.
+  assert.equal(windowPrice?.value, 92.47);
+  assert.equal(windowPrice?.effective, 92.47);
   assert.equal(windowPrice?.note, undefined);
 });
 
-test('the two labour rates are reported as a 13 percent gap', () => {
+test('one shop, one hourly rate', () => {
   const labour = item('labour_per_hour');
 
-  assert.equal(labour.low, 75);
+  // The window costing charged $85 and the awning $75 for the same hour.
+  assert.equal(labour.low, 85);
   assert.equal(labour.high, 85);
-  assert.ok(Math.abs((labour.spread ?? 0) - 10 / 75) < 0.001);
+  assert.equal(labour.spread, 0);
 });
 
 test('items that agree are reported with a spread but are not material', () => {
@@ -72,11 +76,6 @@ test('items that agree are reported with a spread but are not material', () => {
   assert.equal(materialDrift([banding, polish]).length, 0, 'banding and polish match across the lists');
 });
 
-test('rounding is not reported as drift', () => {
-  // Super Grey is 198.12 in one list and 198.00 in another: the same price, typed twice.
-  assert.ok(198.12 / 198 - 1 < MATERIAL_SPREAD);
-});
-
 test('the report is sorted dearest spread first', () => {
   const spreads = items.map((entry) => entry.spread ?? 0);
   assert.deepEqual(
@@ -85,13 +84,23 @@ test('the report is sorted dearest spread first', () => {
   );
 });
 
-test('the defaults carry real drift worth a conversation', () => {
+/**
+ * The report is what proves the consolidation holds. Every shared item is chosen once, in the glass
+ * price list, so no two lists can put a different price on the same product. Before this, seven
+ * glass items and the labour rate disagreed by 13 to 17 percent.
+ */
+test('no shared item drifts', () => {
   const material = materialDrift(items);
 
-  assert.ok(material.length >= 3, `expected several material gaps, got ${material.length}`);
-  // The 5 mm and 6 mm clear gaps and the labour rate are all well over the threshold.
-  assert.ok(material.some((entry) => entry.key === 'labour_per_hour'));
-  assert.ok(material.some((entry) => entry.key === 'glass_clear_6'));
+  assert.deepEqual(
+    material.map((entry) => entry.key),
+    [],
+    `these items are priced in more than one place: ${material.map((entry) => entry.key).join(', ')}`
+  );
+
+  for (const entry of items) {
+    assert.ok((entry.spread ?? 0) < MATERIAL_SPREAD, `${entry.key} spreads ${((entry.spread ?? 0) * 100).toFixed(1)}%`);
+  }
 });
 
 test('a list missing an item drops out rather than reading as zero', () => {
