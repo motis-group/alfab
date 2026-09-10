@@ -6,6 +6,7 @@ import { deflateRawSync } from 'node:zlib';
 import { GlassSpecification, getEffectiveArea, getEffectivePerimeter } from '../calculations';
 import { docxToText, readCutList, readZipEntry } from './docx';
 import { applySketchToSpec, sketchToSvg } from './outline';
+import { SKETCH_SCHEMA } from './extract-server';
 
 /** A one-entry ZIP, built the way Word builds one, so the reader is tested against real bytes. */
 function zipWith(entryName: string, contents: string, store = false): Buffer {
@@ -138,4 +139,33 @@ test('a notched piece is priced on the glass it uses, not on its bounding box', 
 test('a sketch too small to be a shape is refused rather than priced', () => {
   assert.throws(() => sketchToSvg({ points: [[0, 0], [10, 0]] }), /three points/);
   assert.throws(() => sketchToSvg({ points: [[0, 0], [10, 0], [20, 0]] }), /no area/);
+});
+
+/**
+ * Structured outputs take a subset of JSON Schema, and reject the rest at request time with a 400.
+ * `minimum` on an integer cost an estimator an upload and a confusing error; the code already
+ * clamps every one of these, so the schema was stating a constraint twice rather than adding one.
+ */
+test('the sketch schema uses only keywords structured outputs accept', () => {
+  const banned = ['minimum', 'maximum', 'minItems', 'maxItems', 'minLength', 'maxLength', 'pattern', 'format'];
+  const found: string[] = [];
+
+  const walk = (node: unknown, path: string) => {
+    if (!node || typeof node !== 'object') {
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach((entry, index) => walk(entry, `${path}[${index}]`));
+      return;
+    }
+    for (const [key, value] of Object.entries(node)) {
+      if (banned.includes(key)) {
+        found.push(`${path}.${key}`);
+      }
+      walk(value, `${path}.${key}`);
+    }
+  };
+
+  walk(SKETCH_SCHEMA, 'schema');
+  assert.deepEqual(found, [], `these keywords are rejected by output_config.format.schema: ${found.join(', ')}`);
 });

@@ -185,7 +185,9 @@ ${text}
   return { kind: 'docx', fileName, pieces, specSummary: settled.specSummary, warnings };
 }
 
-const SKETCH_SCHEMA = {
+// Exported so a test can walk it. Structured outputs accept a subset of JSON Schema, and the
+// rejection only arrives from the API at request time — long after the estimator uploaded a file.
+export const SKETCH_SCHEMA = {
   type: 'object',
   properties: {
     ...SPEC_PROPERTIES,
@@ -196,7 +198,7 @@ const SKETCH_SCHEMA = {
         type: 'object',
         properties: {
           name: { type: 'string', description: 'A short label, such as the page or a mark on the drawing.' },
-          quantity: { type: 'integer', minimum: 1, description: 'How many off. Default 1 when the drawing does not say.' },
+          quantity: { type: 'integer', description: 'How many off. Default 1 when the drawing does not say. Never below 1.' },
           widthMm: { type: 'number' },
           heightMm: { type: 'number' },
           rectangular: { type: 'boolean', description: 'True when the piece is a plain rectangle.' },
@@ -206,9 +208,8 @@ const SKETCH_SCHEMA = {
             properties: {
               points: {
                 type: 'array',
-                minItems: 3,
-                items: { type: 'array', minItems: 2, maxItems: 2, items: { type: 'number' } },
-                description: 'Corners in order around the outline, in millimetres, origin top-left, y downward. Do not repeat the first point.',
+                items: { type: 'array', items: { type: 'number' }, description: 'A pair, x then y.' },
+                description: 'At least three corners, in order around the outline, in millimetres, origin top-left, y downward. Do not repeat the first point.',
               },
               holes: {
                 type: 'array',
@@ -223,7 +224,7 @@ const SKETCH_SCHEMA = {
             required: ['points', 'holes'],
             additionalProperties: false,
           },
-          holeCount: { type: 'integer', minimum: 0 },
+          holeCount: { type: 'integer', description: 'How many holes, zero when there are none.' },
           notes: { type: 'array', items: { type: 'string' } },
         },
         required: ['name', 'quantity', 'widthMm', 'heightMm', 'rectangular', 'outline', 'holeCount', 'notes'],
