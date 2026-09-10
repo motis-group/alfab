@@ -106,19 +106,19 @@ function issueFor(path: string, value: number | null): string | null {
 
   if (value == null) {
     if (SPINE.has(path)) {
-      return 'Blank. This is read as zero, so every awning quotes short without saying so.';
+      return 'Blank; read as zero.';
     }
     // A rate the sheet never held is a gap, not a mistake: the line is charged as nil and reported.
-    return fallback == null ? null : 'Blank, but this rate had a price. Type it back or the line is charged as nil.';
+    return fallback == null ? null : 'Blank; this rate had a price. Charged as nil until entered.';
   }
   if (value < 0) {
-    return 'Below zero, which turns a cost line into a credit.';
+    return 'Below zero.';
   }
   if (value === 0 && SPINE.has(path)) {
-    return 'Zero. Zero is never reported as not priced, so the quote comes out short and looks right.';
+    return 'Zero; not reported as unpriced.';
   }
   if (path === 'marginRate' && value > 1) {
-    return 'A margin above 1 is a percentage typed as a whole number: 40 instead of 0.4 multiplies the price by 41.';
+    return 'Margin above 1. Enter a fraction: 0.4 for 40%.';
   }
   return null;
 }
@@ -205,7 +205,7 @@ export default function AwningRatesSettings() {
       setSavedRates(loaded.rates);
       setSource(loaded.source);
       setUpdatedAt(loaded.updatedAt);
-      setStatus({ tone: 'success', message: 'Awning rates saved for everyone. The rates they replaced are kept, so an old price can still be reproduced.' });
+      setStatus({ tone: 'success', message: 'Awning rates saved.' });
     } catch (saveError: any) {
       setStatus({ tone: 'error', message: saveError?.message || 'Unable to save the awning rates.' });
     }
@@ -215,7 +215,7 @@ export default function AwningRatesSettings() {
     if (!canWrite) {
       return;
     }
-    if (source === 'saved' && !window.confirm('Reset throws away the whole company awning price list and goes back to the code defaults. The list being dropped is kept as an archive row, but every price typed since then is gone from the editor. Reset?')) {
+    if (source === 'saved' && !window.confirm('Reset all awning rates to the defaults? The current rates are archived.')) {
       return;
     }
     try {
@@ -280,7 +280,7 @@ export default function AwningRatesSettings() {
 
           {hasChanges ? (
             <Card title="WHAT THIS CHANGES">
-              <Text>The sheet&apos;s own example awning, 1220 x 1100 glass, six off.</Text>
+              <Text>Example: 1220 x 1100 glass, 6 off.</Text>
               <RowSpaceBetween>
                 <Text>NOW</Text>
                 <Text>{formatCurrency(impact.before)}</Text>
@@ -299,7 +299,7 @@ export default function AwningRatesSettings() {
 
           {issues.length ? (
             <Card title={blocking.length ? 'RATES TO FIX' : 'RATES NOT PRICED'}>
-              {blocking.length ? <Text>Saving is blocked until the red rates are fixed.</Text> : <Text>These lines are charged as nil and reported on the costing.</Text>}
+              {blocking.length ? <Text>Fix the red rates to save.</Text> : <Text>Charged as nil; reported on the costing.</Text>}
               {issues.map((entry) => (
                 <Text key={entry.field.path}>
                   <span className={SPINE.has(entry.field.path) || (entry.message || '').startsWith('Below zero') || (entry.message || '').startsWith('A margin') ? 'status-error' : 'status-warning'}>
@@ -315,9 +315,7 @@ export default function AwningRatesSettings() {
           <RateReviewCard asAt={rates.asAt} label={(key) => SECTION_TITLES[key] || key} />
 
           <Card title="THESE RATES">
-            <Text>{source === 'saved' && updatedAt ? `Company awning rates, saved ${new Date(updatedAt).toLocaleString()}.` : 'No saved awning rates yet, so the defaults are in use.'}</Text>
-            <Text>They apply to everyone, not only this computer.</Text>
-            <Text style={{ opacity: 0.7 }}>Saving keeps the rates it replaces, so a costing priced on them can still be reproduced.</Text>
+            <Text>{source === 'saved' && updatedAt ? `Saved ${new Date(updatedAt).toLocaleString()}.` : 'Default rates in use.'}</Text>
           </Card>
         </>
       }
@@ -327,7 +325,7 @@ export default function AwningRatesSettings() {
       ]}
     >
       <CardDouble title="PARTS">
-        <Text>Prices from the sheet&apos;s parts list. That list was headed &quot;PARTS LIST &amp; COST + 10%&quot;, so the ten percent is already inside these numbers rather than added by the costing.</Text>
+        <Text>Parts list prices. The sheet&apos;s 10% loading is included.</Text>
         <Input label="THESE PRICES LAST KNOWN GOOD" name="asat_parts" value={rates.asAt.parts} onChange={(event) => updateAsAt('parts', event.target.value)} />
         <RateAgeBadge text={rates.asAt.parts} />
         <br />
@@ -335,7 +333,7 @@ export default function AwningRatesSettings() {
       </CardDouble>
 
       <CardDouble title="FIXED QUANTITIES">
-        <Text>The sheet fixed these rather than deriving them from the size. Everything else is cut to the glass.</Text>
+        <Text>Fixed per awning, not derived from size.</Text>
         <Input label="THESE LAST KNOWN GOOD" name="asat_quantities" value={rates.asAt.quantities} onChange={(event) => updateAsAt('quantities', event.target.value)} />
         <RateAgeBadge text={rates.asAt.quantities} />
         <br />
@@ -343,7 +341,7 @@ export default function AwningRatesSettings() {
       </CardDouble>
 
       <CardDouble title="LABOUR">
-        <Text>Setup is divided across the run, so a batch of six costs less each than a one-off. The sheet costed labour at $1.25 a minute, which is $75 an hour. The window costing uses $85.</Text>
+        <Text>Setup is divided across the run. Sheet rate $1.25 per minute ($75 per hour); the window costing uses $85.</Text>
         <Input label="THESE LAST KNOWN GOOD" name="asat_labour" value={rates.asAt.labour} onChange={(event) => updateAsAt('labour', event.target.value)} />
         <RateAgeBadge text={rates.asAt.labour} />
         <br />
@@ -351,7 +349,7 @@ export default function AwningRatesSettings() {
       </CardDouble>
 
       <CardDouble title="GLASS">
-        <Text>The sheet quoted Super Grey toughened only. The other two are on the menu and blank until the shop says what they cost; blank is reported on the costing rather than quoted off the Super Grey price.</Text>
+        <Text>The sheet priced Super Grey toughened only. Blank glass is reported as not priced.</Text>
         <Input label="THESE PRICES LAST KNOWN GOOD" name="asat_glass" value={rates.asAt.glass} onChange={(event) => updateAsAt('glass', event.target.value)} />
         <RateAgeBadge text={rates.asAt.glass} />
         <br />
@@ -362,7 +360,7 @@ export default function AwningRatesSettings() {
       </CardDouble>
 
       <CardDouble title="MARGIN">
-        <Text>The sheet&apos;s margin is a markup on cost, not a gross margin: 0.4 means the price is the cost times 1.4.</Text>
+        <Text>Markup on cost: 0.4 prices at cost × 1.4.</Text>
         <Input label="THIS LAST KNOWN GOOD" name="asat_margin" value={rates.asAt.marginRate} onChange={(event) => updateAsAt('marginRate', event.target.value)} />
         <RateAgeBadge text={rates.asAt.marginRate} />
         <br />

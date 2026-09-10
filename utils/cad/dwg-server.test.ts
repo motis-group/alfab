@@ -38,7 +38,7 @@ describe('DWG conversion helper', () => {
     assert.equal(result.ok, false);
     assert.equal(result.status, 501);
     // The message is read by sales staff, so it has to tell them what they can do about it.
-    assert.match(result.hint || '', /Export the drawing as DXF/);
+    assert.match(result.hint || '', /Export as DXF/);
   });
 
   it('returns the DXF written by the converter and cleans up', async () => {

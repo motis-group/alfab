@@ -252,7 +252,7 @@ export default function WindowCostingPage() {
 
   function selectProduct(next: WindowProduct) {
     if (!next.type) {
-      setStatus({ tone: 'warning', message: `${productLabel(next)} has no costing recipe yet. ${next.note || ''}`.trim() });
+      setStatus({ tone: 'warning', message: `${productLabel(next)} has no costing yet. ${next.note || ''}`.trim() });
       return;
     }
 
@@ -329,7 +329,7 @@ export default function WindowCostingPage() {
     setMetreDrafts({});
     setWindowName(item.name);
     setQuoteItems((prev) => prev.filter((entry) => entry.localId !== localId));
-    setStatus({ tone: 'success', message: 'Loaded back into the form. Add it to the quote when you are done.' });
+    setStatus({ tone: 'success', message: 'Loaded into the form.' });
   }
 
   function removeQuoteItem(localId: string) {
@@ -359,7 +359,7 @@ export default function WindowCostingPage() {
 
     try {
       await navigator.clipboard.writeText(text);
-      setStatus({ tone: 'warning', message: 'Copied the cost build-up. It shows your margin, so keep it internal.' });
+      setStatus({ tone: 'warning', message: 'Copied the cost build-up (internal).' });
     } catch {
       setStatus({ tone: 'warning', message: 'Clipboard copy failed.' });
     }
@@ -419,7 +419,7 @@ export default function WindowCostingPage() {
     }
     setStatus({
       tone: costing.ratesUpdatedAt === ratesUpdatedAt ? 'success' : 'warning',
-      message: costing.ratesUpdatedAt === ratesUpdatedAt ? `Loaded "${costing.name}".` : `Loaded "${costing.name}". It was priced on older rates, so the price here may differ from ${formatCurrency(costing.price)}.`,
+      message: costing.ratesUpdatedAt === ratesUpdatedAt ? `Loaded "${costing.name}".` : `Loaded "${costing.name}". Priced on older rates; quoted at ${formatCurrency(costing.price)}.`,
     });
   }
 
@@ -450,7 +450,7 @@ export default function WindowCostingPage() {
 
     setJob(addToJob(lines, { name: quoteName, customerName: selectedCustomer?.name || customerName, customerId: customerId || null, notes: quoteNotes }));
     setQuoteItems([]);
-    setStatus({ tone: 'success', message: 'Added to the job. Price awnings or cut glass and they land on the same order.' });
+    setStatus({ tone: 'success', message: 'Added to the job.' });
   }
 
   function createOrderForJob() {
@@ -514,8 +514,7 @@ export default function WindowCostingPage() {
       sidebarMobileOrder="top"
       sidebar={
         <>
-          {/* Every action lives on the toolbar. This card said the same things a second time, and
-              a stack of nine buttons is a list to read rather than a menu to aim at. */}
+          {/* Actions are on the toolbar. */}
           {status ? (
             <Card title="LAST ACTION">
               <Text>
@@ -576,7 +575,7 @@ export default function WindowCostingPage() {
           {result.unpriced.length ? (
             <Card title="NOT PRICED">
               <Text>
-                <span className="status-warning">These lines have no rate and are charged as nil.</span>
+                <span className="status-warning">No rate; charged as nil.</span>
               </Text>
               <Table>
                 {result.unpriced.map((entry) => (
@@ -595,9 +594,7 @@ export default function WindowCostingPage() {
 
 
 
-          {/* The price stays on screen; everything that analyses it is one click away. Six more cards
-              under it made the sidebar three screens tall for a number that moves on every keystroke.
-              Only the open panel is rendered, so the closed ones cost nothing. */}
+          {/* Analysis cards are tabbed; only the open panel is rendered. */}
           <SidebarTabs
             aria-label="Costing detail"
             tabs={[
@@ -688,7 +685,7 @@ export default function WindowCostingPage() {
                   <>
                     {batches.length ? (
                       <Card title="BATCH PRICE">
-                        <Text>Setup labour is shared across a batch, so a larger run costs less each.</Text>
+                        <Text>Setup labour is divided across the batch.</Text>
                         <Table>
                           <TableRow>
                             <TableColumn style={{ width: '12ch' }}>BATCH</TableColumn>
@@ -1046,7 +1043,7 @@ export default function WindowCostingPage() {
         <br />
 
         {derivedGlazingQty ? (
-          <Text>Holes, shape cutting and flat smooth edging are derived from the locks and mullions for this window type.</Text>
+          <Text>Derived from the locks and mullions for this window type.</Text>
         ) : (
           <>
             <Input label="HOLES" type="number" name="glazing_holes" value={String(input.holes)} onChange={(event) => updateNumber('holes', event.target.value)} min="0" />
@@ -1122,7 +1119,7 @@ export default function WindowCostingPage() {
             </RowSpaceBetween>
           </>
         ) : (
-          <Text>No windows on this quote yet. Add the window above to build a quote with several windows; one purchase order line is created for each.</Text>
+          <Text>No windows on this quote.</Text>
         )}
       </CardDouble>
 
@@ -1157,7 +1154,7 @@ export default function WindowCostingPage() {
             ))}
           </Table>
         ) : (
-          <Text>No saved costings. Save one to reuse it as a template for a repeat customer.</Text>
+          <Text>No saved costings.</Text>
         )}
 
         {comparison ? (
@@ -1180,7 +1177,7 @@ export default function WindowCostingPage() {
             </RowSpaceBetween>
             {comparison.onOriginal != null && comparison.quoted != null && Math.abs(comparison.onOriginal - comparison.quoted) > 0.01 ? (
               <Text>
-                <span className="status-warning">The recalculation does not match what was quoted, so the costing itself changed, not just the rates.</span>
+                <span className="status-warning">Recalculated price differs from the quoted price: the costing changed, not only the rates.</span>
               </Text>
             ) : null}
           </>
@@ -1188,7 +1185,7 @@ export default function WindowCostingPage() {
       </CardDouble>
 
       <CardDouble title="WHAT THESE TERMS MEAN">
-        <Text>The costing keeps the words the legacy sheet used. These are what they mean, and where each one is applied. Open the group you need — this is reference, not something to read past on the way to the price.</Text>
+        <Text>Terms used by the legacy costing sheet.</Text>
         <br />
         <WindowCostingGlossary />
       </CardDouble>

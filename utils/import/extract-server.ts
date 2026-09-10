@@ -5,11 +5,8 @@ import { CutListEntry, docxToText, readCutList } from '@utils/import/docx';
 import { ExtractedPiece, ImportReading } from '@utils/import/model';
 import { applySketchToSpec } from '@utils/import/outline';
 
-// Reading a customer's order is split the way the rest of this system splits work: code reads what
-// is unambiguous, the model reads what needs judgement, and code prices the result. A typed cut list
-// is parsed with a regular expression, because a model asked to copy 43 sizes can drop one and say
-// nothing. The model is asked only what the words mean — which glass, how thick, what edge — and,
-// for a handwritten sketch, what the drawing shows.
+// Code reads what is unambiguous (the cut list, by regular expression). The model reads what needs
+// judgement (the glass specification; a handwritten drawing). Code prices the result.
 
 const MODEL = 'claude-opus-5';
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
@@ -32,7 +29,7 @@ export class ImportExtractionError extends Error {
 
 function client(): Anthropic {
   if (!process.env.ANTHROPIC_API_KEY) {
-    throw new ImportExtractionError('Reading customer orders is not switched on for this server.', 'Set ANTHROPIC_API_KEY on the server and restart it.', 503);
+    throw new ImportExtractionError('Order import is not enabled on this server.', 'Set ANTHROPIC_API_KEY and restart.', 503);
   }
   return new Anthropic();
 }
@@ -80,19 +77,19 @@ async function ask(content: Anthropic.Beta.BetaContentBlockParam[], schema: Reco
     });
   } catch (error) {
     if (error instanceof Anthropic.AuthenticationError) {
-      throw new ImportExtractionError('The server was not able to sign in to read the document.', 'Check ANTHROPIC_API_KEY on the server.', 503);
+      throw new ImportExtractionError('API authentication failed.', 'Check ANTHROPIC_API_KEY on the server.', 503);
     }
     if (error instanceof Anthropic.RateLimitError) {
-      throw new ImportExtractionError('Too many documents are being read at once.', 'Wait a moment and upload the file again.', 429);
+      throw new ImportExtractionError('Rate limited.', 'Retry shortly.', 429);
     }
     if (error instanceof Anthropic.APIError) {
-      throw new ImportExtractionError(`The document could not be read: ${error.message}`, 'Try again; if it keeps failing, enter the pieces by hand.');
+      throw new ImportExtractionError(`The document could not be read: ${error.message}`, 'Retry, or enter the pieces by hand.');
     }
     throw error;
   }
 
   if (response.stop_reason === 'refusal') {
-    throw new ImportExtractionError('The document was declined and could not be read.', 'Enter the pieces by hand.');
+    throw new ImportExtractionError('The document was declined.', 'Enter the pieces by hand.');
   }
 
   const text = response.content
@@ -103,7 +100,7 @@ async function ask(content: Anthropic.Beta.BetaContentBlockParam[], schema: Reco
   try {
     return JSON.parse(text);
   } catch {
-    throw new ImportExtractionError('The document was read but the answer could not be understood.', 'Try again, or enter the pieces by hand.');
+    throw new ImportExtractionError('The response could not be parsed.', 'Retry, or enter the pieces by hand.');
   }
 }
 
@@ -111,13 +108,13 @@ async function ask(content: Anthropic.Beta.BetaContentBlockParam[], schema: Reco
 function settleSpec(reading: SpecReading, warnings: string[]): SpecReading {
   const thickness = THICKNESSES.includes(reading.thickness) ? reading.thickness : 6;
   if (thickness !== reading.thickness) {
-    warnings.push(`${reading.thickness} mm is not a thickness this calculator holds; 6 mm was used instead. Check it.`);
+    warnings.push(`${reading.thickness} mm not available; 6 mm used.`);
   }
 
   const available = getAvailableGlassTypes(thickness);
   const glassType = available.includes(reading.glassType) ? reading.glassType : available[0];
   if (glassType !== reading.glassType) {
-    warnings.push(`${reading.glassType} is not stocked in ${thickness} mm; ${glassType} was used instead. Check it.`);
+    warnings.push(`${reading.glassType} not available in ${thickness} mm; ${glassType} used.`);
   }
 
   const edgework = EDGEWORK.includes(reading.edgework) ? reading.edgework : 'ROUGH ARRIS';
@@ -146,7 +143,7 @@ export async function readDocxOrder(file: Buffer, fileName: string): Promise<Imp
   const warnings: string[] = [];
 
   if (!cutList.entries.length) {
-    throw new ImportExtractionError('No sizes were found in that document.', 'A cut list reads like "1200 x 600 - 2 off", one size per line.', 422);
+    throw new ImportExtractionError('No sizes were found in that document.', 'Expected lines like "1200 x 600 - 2 off".', 422);
   }
 
   const reading = (await ask(
@@ -170,7 +167,7 @@ ${text}
   const settled = settleSpec(reading, warnings);
   warnings.push(...(settled.notes || []));
   for (const line of cutList.unparsedLines) {
-    warnings.push(`This line looks like a size but was not read, so it is not on the quote: "${line}"`);
+    warnings.push(`Not read: "${line}"`);
   }
 
   const pieces: ExtractedPiece[] = cutList.entries.map((entry: CutListEntry) => ({
@@ -185,8 +182,7 @@ ${text}
   return { kind: 'docx', fileName, pieces, specSummary: settled.specSummary, warnings };
 }
 
-// Exported so a test can walk it. Structured outputs accept a subset of JSON Schema, and the
-// rejection only arrives from the API at request time — long after the estimator uploaded a file.
+// Exported for the test that checks it against the JSON Schema subset structured outputs accept.
 export const SKETCH_SCHEMA = {
   type: 'object',
   properties: {
@@ -288,13 +284,13 @@ export async function readPdfOrder(file: Buffer, fileName: string): Promise<Impo
         spec = applySketchToSpec(spec, { points: piece.outline.points, holes: piece.outline.holes || [] }, fileName).spec;
         const claimed = piece.holeCount || 0;
         if (claimed !== spec.numHoles) {
-          notes.push(`The drawing reads as ${claimed} hole${claimed === 1 ? '' : 's'} but ${spec.numHoles} ${spec.numHoles === 1 ? 'was' : 'were'} measured, and ${spec.numHoles} ${spec.numHoles === 1 ? 'is' : 'are'} charged. Check the drawing.`);
+          notes.push(`Drawing shows ${claimed} hole${claimed === 1 ? '' : 's'}; ${spec.numHoles} measured and charged.`);
         }
       } catch (error: any) {
-        notes.push(`The outline could not be measured (${error?.message || 'unknown reason'}), so this piece is priced on its width and height.`);
+        notes.push(`Outline not measured (${error?.message || 'unknown reason'}); priced on width × height.`);
       }
     } else if (piece.rectangular === false) {
-      notes.push('This piece is not a rectangle but no outline was read, so it is priced on its width and height. Check the area.');
+      notes.push('Not a rectangle; no outline read. Priced on width × height.');
     }
 
     return {
@@ -308,7 +304,7 @@ export async function readPdfOrder(file: Buffer, fileName: string): Promise<Impo
   });
 
   if (!pieces.length) {
-    throw new ImportExtractionError('No glass was found in that drawing.', 'Check the pages show sizes, then upload it again.', 422);
+    throw new ImportExtractionError('No glass was found in that drawing.', '', 422);
   }
 
   return { kind: 'pdf', fileName, pieces, specSummary: settled.specSummary, warnings };

@@ -482,7 +482,7 @@ export default function NewPurchaseOrderPage() {
     setFormError(null);
 
     if (!orderForm.customerId) {
-      setFormError('Select a customer before saving the purchase order.');
+      setFormError('Select a customer.');
       return;
     }
 
@@ -503,14 +503,14 @@ export default function NewPurchaseOrderPage() {
       }
 
       if ((line.pricingSource === 'adhoc_calculator' || line.pricingSource === 'window_calculator') && !line.lineNote.trim()) {
-        setFormError('Each ad hoc or window costing line needs a description.');
+        setFormError('Each costing line needs a description.');
         return;
       }
     }
 
     // A line at nothing gets made, delivered and invoiced short, and no screen ever says so.
     const freeLines = lineDrafts.filter((line) => !(Number(line.unitPriceAtOrder) > 0));
-    if (freeLines.length && !window.confirm(`${freeLines.length} line${freeLines.length === 1 ? ' has' : 's have'} no price. Saved like this the order is short by whatever ${freeLines.length === 1 ? 'it is' : 'they are'} worth. Save anyway?`)) {
+    if (freeLines.length && !window.confirm(`${freeLines.length} line${freeLines.length === 1 ? '' : 's'} with no price.`)) {
       return;
     }
 
@@ -731,7 +731,7 @@ export default function NewPurchaseOrderPage() {
             <>
               <br />
               <ActionButton onClick={printJobSheet}>Print Job Sheet</ActionButton>
-              <Text>What to make, for the floor. No prices on it.</Text>
+              <Text>Job sheet for the floor. No prices.</Text>
             </>
           ) : null}
         </Card>
@@ -761,7 +761,7 @@ export default function NewPurchaseOrderPage() {
     >
       {!canEditOrders && (
         <Card title="READ ONLY">
-          <Text>You have read-only access. New order creation is disabled.</Text>
+          <Text>Read-only access.</Text>
         </Card>
       )}
 
@@ -772,7 +772,7 @@ export default function NewPurchaseOrderPage() {
           </Text>
           <br />
           <Text>
-            <span className="status-warning">Run `docs/order-management-schema.sql` on your AWS PostgreSQL database, then reload.</span>
+            <span className="status-warning">Apply docs/order-management-schema.sql to the database, then reload.</span>
           </Text>
         </Card>
       )}
@@ -809,7 +809,7 @@ export default function NewPurchaseOrderPage() {
             </option>
           ))}
         </select>
-        {selectedCustomer ? <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone, selectedCustomer.delivery_address].filter(Boolean).join(' · ') || 'No phone or delivery address on this customer yet.'}</Text> : null}
+        {selectedCustomer ? <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone, selectedCustomer.delivery_address].filter(Boolean).join(' · ') || 'No phone or delivery address on file.'}</Text> : null}
         <br />
 
         <Input label="PO NUMBER" name="po_number" value={orderForm.poNumber} onChange={(event) => setOrderForm((prev) => ({ ...prev, poNumber: event.target.value }))} disabled={!canEditOrders || isLoading} />
@@ -1280,7 +1280,7 @@ export default function NewPurchaseOrderPage() {
               <>
                 <br />
                 <Text>ACTUAL TIME</Text>
-                <Text style={{ opacity: 0.7 }}>Minutes this line really took, for the whole line. Fill it in when the job is done: it is what tells the rates page whether the labour estimate is true.</Text>
+                <Text style={{ opacity: 0.7 }}>Actual minutes for the whole line, entered when the job is done.</Text>
                 <Input
                   label="ACTUAL MINUTES"
                   type="number"
@@ -1301,7 +1301,7 @@ export default function NewPurchaseOrderPage() {
               <>
                 <br />
                 <Text>AWNING COSTING</Text>
-                <Text>{activeLine.awningSpec ? 'Priced on the Awning Costing page; the unit price above is the costing price.' : 'No awning costing attached. Price the awning on the Awning Costing page and create the order from there.'}</Text>
+                <Text>{activeLine.awningSpec ? 'Priced on the Awning Costing page.' : 'No awning costing attached.'}</Text>
                 {activeLine.awningRatesUpdatedAt ? <Text>Priced on the awning rates saved {new Date(activeLine.awningRatesUpdatedAt).toLocaleString()}.</Text> : null}
                 <ActionButton onClick={() => router.push('/glass/awnings')}>Open Awning Costing</ActionButton>
               </>
@@ -1311,7 +1311,7 @@ export default function NewPurchaseOrderPage() {
               <>
                 <br />
                 <Text>WINDOW COSTING</Text>
-                <Text>{activeLine.windowSpec ? 'Priced on the Window Costing page; the unit price above is the costing price.' : 'No window costing attached. Price the window on the Window Costing page and create the order from there.'}</Text>
+                <Text>{activeLine.windowSpec ? 'Priced on the Window Costing page.' : 'No window costing attached.'}</Text>
                 {activeLine.windowRatesUpdatedAt ? <Text>Priced on the window rates saved {new Date(activeLine.windowRatesUpdatedAt).toLocaleString()}.</Text> : null}
                 <ActionButton onClick={() => router.push('/glass/windows')}>Open Window Costing</ActionButton>
               </>

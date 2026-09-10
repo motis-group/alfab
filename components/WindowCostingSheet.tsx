@@ -185,9 +185,9 @@ export default function WindowCostingSheet({ audience, quoteName, customerName, 
             <span>Quote total</span>
             <span>{formatCurrency(quoteTotal)}</span>
           </div>
-          {anyUnpriced ? <p className="window-costing-sheet__note">Some lines are not priced yet and are excluded from the total.</p> : null}
+          {anyUnpriced ? <p className="window-costing-sheet__note">Unpriced lines are excluded from the total.</p> : null}
           {notes.trim() ? <p className="window-costing-sheet__note">Notes: {notes.trim()}</p> : null}
-          <footer className="window-costing-sheet__footer">Prices exclude GST unless stated. Please confirm sizes before manufacture.</footer>
+          <footer className="window-costing-sheet__footer">Prices exclude GST. Confirm sizes before manufacture.</footer>
         </>
       )}
     </PrintSheet>

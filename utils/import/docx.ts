@@ -25,7 +25,7 @@ function findEndOfCentralDirectory(zip: Buffer): number {
       return offset;
     }
   }
-  throw new DocxReadError('The file is not a readable Word document.', 'Re-save it from Word as .docx and upload it again.');
+  throw new DocxReadError('The file is not a readable Word document.', 'Save as .docx and upload again.');
 }
 
 /** The bytes of one entry, by name. Null when the archive has no such entry. */
@@ -36,7 +36,7 @@ export function readZipEntry(zip: Buffer, entryName: string): Buffer | null {
 
   for (let index = 0; index < entryCount; index += 1) {
     if (cursor + 46 > zip.length || zip.readUInt32LE(cursor) !== CENTRAL_SIGNATURE) {
-      throw new DocxReadError('The Word document is damaged and could not be read.', 'Re-save it from Word and upload it again.');
+      throw new DocxReadError('The Word document could not be read.', 'Re-save it from Word and upload it again.');
     }
 
     const method = zip.readUInt16LE(cursor + 10);
@@ -90,7 +90,7 @@ function decodeXmlText(value: string): string {
 export function docxToText(file: Buffer): string {
   const xml = readZipEntry(file, 'word/document.xml');
   if (!xml) {
-    throw new DocxReadError('The Word document has no readable text.', 'Check the file opens in Word, then upload it again.');
+    throw new DocxReadError('The Word document has no readable text.', 'Check the file opens in Word.');
   }
 
   return decodeXmlText(

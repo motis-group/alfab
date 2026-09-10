@@ -84,14 +84,14 @@ export default function PricingSettings() {
     try {
       await updatePricingData({ basePrices, edgeworkPrices, otherPrices, asAt });
       setHasChanges(false);
-      setStatus({ tone: 'success', message: 'Glass rates saved for everyone. The rates they replaced are kept.' });
+      setStatus({ tone: 'success', message: 'Glass rates saved.' });
     } catch (saveError: any) {
       setStatus({ tone: 'error', message: saveError?.message || 'Unable to save the glass rates.' });
     }
   };
 
   const handleReset = async () => {
-    if (source === 'saved' && !window.confirm('Reset throws away the whole company glass price list and goes back to the code defaults. The list being dropped is kept as an archive row, but every price typed since then is gone from the editor. Reset?')) {
+    if (source === 'saved' && !window.confirm('Reset all glass rates to the defaults? The current rates are archived.')) {
       return;
     }
     try {
@@ -124,7 +124,7 @@ export default function PricingSettings() {
           {hasChanges && (
             <Card title="UNSAVED CHANGES">
               <Text>
-                <span className="status-warning">You have unsaved changes. Save before leaving this page.</span>
+                <span className="status-warning">Unsaved changes.</span>
               </Text>
               <br />
               <RowSpaceBetween>
@@ -137,8 +137,7 @@ export default function PricingSettings() {
           <RateReviewCard asAt={asAt} label={(key) => (key === 'basePrices' ? 'Base glass prices' : key === 'edgeworkPrices' ? 'Edgework' : 'Holes, shaping and services')} />
 
           <Card title="THESE RATES">
-            <Text>{source === 'saved' && updatedAt ? `Company glass rates, saved ${new Date(updatedAt).toLocaleString()}.` : 'No saved glass rates yet, so the defaults are in use.'}</Text>
-            <Text>They apply to everyone, not only this computer.</Text>
+            <Text>{source === 'saved' && updatedAt ? `Saved ${new Date(updatedAt).toLocaleString()}.` : 'Default rates in use.'}</Text>
             {error ? (
               <Text>
                 <span className="status-warning">{error}</span>
@@ -171,7 +170,7 @@ export default function PricingSettings() {
       ]}
     >
       <CardDouble title="BASE GLASS PRICES ($ per m²)">
-        <Text>Configure the base price per square meter for each glass type and thickness combination.</Text>
+        <Text>Base price per m² by glass type and thickness.</Text>
         <Input label="THESE PRICES LAST KNOWN GOOD" name="asat_base" value={asAt.basePrices} onChange={(event) => updateAsAt('basePrices', event.target.value)} placeholder="unknown" />
         <RateAgeBadge text={asAt.basePrices} />
         <br />
@@ -202,7 +201,7 @@ export default function PricingSettings() {
       </CardDouble>
 
       <CardDouble title="EDGEWORK PRICES ($ per meter)">
-        <Text>Configure the edgework pricing per linear meter based on thickness ranges.</Text>
+        <Text>Edgework price per metre by thickness range.</Text>
         <Input label="THESE PRICES LAST KNOWN GOOD" name="asat_edgework" value={asAt.edgeworkPrices} onChange={(event) => updateAsAt('edgeworkPrices', event.target.value)} placeholder="unknown" />
         <RateAgeBadge text={asAt.edgeworkPrices} />
         <br />
@@ -231,7 +230,7 @@ export default function PricingSettings() {
       </CardDouble>
 
       <CardDouble title="OTHER PRICING">
-        <Text>Configure additional service and feature pricing.</Text>
+        <Text>Other charges.</Text>
         <Input label="THESE PRICES LAST KNOWN GOOD" name="asat_other" value={asAt.otherPrices} onChange={(event) => updateAsAt('otherPrices', event.target.value)} placeholder="unknown" />
         <RateAgeBadge text={asAt.otherPrices} />
         <br />
@@ -284,12 +283,12 @@ export default function PricingSettings() {
             <Text>
               <strong>MINIMUM CHARGE</strong>
             </Text>
-            <Text style={{ opacity: 0.7 }}>A small piece costs the same to handle, cut and invoice as a big one, but area alone prices it at a few dollars. These two set the floor. Leave them at 0 to charge exact area, which is what the calculator did before.</Text>
+            <Text style={{ opacity: 0.7 }}>Minimum charge per piece and minimum area charged. 0 charges exact area.</Text>
             <Input label="Minimum Charge Per Piece ($)" type="number" name="min_charge" value={otherPrices.minCharge.toString()} onChange={(event) => updateOtherPrice('minCharge', event.target.value)} step="0.01" min="0" />
             <Input label="Minimum Area Charged (m²)" type="number" name="min_area" value={otherPrices.minAreaSqm.toString()} onChange={(event) => updateOtherPrice('minAreaSqm', event.target.value)} step="0.01" min="0" />
             {!otherPrices.minCharge && !otherPrices.minAreaSqm ? (
               <Text>
-                <span className="status-warning">No minimum set. A 200 x 200 piece of 6 mm clear quotes at about $4.</span>
+                <span className="status-warning">No minimum set.</span>
               </Text>
             ) : null}
           </div>

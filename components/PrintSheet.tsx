@@ -9,11 +9,9 @@ interface PrintSheetProps {
 }
 
 /**
- * Wraps a printable sheet and puts it at the end of <body>, outside the app.
- *
- * The sheet has to sit beside the app rather than inside it. Printing takes body's other children
- * out of the layout, and an app hidden any other way keeps its height and prints as blank pages.
- * Nothing renders until the component mounts, because the portal needs a real document.
+ * Renders a printable sheet as the last child of <body>. Print styles remove body's other children
+ * from the layout; a sheet inside the app would inherit the app's height. Renders after mount only,
+ * because the portal needs a document.
  */
 export default function PrintSheet({ audience, children }: PrintSheetProps) {
   const [mounted, setMounted] = React.useState(false);

@@ -234,9 +234,7 @@ if [[ -z "${DATABASE_SSL_REJECT_UNAUTHORIZED}" || "${DATABASE_SSL_REJECT_UNAUTHO
   DATABASE_SSL_REJECT_UNAUTHORIZED="false"
 fi
 
-# This file is rewritten from scratch below, so anything the server was given by hand and this
-# script does not know about would be lost on every release. ANTHROPIC_API_KEY was, silently, and
-# the feature that needs it reported itself switched off. Unmanaged settings are carried across.
+# The file is rewritten below. Settings this script does not manage are carried across.
 MANAGED_KEYS="NODE_ENV PORT DATABASE_URL DATABASE_SSL DATABASE_SSL_REJECT_UNAUTHORIZED NODE_OPTIONS SUPERADMIN_USERNAME ADMIN_PASSWORD"
 PRESERVED_ENV=""
 if [[ -f /etc/alfab.env ]]; then

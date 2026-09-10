@@ -20,8 +20,7 @@ export default function EstimateAccuracyCard({ summary, title = 'ESTIMATE AGAINS
     <Card title={title}>
       {summary.ratio == null ? (
         <>
-          <Text>No finished line has its actual time recorded yet.</Text>
-          <Text style={{ opacity: 0.7 }}>Type the minutes on an order line when the job is done. After a handful, this says whether the labour minutes below are true.</Text>
+          <Text>No actual times recorded.</Text>
         </>
       ) : (
         <>
@@ -49,7 +48,7 @@ export default function EstimateAccuracyCard({ summary, title = 'ESTIMATE AGAINS
             <Text>{Math.round(summary.actualMinutes)} min</Text>
           </RowSpaceBetween>
           {implied != null && material ? <Text style={{ opacity: 0.7 }}>At the measured rate that is about {Math.round(implied)} minutes each. Compare it against the per-unit minutes below before changing anything.</Text> : null}
-          <Text style={{ opacity: 0.7 }}>Estimates are recomputed on the current rates, so this measures the table as it stands today.</Text>
+          <Text style={{ opacity: 0.7 }}>Estimates use the current rates.</Text>
         </>
       )}
     </Card>

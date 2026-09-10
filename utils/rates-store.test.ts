@@ -73,7 +73,7 @@ test('a write the gateway swallows is reported, not announced as saved', async (
   const rows = new Map<string, { rates: unknown; updated_at: string }>();
   stubGateway({ rows });
 
-  await assert.rejects(() => createRatesStore<Rates>('t', merge).saveAndReload({ perHour: 90 }, null), /did not save.*no saved rates/);
+  await assert.rejects(() => createRatesStore<Rates>('t', merge).saveAndReload({ perHour: 90 }, null), /Save failed: no saved rates/);
 });
 
 test('a stamp that has not moved means the row was not touched', async () => {
@@ -89,7 +89,7 @@ test('a stamp that has not moved means the row was not touched', async () => {
     },
   });
 
-  await assert.rejects(() => createRatesStore<Rates>('t', merge).saveAndReload({ perHour: 90 }, '2026-01-01T00:00:00Z'), /still holds the rates that were there before/);
+  await assert.rejects(() => createRatesStore<Rates>('t', merge).saveAndReload({ perHour: 90 }, '2026-01-01T00:00:00Z'), /stored rates did not change/);
 });
 
 test('a read that fails after the write says the save is not certain', async () => {
@@ -102,5 +102,5 @@ test('a read that fails after the write says the save is not certain', async () 
     onWrite: (call) => rows.set('default', { rates: call.values?.rates, updated_at: '2026-02-01T00:00:00Z' }),
   });
 
-  await assert.rejects(() => createRatesStore<Rates>('t', merge).saveAndReload({ perHour: 90 }, '2026-01-01T00:00:00Z'), /could not be read back.*connection reset/);
+  await assert.rejects(() => createRatesStore<Rates>('t', merge).saveAndReload({ perHour: 90 }, '2026-01-01T00:00:00Z'), /read-back failed: connection reset/);
 });

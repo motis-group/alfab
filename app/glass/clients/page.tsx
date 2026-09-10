@@ -422,7 +422,7 @@ export default function CustomersPage() {
     >
       {!canEdit && (
         <Card title="READ ONLY">
-          <Text>Customer and product management requires admin or superadmin role.</Text>
+          <Text>Requires admin access.</Text>
         </Card>
       )}
 
@@ -535,7 +535,7 @@ export default function CustomersPage() {
           {selectedCustomerId && !selectedCustomerProducts.length && (
             <TableRow>
               <TableColumn colSpan={6} style={{ textAlign: 'center' }}>
-                No products defined for this customer.
+                No products for this customer.
               </TableColumn>
             </TableRow>
           )}
