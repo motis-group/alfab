@@ -39,10 +39,7 @@ export default function QuoteDocument({ quote, onClose, onConvert, onOpen }: Quo
 
   return (
     <Window aria-label={`Quote ${quote.reference || quote.name || 'untitled'}`}>
-      <Text>
-        Status: {QUOTE_STATUS_LABELS[quote.status]}
-        {quote.statusReason ? `. ${quote.statusReason}` : ''}
-      </Text>
+      <Text>Status: {QUOTE_STATUS_LABELS[quote.status]}</Text>
       <br />
 
       {lines.length ? <QuotePaper reference={quote.reference} quoteName={quote.name} customerName={quote.customer} quoteDate={quote.date ? quote.date.slice(0, 10) : ''} notes={quote.draft?.quoteNotes || ''} lines={lines} /> : <Text>This quote has no priced line. Open it in the calculator to price it.</Text>}

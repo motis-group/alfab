@@ -38,8 +38,7 @@ function glassQuote(over: Partial<QuoteRecord> = {}): QuoteRecord {
     lineCount: 1,
     total: 200,
     status: 'open',
-    statusReason: null,
-    statusChangedAt: null,
+    purchaseOrderId: null,
     draft: { quoteName: 'Cut glass', customerName: 'Status Houseboats', customerId: 'c1', quoteDate: '2026-09-10', quoteNotes: 'deliver to Eildon', glassLines: [{ description: 'Side panel', quantity: 2, unitPrice: 100, markupPercent: 20, spec }] },
     ...over,
   };
@@ -57,8 +56,7 @@ function windowQuote(over: Partial<QuoteRecord> = {}): QuoteRecord {
     lineCount: 1,
     total: 800,
     status: 'open',
-    statusReason: null,
-    statusChangedAt: null,
+    purchaseOrderId: null,
     draft: { quoteName: 'Kitchen hopper', customerName: 'Status Houseboats', customerId: null, quoteDate: '2026-09-09', quoteNotes: '', windowLines: [{ description: 'Kitchen hopper', quantity: 1, unitPrice: 800, windowSpec: { type: 'T5573' } as never, ratesUpdatedAt: null }] },
     ...over,
   };

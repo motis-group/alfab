@@ -55,3 +55,11 @@ test('a draft with no line is not an order', () => {
   persistQuoteToOrderDraft(draft({}));
   assert.equal(consumeQuoteToOrderDraft(), null);
 });
+
+test('the quotes behind a draft reach the order page, so saving the order can link them', () => {
+  persistQuoteToOrderDraft({ ...draft({ glassLines: [glassLine] }), quoteIds: ['q-1', 'q-2'] });
+  assert.deepEqual(consumeQuoteToOrderDraft()?.quoteIds, ['q-1', 'q-2']);
+
+  persistQuoteToOrderDraft(draft({ glassLines: [glassLine] }));
+  assert.deepEqual(consumeQuoteToOrderDraft()?.quoteIds, [], 'a draft from an unsaved calculator quote links nothing');
+});

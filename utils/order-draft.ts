@@ -33,6 +33,8 @@ export interface OrderFormState {
   requiredDate: string;
   status: OrderStatus;
   notes: string;
+  /** The saved quotes a new order is made from. Saving the order links them, which makes them won. */
+  quoteIds: string[];
 }
 
 export interface LineDraft {
@@ -75,5 +77,5 @@ export function createLineDraft(partial?: Partial<LineDraft>): LineDraft {
 }
 
 export function emptyOrderForm(): OrderFormState {
-  return { id: null, customerId: '', poNumber: '', receivedDate: todayISODate(), requiredDate: '', status: 'open', notes: '' };
+  return { id: null, customerId: '', poNumber: '', receivedDate: todayISODate(), requiredDate: '', status: 'open', notes: '', quoteIds: [] };
 }

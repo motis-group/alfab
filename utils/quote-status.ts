@@ -1,10 +1,10 @@
 /**
  * Whether a quote turned into work.
  *
- * Quotes were written, printed and then forgotten: the table held what was quoted and never whether
- * it was won. So nobody could say what the win rate was, which quotes were still live, or whether
- * the margin was set too high. One field answers all three, and it only pays off if it is filled in,
- * which is why marking a quote is two clicks from the list it already appears on.
+ * Nobody marks a quote. It is won when it becomes a purchase order, expired when its price hold runs
+ * out unanswered, and open until then. So the win rate, the live quotes and their value come from
+ * what the shop does anyway, converting quotes, rather than from a status somebody has to remember
+ * to set.
  *
  * Shared by the glass, window and awning quote lists: all three are rows in `quotes`.
  */
@@ -13,14 +13,13 @@ import { createClient } from '@utils/db-client';
 
 const TABLE = 'quotes';
 
-export type QuoteStatus = 'open' | 'won' | 'lost' | 'expired';
+export type QuoteStatus = 'open' | 'won' | 'expired';
 
-export const QUOTE_STATUS_ORDER: QuoteStatus[] = ['open', 'won', 'lost', 'expired'];
+export const QUOTE_STATUS_ORDER: QuoteStatus[] = ['open', 'won', 'expired'];
 
 export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
   open: 'Open',
   won: 'Won',
-  lost: 'Lost',
   expired: 'Expired',
 };
 
@@ -28,21 +27,8 @@ export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
 export const QUOTE_STATUS_TONE: Record<QuoteStatus, string> = {
   open: 'status-warning',
   won: 'status-success',
-  lost: 'status-error',
   expired: 'status-warning',
 };
-
-/**
- * Why a quote was lost. A free-text box gets left empty; a short list gets answered, and only an
- * answered one can tell you whether you are losing on price or on lead time.
- */
-export const LOST_REASONS = ['Price', 'Lead time', 'No response', 'Went elsewhere', 'Job cancelled', 'Other'] as const;
-
-export type LostReason = (typeof LOST_REASONS)[number];
-
-export function isQuoteStatus(value: unknown): value is QuoteStatus {
-  return typeof value === 'string' && (QUOTE_STATUS_ORDER as string[]).includes(value);
-}
 
 /** How long a quote's prices hold. The printed quote states it; an unanswered quote then expires. */
 export const QUOTE_HOLD_DAYS = 30;
@@ -59,38 +45,45 @@ function addDays(day: string, days: number): string {
 }
 
 /**
- * The status a quote reads as on `today` (YYYY-MM-DD). An open quote expires the day after its hold
- * runs out. Setting it back to open by hand starts the hold again from that day.
- *
- * Computed, never written: the stored status stays open. Nothing has to run on a schedule, so
- * nothing can stop running. SQL that reads `quotes.status` directly has to apply the same rule.
+ * What a stored status still says. Won is no longer stored: a quote marked won by hand, and never
+ * made into an order, reads as open. Lost and expired were only ever set by hand, and both mean the
+ * quote is not coming back.
  */
-export function effectiveQuoteStatus(quote: { status: QuoteStatus; date: string; statusChangedAt: string | null }, today: string): QuoteStatus {
-  if (quote.status !== 'open' || !/^\d{4}-\d{2}-\d{2}/.test(quote.date)) {
+export type StoredQuoteStatus = 'open' | 'expired';
+
+export function readQuoteStatus(value: unknown): StoredQuoteStatus {
+  return value === 'lost' || value === 'expired' ? 'expired' : 'open';
+}
+
+/**
+ * The status a quote reads as on `today` (YYYY-MM-DD). A quote with a purchase order is won. An
+ * open one expires the day after its hold runs out.
+ *
+ * Computed, never written: nothing runs on a schedule, so nothing can stop running. SQL that reads
+ * `quotes.status` directly has to apply the same rule.
+ */
+export function effectiveQuoteStatus(quote: { status: StoredQuoteStatus; date: string; purchaseOrderId: string | null }, today: string): QuoteStatus {
+  if (quote.purchaseOrderId) {
+    return 'won';
+  }
+  if (quote.status === 'expired' || !/^\d{4}-\d{2}-\d{2}/.test(quote.date)) {
     return quote.status;
   }
-  const reopened = quote.statusChangedAt ? dayOf(quote.statusChangedAt) : '';
-  const holdStarts = reopened > dayOf(quote.date) ? reopened : dayOf(quote.date);
-  return today > addDays(holdStarts, QUOTE_HOLD_DAYS) ? 'expired' : 'open';
+  return today > addDays(dayOf(quote.date), QUOTE_HOLD_DAYS) ? 'expired' : 'open';
 }
 
-/** Read a status off a quote row, defaulting anything unrecognised to open. */
-export function readQuoteStatus(value: unknown): QuoteStatus {
-  return isQuoteStatus(value) ? value : 'open';
+/**
+ * Why a quote cannot be deleted, or null when it can. A won quote is the record of what an order
+ * was sold at, so it goes only when its order does: deleting the order returns it to open.
+ */
+export function quoteDeleteRefusal(quote: { status: QuoteStatus; label: string }): string | null {
+  return quote.status === 'won' ? `${quote.label} became a purchase order, so it stays. Delete the order to delete the quote.` : null;
 }
 
-export async function setQuoteStatus(id: string, status: QuoteStatus, reason?: string | null): Promise<void> {
+/** Deletes a quote of any kind: every calculator's quotes are rows in the one table. */
+export async function deleteQuote(id: string): Promise<void> {
   const db = createClient();
-  const { error } = await db
-    .from(TABLE)
-    .update({
-      status,
-      // A reason belongs to a loss. Keeping one on a re-opened quote would read as the reason it is open.
-      status_reason: status === 'lost' ? reason || null : null,
-      status_changed_at: new Date().toISOString(),
-    })
-    .eq('id', id);
-
+  const { error } = await db.from(TABLE).delete().eq('id', id);
   if (error) {
     throw new Error(error.message);
   }
@@ -104,48 +97,29 @@ export interface QuoteOutcome {
 export interface WinRate {
   open: number;
   won: number;
-  lost: number;
   expired: number;
-  /** Decided quotes only: won / (won + lost). Null until something has been decided. */
+  /** Won over quotes that have run their course: won / (won + expired). Null until one has. */
   rate: number | null;
-  /** Value won and lost, for the quotes that carry a price. */
+  /** Value won, for the quotes that carry a price. */
   wonValue: number;
-  lostValue: number;
 }
 
 /**
- * Win rate over decided quotes. Open and expired quotes are counted but kept out of the rate: a
- * quote nobody has answered is not a loss, and treating it as one flatters nothing.
+ * Win rate over quotes that have run their course. An open quote is still in play, so it is counted
+ * but kept out of the rate; an expired one went unanswered for its whole price hold and counts
+ * against it.
  */
 export function winRate(quotes: QuoteOutcome[]): WinRate {
-  const tally: WinRate = { open: 0, won: 0, lost: 0, expired: 0, rate: null, wonValue: 0, lostValue: 0 };
+  const tally: WinRate = { open: 0, won: 0, expired: 0, rate: null, wonValue: 0 };
 
   for (const quote of quotes) {
     tally[quote.status] += 1;
     if (quote.status === 'won') {
       tally.wonValue += quote.price ?? 0;
     }
-    if (quote.status === 'lost') {
-      tally.lostValue += quote.price ?? 0;
-    }
   }
 
-  const decided = tally.won + tally.lost;
-  tally.rate = decided > 0 ? tally.won / decided : null;
+  const settled = tally.won + tally.expired;
+  tally.rate = settled > 0 ? tally.won / settled : null;
   return tally;
-}
-
-/** Losses grouped by the reason given, biggest first. Losses with no reason group under "Not given". */
-export function lossReasons(quotes: Array<{ status: QuoteStatus; statusReason: string | null }>): Array<{ reason: string; count: number }> {
-  const counts = new Map<string, number>();
-
-  for (const quote of quotes) {
-    if (quote.status !== 'lost') {
-      continue;
-    }
-    const reason = quote.statusReason?.trim() || 'Not given';
-    counts.set(reason, (counts.get(reason) || 0) + 1);
-  }
-
-  return Array.from(counts, ([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count || a.reason.localeCompare(b.reason));
 }

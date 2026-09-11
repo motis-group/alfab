@@ -46,10 +46,13 @@ export interface QuoteToOrderDraft {
   windowLines: WindowQuoteLine[];
   /** Awning costings, one per purchase order line. */
   awningLines: AwningQuoteLine[];
+  /** The saved quotes the order is made from. Saving the order links them, which is what makes them won. */
+  quoteIds: string[];
 }
 
-export type QuoteToOrderDraftInput = Omit<QuoteToOrderDraft, 'glassLines' | 'windowLines' | 'awningLines' | 'customerId'> & {
+export type QuoteToOrderDraftInput = Omit<QuoteToOrderDraft, 'glassLines' | 'windowLines' | 'awningLines' | 'customerId' | 'quoteIds'> & {
   customerId?: string | null;
+  quoteIds?: string[];
   glassLines?: GlassQuoteLine[];
   windowLines?: WindowQuoteLine[];
   awningLines?: AwningQuoteLine[];
@@ -174,6 +177,7 @@ function normalizeDraft(draft: QuoteToOrderDraftInput | QuoteToOrderDraft): Quot
     glassLines: normalizeGlassLines(draft.glassLines),
     windowLines: normalizeWindowLines(draft.windowLines),
     awningLines: normalizeAwningLines(draft.awningLines),
+    quoteIds: Array.isArray(draft.quoteIds) ? draft.quoteIds.filter((id): id is string => typeof id === 'string' && id.length > 0) : [],
   };
 }
 
