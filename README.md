@@ -63,6 +63,6 @@ For quote outcomes and whether the labour estimates hold up, see:
 
 - `projects/costing/development/specs/feedback-loops.md`
 
-For a job spanning windows, awnings and cut glass, see:
+For converting one or more quotes to a purchase order, see:
 
 - `projects/costing/development/specs/jobs.md`

@@ -1,48 +1,100 @@
-# One job, several product types
+# Converting quotes to a purchase order
 
-A boat needs windows, awnings and cut glass. Each was priced on its own page and sent as its own
-purchase order, so the customer got three numbers and somebody added them up by hand.
-
-The job basket is the layer above the three calculators. Each one still stages its own items the way
-it always did; "Add To Job" moves them up to the job, and the job becomes one purchase order with a
-line for each item, whatever its type.
+A boat needs windows, awnings and cut glass. The estimator prices each in its own calculator and
+saves it as its own quote. Converting the quotes together puts them on one purchase order, so the
+customer gets one order and one number.
 
 | Part | Location |
 | --- | --- |
-| The basket | `utils/job-basket.ts` |
-| Panel and the hook that keeps a page in step | `components/JobPanel.tsx` |
-| Draft handover | `utils/quote-to-order.ts`, draft kind `job` |
-| Order side | `app/glass/new/page.tsx` |
-| Checks | `utils/job-basket.test.ts` |
+| Merge, customer rule, warnings and name | `utils/quote-register.ts`, `mergeQuotesForOrder` |
+| Tick and convert | `app/glass/page.tsx` |
+| Convert one quote from its document | `app/glass/dashboard/page.tsx`, `components/QuoteDocument.tsx` |
+| Draft handover | `utils/quote-to-order.ts` |
+| Order side | `app/glass/new/page.tsx`, `applyQuoteDraft` |
+| Checks | `utils/quote-register.test.ts`, `utils/customer-quote-store.test.ts` |
 
-## Two levels, on purpose
+## Where a quote is converted
 
-The per-page quote was kept rather than replaced. Staging several windows and then adding them all
-to the job is how the work is actually done, and collapsing the two would have meant rebuilding
-three working pages to gain nothing.
+The order list at `/glass` shows every saved quote of every kind. Convert on a row converts that
+quote alone. To put several quotes on one order, tick them and click "Convert N To One Order". The
+button shows only when the estimator ticks two or more quotes.
 
-- **The page quote** holds one product type and knows how to print it.
-- **The job** holds anything and becomes the order.
+On the dashboard at `/glass/dashboard`, View on an open quote shows the quote document. "CONVERT TO
+ORDER" on the document converts that quote.
 
-The job panel appears on all three calculators, so the running total is visible from wherever the
-estimator is working.
+Both pages call `mergeQuotesForOrder`, so one quote is a merge of one. The page marks each converted
+quote with a priced line as won. Then it opens a new order from the draft on `/glass/new`. The
+estimator checks the order and saves it.
 
-## Where it lives
+A purchase order is an approved quote, so conversion is a deliberate act. A quote marked won does not
+become an order by itself.
 
-Session storage, under `alfabJobBasket`. A job is built by walking between pages and finished in one
-sitting. Nothing in the basket is the record of anything — a saved quote and a purchase order are —
-so losing it costs a few minutes of retyping and never a price.
+## One order, one customer
 
-A `alfab-job-changed` event fires on write, which is how a page that is already open notices that
-another one added to the job.
+A purchase order carries one customer id and one delivery address. A line has no customer of its own,
+so nothing downstream catches one customer's glass on another customer's order. For this reason,
+`mergeQuotesForOrder` refuses quotes for different customers.
 
-Anything unrecognised in storage is dropped rather than trusted: a line with no costing spec cannot
-become an order line, so it is filtered out on read.
+The rule compares only the quotes that have a priced line:
 
-## Details
+- It compares names without case or extra spaces, so `Status Houseboats` and `status  houseboats` are
+  one customer. It refuses two or more different names, and its reason lists them.
+- A quote with a customer id and a quote with only the same name are one customer.
+- It refuses two customer records with the same name.
+- A quote with no customer name does not count. It joins the customer that the other quotes name.
 
-The first page to name the customer names them for the job; later pages do not overwrite it. The
-order carries the job's customer, so a purchase order does not have to be matched by name.
+The order list checks the ticked quotes each time the selection changes. When the set cannot become
+one order, the list shows the reason and offers no Convert button.
 
-Each line keeps the stamp of the rates that priced it, so a line on the order can still be
-reproduced later. A glass line keeps its own markup, since the glass calculator prices per piece.
+The first converted quote with a customer id gives the order its customer. Glass quotes and printed
+customer quotes can carry an id. Window and awning costings carry only a name. When no quote has an
+id, the order page selects the active customer with the first quote's name, if exactly one matches.
+Otherwise, the order notes get `Calculator customer:` and the name.
+
+## Quotes with no priced line
+
+The order list does not let the estimator tick a quote with no priced line. Its Convert button reports
+that there is nothing to put on an order. The dashboard's quote document shows no "CONVERT TO ORDER"
+for it.
+
+`mergeQuotesForOrder` still accepts such a quote. It leaves the quote off the draft and returns a
+warning that names it. The order list shows the warnings in its error card and then opens the order
+page at once. The order page does not get the warnings.
+
+A printed customer quote can mix priced and unpriced lines. Only the priced lines go on the order, and
+no warning names the unpriced lines.
+
+## The order's name
+
+Each quote gives a label: its reference, then its name, such as `Q-3F2A9C1E Smith residence`. Only a
+printed customer quote has a reference. One quote gives the draft its label. Several quotes give their
+labels joined with ` + `, such as `Q-3F2A9C1E Smith residence + Kitchen hopper`.
+
+A purchase order has no name field. The order page writes the name into the line descriptions:
+
+- A window or awning line reads as the name, then ` | `, then the line's own description.
+- A glass line starts with the name of the piece. It uses the draft's name only when the piece has none.
+
+On an order made from several quotes, each window and awning line carries every label, not only the
+label of its own quote. The order stores no link to the quotes it came from. Only the line descriptions
+show where it came from.
+
+## What else the draft carries
+
+- **Lines.** Every priced line of every quote. The order page lists glass lines first, then windows,
+  then awnings.
+- **Rates.** Window and awning lines keep the stamp of the rates that priced them. A glass line keeps
+  its own markup.
+- **Notes.** The notes of each quote, without blanks and without repeats. They become the order notes.
+- **Date.** The date of the first priced quote becomes the order's received date. The order list sorts
+  newest first, so on the list that is the newest quote ticked.
+
+## Handover to the order page
+
+`persistQuoteToOrderDraft` writes the draft to session storage under `adhocQuoteToPurchaseOrderDraft`.
+On `/glass/new?fromQuote=1`, `consumeQuoteToOrderDraft` reads the draft once and removes it. It drops
+any line whose costing spec it does not recognize.
+
+`consumeQuoteToOrderDraft` checks only the lines that match the draft's `kind`. `mergeQuotesForOrder`
+sets no kind, so every converted draft reads as glass, and the check drops a draft with no glass line.
+Converting only window and awning quotes opens an empty order, after the page marks the quotes won.
