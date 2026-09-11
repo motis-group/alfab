@@ -132,6 +132,11 @@ export function formatCurrency(value: number | null | undefined): string {
   return `$${amount.toFixed(2)}`;
 }
 
+/** Whether a line records work: a quantity made, or the minutes it took. Nothing rebuilds either. */
+export function lineRecordsWork(line: Pick<PurchaseOrderLine, 'quantity_fulfilled' | 'actual_minutes'>): boolean {
+  return Number(line.quantity_fulfilled || 0) > 0 || (line.actual_minutes != null && String(line.actual_minutes).trim() !== '');
+}
+
 /**
  * Why an order cannot be deleted, or null when it can. Work recorded on an order is history nothing
  * else can rebuild: the quantities made and the minutes they took, which correct the labour
@@ -142,8 +147,7 @@ export function orderDeleteRefusal(order: Pick<PurchaseOrder, 'po_number' | 'sta
   if (order.status === 'in_production' || order.status === 'fulfilled') {
     return `${name} is ${statusLabel(order.status).toLowerCase()}, so it can only be archived.`;
   }
-  const recorded = lines.some((line) => Number(line.quantity_fulfilled || 0) > 0 || (line.actual_minutes != null && String(line.actual_minutes).trim() !== ''));
-  return recorded ? `${name} has work recorded against it, so it can only be archived.` : null;
+  return lines.some(lineRecordsWork) ? `${name} has work recorded against it, so it can only be archived.` : null;
 }
 
 export function statusLabel(status: OrderStatus): string {

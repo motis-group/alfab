@@ -3,7 +3,8 @@ import { NextResponse } from 'next/server';
 import { getAppSession, userHasPermission } from '@utils/auth-session';
 import { AppPermission } from '@utils/authz';
 import { AUDITED_TABLES, NATURAL_KEY_TABLES, TABLE_COLUMNS, TABLE_PERMISSIONS } from '@utils/db-tables';
-import { dbQuery } from '@utils/db';
+import { dbQuery, getDbPool } from '@utils/db';
+import { lineRecordsWork, orderDeleteRefusal } from '@utils/order-management';
 
 export const runtime = 'nodejs';
 
@@ -153,6 +154,54 @@ function applyServerAuditColumns(table: string, action: Operation, rows: Array<R
   }
 }
 
+/**
+ * Orders and their lines carry recorded work: the quantities made and the minutes they took, which
+ * check the labour estimates and which nothing rebuilds. A delete that would take any of it is
+ * refused here, whatever the client sent, by the rule the order list shows. The rows are locked
+ * before the check, so work recorded while the delete is being checked cannot slip through.
+ */
+async function deleteKeepingRecordedWork(table: 'purchase_orders' | 'purchase_order_lines', whereSql: string, params: unknown[], returningSql: string): Promise<{ refusal: string } | { rows: unknown[] }> {
+  const client = await getDbPool().connect();
+  try {
+    await client.query('begin');
+    let ids: string[];
+    let refusal: string | null = null;
+
+    if (table === 'purchase_orders') {
+      const orders = (await client.query(`select id, po_number, status from purchase_orders${whereSql} for update`, params)).rows;
+      ids = orders.map((order) => order.id);
+      const lines = (await client.query('select purchase_order_id, quantity_fulfilled, actual_minutes from purchase_order_lines where purchase_order_id = any($1::uuid[]) for update', [ids])).rows;
+      for (const order of orders) {
+        refusal = orderDeleteRefusal(order, lines.filter((line) => line.purchase_order_id === order.id));
+        if (refusal) {
+          break;
+        }
+      }
+    } else {
+      const lines = (await client.query(`select id, purchase_order_id, quantity_fulfilled, actual_minutes from purchase_order_lines${whereSql} for update`, params)).rows;
+      ids = lines.map((line) => line.id);
+      const worked = lines.find(lineRecordsWork);
+      if (worked) {
+        const order = (await client.query('select po_number from purchase_orders where id = $1', [worked.purchase_order_id])).rows[0];
+        refusal = `A line on PO ${order?.po_number || '(no number)'} has work recorded against it, so it cannot be removed.`;
+      }
+    }
+
+    if (refusal) {
+      await client.query('rollback');
+      return { refusal };
+    }
+    const result = await client.query(`delete from ${table} where id = any($1::uuid[])${returningSql}`, [ids]);
+    await client.query('commit');
+    return { rows: result.rows };
+  } catch (error) {
+    await client.query('rollback').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function POST(request: Request) {
   const session = await getAppSession();
   if (!session) {
@@ -257,6 +306,15 @@ export async function POST(request: Request) {
 
       const whereSql = buildWhereClause(table, filters, params);
       const returningSql = payload.returning ? ` returning ${parseColumns(table, payload.returning)}` : '';
+
+      if (table === 'purchase_orders' || table === 'purchase_order_lines') {
+        const outcome = await deleteKeepingRecordedWork(table, whereSql, params, returningSql);
+        if ('refusal' in outcome) {
+          return NextResponse.json({ data: null, error: { message: outcome.refusal } }, { status: 409 });
+        }
+        return NextResponse.json({ data: payload.returning ? outcome.rows : null, error: null });
+      }
+
       const sql = `delete from ${tableSql}${whereSql}${returningSql}`;
       const result = await dbQuery(sql, params);
       return NextResponse.json({ data: payload.returning ? result.rows : null, error: null });
