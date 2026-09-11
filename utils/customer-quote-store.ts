@@ -55,6 +55,8 @@ export interface CustomerQuote extends CustomerQuoteContent {
   ratesUpdatedAt: string | null;
   status: QuoteStatus;
   statusReason: string | null;
+  /** When someone last set the status by hand. Null for a quote nobody has marked. */
+  statusChangedAt: string | null;
 }
 
 export function quoteTotals(lines: QuoteLine[]) {
@@ -138,6 +140,7 @@ interface QuoteRow {
   cost: unknown;
   status?: unknown;
   status_reason?: string | null;
+  status_changed_at?: string | null;
 }
 
 /** Reads a quotes row. Rows of any other kind, or without lines, are not customer quotes. */
@@ -170,6 +173,7 @@ export function toCustomerQuote(row: QuoteRow): CustomerQuote | null {
     ratesUpdatedAt: text(specification.ratesUpdatedAt),
     status: readQuoteStatus(row.status),
     statusReason: text(row.status_reason),
+    statusChangedAt: text(row.status_changed_at),
   };
 }
 

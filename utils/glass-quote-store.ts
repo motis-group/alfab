@@ -30,6 +30,8 @@ export interface SavedGlassQuote {
   status: QuoteStatus;
   /** Why it was lost, when it was lost. */
   statusReason: string | null;
+  /** When someone last set the status by hand. Null for a quote nobody has marked. */
+  statusChangedAt: string | null;
   /** Stamp of the glass rates the saved prices were calculated on. */
   ratesUpdatedAt: string | null;
 }
@@ -43,6 +45,7 @@ interface QuoteRow {
   cost: unknown;
   status?: unknown;
   status_reason?: string | null;
+  status_changed_at?: string | null;
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -79,6 +82,7 @@ function toSavedQuote(row: QuoteRow): SavedGlassQuote | null {
     total: typeof cost.total === 'number' ? cost.total : 0,
     status: readQuoteStatus(row.status),
     statusReason: typeof row.status_reason === 'string' ? row.status_reason : null,
+    statusChangedAt: typeof row.status_changed_at === 'string' ? row.status_changed_at : null,
     ratesUpdatedAt: typeof specification.ratesUpdatedAt === 'string' ? specification.ratesUpdatedAt : null,
   };
 }

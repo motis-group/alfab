@@ -26,6 +26,15 @@ short list: Price, Lead time, No response, Went elsewhere, Job cancelled, Other.
 gets left empty, and an empty reason cannot tell anyone whether the shop is losing on price or on
 lead time.
 
+An open quote expires by itself the day after its 30-day price hold runs out, counted from the
+quote date. A quote set back to open by hand starts a new 30 days from that day. Won and lost quotes
+never expire. `effectiveQuoteStatus` in `utils/quote-status.ts` applies the rule when
+`listQuoteRecords` reads the quotes, so every list and card shows the same status.
+
+The rule is computed and never written. The stored status of an expired quote stays `open`, so
+SQL that reads `quotes.status` directly shows it as open unless it applies the same rule. Nothing
+runs on a schedule, so there is no job that can stop running.
+
 The win rate is won over **decided** quotes. Open and expired quotes are counted and shown but kept
 out of the rate: a quote nobody has answered is not a loss. Value won and value lost are totalled
 beside it, over the quotes that carry a price.
