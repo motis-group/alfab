@@ -33,6 +33,7 @@ import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, isMergeRefusal, listQ
 import { QUOTE_STATUS_LABELS, QUOTE_STATUS_ORDER, QUOTE_STATUS_TONE, QuoteStatus, deleteQuote, quoteDeleteRefusal } from '@utils/quote-status';
 import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { overdueOrders } from '@utils/order-metrics';
+import { useConfirm } from '@components/modals/ModalConfirm';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
@@ -111,6 +112,7 @@ function matchesArchiveFilter(order: PurchaseOrder, filter: ArchiveFilter): bool
 
 export default function OrderDashboardPage() {
   const router = useRouter();
+  const confirm = useConfirm();
 
   const [role, setRole] = useState<UserRole>('readonly');
 
@@ -230,7 +232,7 @@ export default function OrderDashboardPage() {
       return;
     }
     const warning = quote.reference ? `Delete ${quote.reference}? It was printed for a customer, so the number they hold will point at nothing. This cannot be undone.` : `Delete ${label}? This cannot be undone.`;
-    if (!window.confirm(warning)) {
+    if (!(await confirm('DELETE QUOTE', warning))) {
       return;
     }
     try {
@@ -270,7 +272,7 @@ export default function OrderDashboardPage() {
       setOrderNotice(refusal);
       return;
     }
-    if (!window.confirm(`Delete PO ${order.po_number} and its ${lines.length} line${lines.length === 1 ? '' : 's'}? This cannot be undone. Archive hides it instead and can be undone.`)) {
+    if (!(await confirm('DELETE ORDER', `Delete PO ${order.po_number} and its ${lines.length} line${lines.length === 1 ? '' : 's'}? This cannot be undone. Archive hides it instead and can be undone.`))) {
       return;
     }
     const { error } = await createClient().from(TABLE_PURCHASE_ORDERS).delete().eq('id', order.id);
