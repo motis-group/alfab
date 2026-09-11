@@ -8,6 +8,7 @@ import DefaultActionBar from '@components/page/DefaultActionBar';
 import DefaultLayout from '@components/page/DefaultLayout';
 import DropdownMenuTrigger from '@components/DropdownMenuTrigger';
 import Grid from '@components/Grid';
+import ModalStack from '@components/ModalStack';
 import Navigation from '@components/Navigation';
 import AppSectionNav from '@components/page/AppSectionNav';
 import AppSessionIndicator from '@components/page/AppSessionIndicator';
@@ -92,6 +93,8 @@ const AppFrame: React.FC<AppFrameProps> = ({
           </main>
         )}
       </Grid>
+      {/* Where a page's modals appear: the provider is in the root layout, the stack is drawn here. */}
+      <ModalStack />
     </DefaultLayout>
   );
 };
