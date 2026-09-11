@@ -1,4 +1,4 @@
-import { QuoteStatus, effectiveQuoteStatus } from '@utils/quote-status';
+import { QuoteStatus, StoredQuoteStatus, effectiveQuoteStatus } from '@utils/quote-status';
 import { todayISODate } from '@utils/order-management';
 import { AwningCostingInput } from '@utils/awning-costing';
 import { SavedAwningCosting, listAwningCostings } from '@utils/awning-quote-store';
@@ -42,9 +42,8 @@ export interface QuoteRecord {
   lineCount: number;
   total: number;
   status: QuoteStatus;
-  statusReason: string | null;
-  /** When someone last set the status by hand. Null for a quote nobody has marked. */
-  statusChangedAt: string | null;
+  /** The purchase order the quote became, which is what makes it won. Null until then. */
+  purchaseOrderId: string | null;
   /** The draft an order is created from, or null when the quote has no price to carry. */
   draft: QuoteToOrderDraftInput | null;
 }
@@ -61,8 +60,7 @@ function fromGlass(quote: SavedGlassQuote): QuoteRecord {
     lineCount: quote.items.length,
     total: quote.total,
     status: quote.status,
-    statusReason: quote.statusReason,
-    statusChangedAt: quote.statusChangedAt,
+    purchaseOrderId: quote.purchaseOrderId,
     draft: quote.items.length
       ? {
           quoteName: quote.name,
@@ -94,8 +92,7 @@ function fromWindow(costing: SavedWindowCosting): QuoteRecord {
     lineCount: 1,
     total: costing.price ?? 0,
     status: costing.status,
-    statusReason: costing.statusReason,
-    statusChangedAt: costing.statusChangedAt,
+    purchaseOrderId: costing.purchaseOrderId,
     draft:
       costing.price == null
         ? null
@@ -122,8 +119,7 @@ function fromAwning(costing: SavedAwningCosting): QuoteRecord {
     lineCount: 1,
     total: (costing.price ?? 0) * Math.max(1, costing.input.qty),
     status: costing.status,
-    statusReason: costing.statusReason,
-    statusChangedAt: costing.statusChangedAt,
+    purchaseOrderId: costing.purchaseOrderId,
     draft:
       costing.price == null
         ? null
@@ -155,8 +151,7 @@ export function fromCustomerQuote(quote: CustomerQuote): QuoteRecord {
     lineCount: quote.lines.length,
     total: quote.subtotal,
     status: quote.status,
-    statusReason: quote.statusReason,
-    statusChangedAt: quote.statusChangedAt,
+    purchaseOrderId: quote.purchaseOrderId,
     draft: priced.length
       ? {
           quoteName: quote.name,
@@ -201,7 +196,8 @@ export async function listQuoteRecords(): Promise<{ records: QuoteRecord[]; erro
   records.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   // Every reader of a quote's status comes through here, so this is where an unanswered quote expires.
   const today = todayISODate();
-  return { records: records.map((record) => ({ ...record, status: effectiveQuoteStatus(record, today) })), errors };
+  // The mappers carry the stored status; this is where it becomes the status every list shows.
+  return { records: records.map((record) => ({ ...record, status: effectiveQuoteStatus({ status: record.status as StoredQuoteStatus, date: record.date, purchaseOrderId: record.purchaseOrderId }, today) })), errors };
 }
 
 export interface MergedQuoteDraft {
@@ -276,6 +272,7 @@ export function mergeQuotesForOrder(records: QuoteRecord[]): MergedQuoteDraft | 
       glassLines: priced.flatMap((record) => record.draft!.glassLines || []),
       windowLines: priced.flatMap((record) => record.draft!.windowLines || []),
       awningLines: priced.flatMap((record) => record.draft!.awningLines || []),
+      quoteIds: priced.map((record) => record.id),
     },
     warnings,
   };

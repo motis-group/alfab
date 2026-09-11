@@ -5,6 +5,7 @@ import { AppPermission } from '@utils/authz';
 import { AUDITED_TABLES, NATURAL_KEY_TABLES, TABLE_COLUMNS, TABLE_PERMISSIONS } from '@utils/db-tables';
 import { dbQuery, getDbPool } from '@utils/db';
 import { lineRecordsWork, orderDeleteRefusal } from '@utils/order-management';
+import { quoteDeleteRefusal } from '@utils/quote-status';
 
 export const runtime = 'nodejs';
 
@@ -154,13 +155,18 @@ function applyServerAuditColumns(table: string, action: Operation, rows: Array<R
   }
 }
 
+/** Tables whose rows carry history nothing rebuilds, so a delete is checked before it runs. */
+const GUARDED_DELETE_TABLES = ['purchase_orders', 'purchase_order_lines', 'quotes'] as const;
+type GuardedDeleteTable = (typeof GUARDED_DELETE_TABLES)[number];
+
 /**
  * Orders and their lines carry recorded work: the quantities made and the minutes they took, which
- * check the labour estimates and which nothing rebuilds. A delete that would take any of it is
- * refused here, whatever the client sent, by the rule the order list shows. The rows are locked
- * before the check, so work recorded while the delete is being checked cannot slip through.
+ * check the labour estimates. A decided quote carries its outcome, which the win rate and the loss
+ * reasons count. A delete that would take any of it is refused here, whatever the client sent, by
+ * the rule the order list shows. The rows are locked before the check, so history recorded while
+ * the delete is being checked cannot slip through.
  */
-async function deleteKeepingRecordedWork(table: 'purchase_orders' | 'purchase_order_lines', whereSql: string, params: unknown[], returningSql: string): Promise<{ refusal: string } | { rows: unknown[] }> {
+async function deleteUnlessRefused(table: GuardedDeleteTable, whereSql: string, params: unknown[], returningSql: string): Promise<{ refusal: string } | { rows: unknown[] }> {
   const client = await getDbPool().connect();
   try {
     await client.query('begin');
@@ -173,6 +179,15 @@ async function deleteKeepingRecordedWork(table: 'purchase_orders' | 'purchase_or
       const lines = (await client.query('select purchase_order_id, quantity_fulfilled, actual_minutes from purchase_order_lines where purchase_order_id = any($1::uuid[]) for update', [ids])).rows;
       for (const order of orders) {
         refusal = orderDeleteRefusal(order, lines.filter((line) => line.purchase_order_id === order.id));
+        if (refusal) {
+          break;
+        }
+      }
+    } else if (table === 'quotes') {
+      const quotes = (await client.query(`select id, name, purchase_order_id from quotes${whereSql} for update`, params)).rows;
+      ids = quotes.map((quote) => quote.id);
+      for (const quote of quotes) {
+        refusal = quoteDeleteRefusal({ status: quote.purchase_order_id ? 'won' : 'open', label: quote.name || 'The quote' });
         if (refusal) {
           break;
         }
@@ -307,8 +322,8 @@ export async function POST(request: Request) {
       const whereSql = buildWhereClause(table, filters, params);
       const returningSql = payload.returning ? ` returning ${parseColumns(table, payload.returning)}` : '';
 
-      if (table === 'purchase_orders' || table === 'purchase_order_lines') {
-        const outcome = await deleteKeepingRecordedWork(table, whereSql, params, returningSql);
+      if ((GUARDED_DELETE_TABLES as readonly string[]).includes(table)) {
+        const outcome = await deleteUnlessRefused(table as GuardedDeleteTable, whereSql, params, returningSql);
         if ('refusal' in outcome) {
           return NextResponse.json({ data: null, error: { message: outcome.refusal } }, { status: 409 });
         }

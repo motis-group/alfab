@@ -91,4 +91,5 @@ test('a printed quote becomes an order at the prices offered, without its unpric
   const together = mergeQuotesForOrder([record, { ...record, id: 'costing', reference: null, name: 'Kitchen hopper' }]);
   assert.ok(together && !isMergeRefusal(together));
   assert.equal(together.draft.quoteName, 'Q-3F2A9C1E Smith residence + Kitchen hopper');
+  assert.deepEqual(together.draft.quoteIds, [record.id, 'costing'], 'saving the order links every quote on it');
 });

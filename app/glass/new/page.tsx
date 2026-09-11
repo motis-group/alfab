@@ -36,6 +36,7 @@ const TABLE_CUSTOMERS = 'customers';
 const TABLE_CUSTOMER_PRODUCTS = 'customer_products';
 const TABLE_PURCHASE_ORDERS = 'purchase_orders';
 const TABLE_PURCHASE_ORDER_LINES = 'purchase_order_lines';
+const TABLE_QUOTES = 'quotes';
 
 const EDGEWORK_OPTIONS: GlassSpecification['edgework'][] = ['ROUGH ARRIS', 'FLAT GRIND - STRAIGHT', 'FLAT GRIND - CURVED', 'FLAT POLISH - STRAIGHT', 'FLAT POLISH - CURVED'];
 
@@ -85,6 +86,7 @@ export default function NewPurchaseOrderPage() {
     requiredDate: '',
     status: 'open',
     notes: '',
+    quoteIds: [],
   });
 
   const [lineDrafts, setLineDrafts] = useState<LineDraft[]>([createLineDraft()]);
@@ -157,6 +159,7 @@ export default function NewPurchaseOrderPage() {
       requiredDate: order.required_date || '',
       status: order.status,
       notes: order.notes || '',
+      quoteIds: [],
     });
     setArchivedAt(order.archived_at || null);
 
@@ -298,6 +301,7 @@ export default function NewPurchaseOrderPage() {
       requiredDate: '',
       status: 'open',
       notes: '',
+      quoteIds: [],
     });
     setLineDrafts([defaultLine]);
     setActiveLineId(defaultLine.localId);
@@ -380,6 +384,7 @@ export default function NewPurchaseOrderPage() {
       customerId: matchedCustomerId,
       receivedDate: quoteDraft.quoteDate || prev.receivedDate,
       notes: draftNotes,
+      quoteIds: quoteDraft.quoteIds,
     }));
     setLineDrafts(draftLines);
     setActiveLineId(draftLines[0].localId);
@@ -539,6 +544,12 @@ export default function NewPurchaseOrderPage() {
       if (newLines.length) {
         const { error: insertLineError } = await db.from(TABLE_PURCHASE_ORDER_LINES).insert(newLines.map(buildLinePayload));
         if (insertLineError) throw insertLineError;
+      }
+
+      // The quotes this order was made from are won now that it exists; the link is what says so.
+      for (const quoteId of orderForm.quoteIds) {
+        const { error: linkError } = await db.from(TABLE_QUOTES).update({ purchase_order_id: orderId }).eq('id', quoteId);
+        if (linkError) throw linkError;
       }
 
       router.push(`/glass?orderId=${orderId}`);

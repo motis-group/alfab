@@ -1,6 +1,6 @@
 import { AwningCostingInput } from '@utils/awning-costing';
 import { createClient } from '@utils/db-client';
-import { QuoteStatus, readQuoteStatus } from '@utils/quote-status';
+import { StoredQuoteStatus, readQuoteStatus } from '@utils/quote-status';
 import { WindowCostingInput } from '@utils/window-costing';
 
 const TABLE = 'quotes';
@@ -53,10 +53,10 @@ export interface CustomerQuote extends CustomerQuoteContent {
   issuedAt: string | null;
   /** Stamp of the rates the prices were calculated on. */
   ratesUpdatedAt: string | null;
-  status: QuoteStatus;
-  statusReason: string | null;
-  /** When someone last set the status by hand. Null for a quote nobody has marked. */
-  statusChangedAt: string | null;
+  /** What the stored status still says. Won comes from the order link, not from here. */
+  status: StoredQuoteStatus;
+  /** The purchase order this quote became. Null until an order made from it is saved. */
+  purchaseOrderId: string | null;
 }
 
 export function quoteTotals(lines: QuoteLine[]) {
@@ -139,8 +139,7 @@ interface QuoteRow {
   specification: unknown;
   cost: unknown;
   status?: unknown;
-  status_reason?: string | null;
-  status_changed_at?: string | null;
+  purchase_order_id?: string | null;
 }
 
 /** Reads a quotes row. Rows of any other kind, or without lines, are not customer quotes. */
@@ -172,8 +171,7 @@ export function toCustomerQuote(row: QuoteRow): CustomerQuote | null {
     issuedAt: text(specification.issuedAt),
     ratesUpdatedAt: text(specification.ratesUpdatedAt),
     status: readQuoteStatus(row.status),
-    statusReason: text(row.status_reason),
-    statusChangedAt: text(row.status_changed_at),
+    purchaseOrderId: typeof row.purchase_order_id === 'string' ? row.purchase_order_id : null,
   };
 }
 

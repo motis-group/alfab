@@ -92,11 +92,11 @@ test('only open quotes count towards the value still in play', () => {
     { status: 'open', total: 100 },
     { status: 'open', total: 250 },
     { status: 'won', total: 900 },
-    { status: 'lost', total: 400 },
+    { status: 'expired', total: 400 },
   ] as QuoteRecord[];
 
   const tally = tallyQuotes(quotes);
 
-  assert.deepEqual(tally.counts, { open: 2, won: 1, lost: 1, expired: 0 });
-  assert.equal(tally.openValue, 350, 'won work is on an order; lost work is not coming back');
+  assert.deepEqual(tally.counts, { open: 2, won: 1, expired: 1 });
+  assert.equal(tally.openValue, 350, 'won work is on an order; expired work is not coming back');
 });

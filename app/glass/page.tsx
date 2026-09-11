@@ -29,9 +29,8 @@ import {
   todayISODate,
   localISODate,
 } from '@utils/order-management';
-import QuoteStatusControl from '@components/QuoteStatusControl';
 import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
-import { QUOTE_STATUS_LABELS, QUOTE_STATUS_ORDER, QuoteStatus, setQuoteStatus } from '@utils/quote-status';
+import { QUOTE_STATUS_LABELS, QUOTE_STATUS_ORDER, QUOTE_STATUS_TONE, QuoteStatus, deleteQuote, quoteDeleteRefusal } from '@utils/quote-status';
 import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { overdueOrders } from '@utils/order-metrics';
 import { createClient } from '@utils/db-client';
@@ -222,6 +221,26 @@ export default function OrderDashboardPage() {
   }
 
   /** Saved quotes from all three calculators. A calculator that cannot be read is named, not hidden. */
+  /** Deleting is for a quote nobody answered or one made by mistake. A won quote goes with its order. */
+  async function removeQuote(quote: QuoteRecord) {
+    const label = quote.reference || quote.name || 'This quote';
+    const refusal = quoteDeleteRefusal({ status: quote.status, label });
+    if (refusal) {
+      setQuoteError(refusal);
+      return;
+    }
+    const warning = quote.reference ? `Delete ${quote.reference}? It was printed for a customer, so the number they hold will point at nothing. This cannot be undone.` : `Delete ${label}? This cannot be undone.`;
+    if (!window.confirm(warning)) {
+      return;
+    }
+    try {
+      await deleteQuote(quote.id);
+      await refreshQuotes();
+    } catch (error: any) {
+      setQuoteError(error?.message || 'Unable to delete the quote.');
+    }
+  }
+
   async function refreshQuotes() {
     const { records, errors } = await listQuoteRecords();
     setQuotes(records);
@@ -263,15 +282,6 @@ export default function OrderDashboardPage() {
     await loadData();
   }
 
-  async function markQuote(id: string, status: QuoteStatus, reason?: string | null) {
-    try {
-      await setQuoteStatus(id, status, reason);
-      await refreshQuotes();
-    } catch (error: any) {
-      setFormError(error?.message || 'Unable to mark the quote.');
-    }
-  }
-
   /**
    * A purchase order is an approved quote, so converting is a deliberate act rather than something
    * that happens when a quote is marked won. Several quotes convert into one order, which is how a
@@ -289,13 +299,6 @@ export default function OrderDashboardPage() {
     }
 
     setFormError(merged.warnings.length ? merged.warnings.join(' ') : null);
-
-    for (const record of records) {
-      if (record.draft && record.status !== 'won') {
-        await markQuote(record.id, 'won');
-      }
-    }
-
     persistQuoteToOrderDraft(merged.draft);
     router.push('/glass/new?fromQuote=1');
   }
@@ -471,7 +474,7 @@ export default function OrderDashboardPage() {
               <TableColumn style={{ width: '8ch' }}>LINES</TableColumn>
               <TableColumn style={{ width: '13ch' }}>TOTAL</TableColumn>
               <TableColumn style={{ width: '22ch' }}>STATUS</TableColumn>
-              <TableColumn style={{ width: '24ch' }}>ACTIONS</TableColumn>
+              <TableColumn style={{ width: '32ch' }}>ACTIONS</TableColumn>
             </TableRow>
 
             {filteredQuotes.map((quote) => (
@@ -486,11 +489,12 @@ export default function OrderDashboardPage() {
                 <TableColumn>{quote.lineCount}</TableColumn>
                 <TableColumn>{formatCurrency(quote.total)}</TableColumn>
                 <TableColumn>
-                  <QuoteStatusControl status={quote.status} statusReason={quote.statusReason} disabled={role === 'readonly'} onChange={(next, reason) => markQuote(quote.id, next, reason)} />
+                  <span className={QUOTE_STATUS_TONE[quote.status]}>{QUOTE_STATUS_LABELS[quote.status]}</span>
                 </TableColumn>
                 <TableColumn style={{ whiteSpace: 'nowrap' }}>
                   <ActionButton onClick={() => router.push(QUOTE_KIND_HREFS[quote.kind])}>Open</ActionButton>{' '}
-                  <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuotes([quote])}>Convert</ActionButton>
+                  <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuotes([quote])}>Convert</ActionButton>{' '}
+                  <ActionButton onClick={role === 'readonly' ? undefined : () => removeQuote(quote)}>Delete</ActionButton>
                 </TableColumn>
               </TableRow>
             ))}

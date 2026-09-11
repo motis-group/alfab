@@ -19,7 +19,7 @@ import Text from '@components/Text';
 import { Customer, PurchaseOrder, formatCurrency, statusLabel, todayISODate } from '@utils/order-management';
 import { openOrdersByCustomer, ordersDueWithin, ordersWithStatus, overdueOrders, recentOrders, tallyQuotes } from '@utils/order-metrics';
 import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
-import { QUOTE_STATUS_LABELS, setQuoteStatus, winRate } from '@utils/quote-status';
+import { QUOTE_STATUS_LABELS, winRate } from '@utils/quote-status';
 import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
@@ -98,9 +98,6 @@ export default function DashboardPage() {
       return;
     }
 
-    if (quote.status !== 'won') {
-      await setQuoteStatus(quote.id, 'won');
-    }
     persistQuoteToOrderDraft(merged.draft);
     router.push('/glass/new?fromQuote=1');
   }
@@ -166,8 +163,8 @@ export default function DashboardPage() {
               <Text>{quoteTally.counts.won}</Text>
             </RowSpaceBetween>
             <RowSpaceBetween>
-              <Text>LOST</Text>
-              <Text>{quoteTally.counts.lost}</Text>
+              <Text>EXPIRED</Text>
+              <Text>{quoteTally.counts.expired}</Text>
             </RowSpaceBetween>
             <RowSpaceBetween>
               <Text>WIN RATE</Text>

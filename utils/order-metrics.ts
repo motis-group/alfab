@@ -84,12 +84,12 @@ export function recentOrders(orders: PurchaseOrder[], limit: number): PurchaseOr
 
 export interface QuoteTally {
   counts: Record<QuoteStatus, number>;
-  /** What the open quotes are worth. Won work is on an order; lost and expired are not coming back. */
+  /** What the open quotes are worth. Won work is on an order; expired quotes are not coming back. */
   openValue: number;
 }
 
 export function tallyQuotes(quotes: QuoteRecord[]): QuoteTally {
-  const counts: Record<QuoteStatus, number> = { open: 0, won: 0, lost: 0, expired: 0 };
+  const counts: Record<QuoteStatus, number> = { open: 0, won: 0, expired: 0 };
   let openValue = 0;
 
   for (const quote of quotes) {

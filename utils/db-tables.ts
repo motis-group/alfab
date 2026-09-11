@@ -7,7 +7,7 @@
 import { AppPermission } from '@utils/authz';
 
 export const TABLE_COLUMNS: Record<string, Set<string>> = {
-  quotes: new Set(['id', 'name', 'client', 'specification', 'cost', 'date', 'status', 'status_reason', 'status_changed_at']),
+  quotes: new Set(['id', 'name', 'client', 'specification', 'cost', 'date', 'status', 'status_reason', 'status_changed_at', 'purchase_order_id']),
   customers: new Set(['id', 'name', 'contact_name', 'contact_email', 'phone', 'delivery_address', 'is_active', 'created_at']),
   product_categories: new Set(['id', 'name', 'description']),
   products: new Set(['id', 'name', 'category_id', 'sku', 'unit_price', 'is_active', 'created_at']),

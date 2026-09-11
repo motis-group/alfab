@@ -1,5 +1,5 @@
 import { createClient } from '@utils/db-client';
-import { QuoteStatus, readQuoteStatus } from '@utils/quote-status';
+import { StoredQuoteStatus, readQuoteStatus } from '@utils/quote-status';
 import { CostBreakdown, GlassSpecification } from '@utils/calculations';
 
 const TABLE = 'quotes';
@@ -27,11 +27,10 @@ export interface SavedGlassQuote {
   notes: string;
   items: SavedGlassItem[];
   total: number;
-  status: QuoteStatus;
-  /** Why it was lost, when it was lost. */
-  statusReason: string | null;
-  /** When someone last set the status by hand. Null for a quote nobody has marked. */
-  statusChangedAt: string | null;
+  /** What the stored status still says. Won comes from the order link, not from here. */
+  status: StoredQuoteStatus;
+  /** The purchase order this quote became. Null until an order made from it is saved. */
+  purchaseOrderId: string | null;
   /** Stamp of the glass rates the saved prices were calculated on. */
   ratesUpdatedAt: string | null;
 }
@@ -44,8 +43,7 @@ interface QuoteRow {
   specification: unknown;
   cost: unknown;
   status?: unknown;
-  status_reason?: string | null;
-  status_changed_at?: string | null;
+  purchase_order_id?: string | null;
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -81,8 +79,7 @@ function toSavedQuote(row: QuoteRow): SavedGlassQuote | null {
     items: specification.items as SavedGlassItem[],
     total: typeof cost.total === 'number' ? cost.total : 0,
     status: readQuoteStatus(row.status),
-    statusReason: typeof row.status_reason === 'string' ? row.status_reason : null,
-    statusChangedAt: typeof row.status_changed_at === 'string' ? row.status_changed_at : null,
+    purchaseOrderId: typeof row.purchase_order_id === 'string' ? row.purchase_order_id : null,
     ratesUpdatedAt: typeof specification.ratesUpdatedAt === 'string' ? specification.ratesUpdatedAt : null,
   };
 }
@@ -113,14 +110,6 @@ export async function saveGlassQuote(quote: { name: string; customer: string; cu
     },
   });
 
-  if (error) {
-    throw new Error(error.message);
-  }
-}
-
-export async function deleteGlassQuote(id: string): Promise<void> {
-  const db = createClient();
-  const { error } = await db.from(TABLE).delete().eq('id', id);
   if (error) {
     throw new Error(error.message);
   }

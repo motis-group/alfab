@@ -250,6 +250,9 @@ exception
     null;
 end $$;
 
+-- The purchase order a quote became. A quote with one is won; deleting the order returns it to open.
+alter table quotes add column if not exists purchase_order_id uuid references purchase_orders(id) on delete set null;
+
 create table if not exists purchase_order_lines (
   id uuid primary key default gen_random_uuid(),
   purchase_order_id uuid not null references purchase_orders(id) on delete cascade,
