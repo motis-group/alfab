@@ -30,6 +30,7 @@ function glassQuote(over: Partial<QuoteRecord> = {}): QuoteRecord {
   return {
     id: 'g1',
     kind: 'glass',
+    reference: null,
     name: 'Cut glass',
     customer: 'Status Houseboats',
     customerId: 'c1',
@@ -47,6 +48,7 @@ function windowQuote(over: Partial<QuoteRecord> = {}): QuoteRecord {
   return {
     id: 'w1',
     kind: 'window',
+    reference: null,
     name: 'Kitchen hopper',
     customer: 'Status Houseboats',
     customerId: null,

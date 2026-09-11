@@ -7,7 +7,8 @@ import { useRouter } from 'next/navigation';
 
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
-import AwningCostingSheet, { AwningCostingSheetAwning } from '@components/AwningCostingSheet';
+import AwningCostingSheet, { AwningCostingSheetAwning, awningQuoteLines } from '@components/AwningCostingSheet';
+import { CustomerQuoteContent, quoteFingerprint, quoteReference, saveCustomerQuote } from '@utils/customer-quote-store';
 import Card from '@components/Card';
 import SidebarTabs from '@components/SidebarTabs';
 import CardDouble from '@components/CardDouble';
@@ -68,6 +69,9 @@ export default function AwningCostingPage() {
 
   const [role, setRole] = useState<UserRole>('readonly');
   const [canSaveCostings, setCanSaveCostings] = useState(false);
+  const [username, setUsername] = useState<string | null>(null);
+  // The quote last saved for the customer, and the content it was saved with.
+  const [issued, setIssued] = useState<{ id: string; fingerprint: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<{ tone: 'success' | 'warning'; message: string } | null>(null);
@@ -149,6 +153,7 @@ export default function AwningCostingPage() {
 
         setRole(user.effectiveRole as UserRole);
         setCanSaveCostings(userCan(user, 'quotes:write'));
+        setUsername(user.username);
 
         // Opened from an order to price one of its lines: load that line into the form.
         const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -300,7 +305,38 @@ export default function AwningCostingPage() {
     }
   }
 
-  function printSheet(audience: 'internal' | 'customer') {
+  // The customer copy on screen, as a print would record it. A reprint of unchanged content reuses
+  // the quote already saved; any change is a different offer and prints as a draft until it is saved.
+  const printedQuote: CustomerQuoteContent = { kind: 'awning-quote', name: quoteName, customer: selectedCustomer?.name || customerName, customerId: customerId || null, date: quoteDate, notes: quoteNotes, lines: awningQuoteLines(sheetAwnings, rates) };
+  const printedFingerprint = quoteFingerprint(printedQuote);
+  const reference = issued && issued.fingerprint === printedFingerprint ? quoteReference(issued.id) : null;
+
+  /** Saves the customer copy so the print carries a number. False, with the reason on screen, when it cannot. */
+  async function issueQuote(): Promise<boolean> {
+    if (!canSaveCostings) {
+      setStatus({ tone: 'warning', message: 'A numbered quote is saved as it prints, and saving quotes needs access. Cmd+P prints a draft.' });
+      return false;
+    }
+    if (!printedQuote.lines.some((line) => line.unitPrice != null)) {
+      setStatus({ tone: 'warning', message: 'Nothing on this quote has a price, so there is no offer to print.' });
+      return false;
+    }
+
+    try {
+      const id = await saveCustomerQuote({ ...printedQuote, issuedBy: username, ratesUpdatedAt });
+      setIssued({ id, fingerprint: printedFingerprint });
+      setStatus({ tone: 'success', message: `Quote ${quoteReference(id)} saved. It is in the order list.` });
+      return true;
+    } catch (saveError: any) {
+      setStatus({ tone: 'warning', message: `The quote was not saved, so it was not printed. ${saveError?.message || ''}`.trim() });
+      return false;
+    }
+  }
+
+  async function printSheet(audience: 'internal' | 'customer') {
+    if (audience === 'customer' && !reference && !(await issueQuote())) {
+      return;
+    }
     setSheetAudience(audience);
     if (typeof window !== 'undefined') {
       // Let the sheet re-render for the chosen audience before the print dialog reads the page.
@@ -727,7 +763,7 @@ export default function AwningCostingPage() {
         </CardDouble>
       )}
 
-      <AwningCostingSheet audience={sheetAudience} quoteName={quoteName} customerName={selectedCustomer?.name || customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} awnings={sheetAwnings} />
+      <AwningCostingSheet audience={sheetAudience} reference={reference} quoteName={quoteName} customerName={selectedCustomer?.name || customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} awnings={sheetAwnings} />
     </AppFrame>
   );
 }

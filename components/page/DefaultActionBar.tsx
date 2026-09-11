@@ -305,7 +305,7 @@ const DefaultActionBar: React.FC<DefaultActionBarProps> = ({ floating = false, i
               },
               {
                 icon: '⊹',
-                children: 'TX-02 Berkeley Mono™ Trial [usgraphics.com]',
+                children: 'TX-02 Berkeley Mono™ [usgraphics.com]',
                 onClick: () => Utilities.onHandleFontChange('font-use-berkeley-mono'),
               },
               {

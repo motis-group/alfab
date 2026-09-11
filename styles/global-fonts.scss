@@ -115,13 +115,22 @@ body.font-use-web-plus-ibm-vga-8x16 {
   --font-family-mono: 'WebPlus-IBM-VGA-8X16', sans-serif;
 }
 
+/* Licensed Berkeley Mono, served from public/fonts so every machine prints the same document.
+   local() picks up the desktop install first and skips the download. */
 @font-face {
-  font-family: 'TX02Mono-Regular';
-  src: url('https://intdev-global.s3.us-west-2.amazonaws.com/public/internet-dev/e049dfb6-9c5d-4ac4-97c2-eb6e95c61d09.woff2') format('woff2');
+  font-family: 'Berkeley Mono';
+  font-weight: 400;
+  src: local('BerkeleyMono-Regular'), url('/fonts/BerkeleyMono-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Berkeley Mono';
+  font-weight: 700;
+  src: local('BerkeleyMono-Bold'), url('/fonts/BerkeleyMono-Bold.woff2') format('woff2');
 }
 
 body.font-use-berkeley-mono {
-  --font-family-mono: 'TX02Mono-Regular', sans-serif;
+  --font-family-mono: 'Berkeley Mono', sans-serif;
 }
 
 @font-face {

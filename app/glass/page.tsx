@@ -441,7 +441,7 @@ export default function OrderDashboardPage() {
                 <TableColumn>
                   <input type="checkbox" checked={selectedQuotes.has(quote.id)} disabled={!quote.draft} aria-label={`Put ${quote.name || 'this quote'} on an order`} onChange={() => toggleQuote(quote.id)} />
                 </TableColumn>
-                <TableColumn>{quote.name || 'Untitled'}</TableColumn>
+                <TableColumn>{[quote.reference, quote.name || 'Untitled'].filter(Boolean).join(' · ')}</TableColumn>
                 <TableColumn>{QUOTE_KIND_LABELS[quote.kind]}</TableColumn>
                 <TableColumn>{quote.customer || 'Walk-in'}</TableColumn>
                 <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>

@@ -699,6 +699,8 @@ select option {
 
   .window-costing-sheet {
     display: block;
+    /* Border-box, or the side padding is added to the full width and the sheet runs off the page. */
+    box-sizing: border-box;
     width: 100%;
     padding: 0 12mm;
     color: #000;
@@ -794,16 +796,172 @@ select option {
     border-top: 0.25pt solid #999;
   }
 
-  /* What the customer is being asked to pay for the whole quote, under the last line. */
-  .window-costing-sheet__total {
-    display: flex;
-    justify-content: space-between;
-    border-top: 0.75pt solid #000;
-    padding-top: 1mm;
-    margin-top: 2mm;
-    font-size: 11pt;
-    font-weight: 700;
+  /* The customer's copy is the quote paper below, with the page margins an invoice has. */
+  .window-costing-sheet[data-audience='customer'] {
+    padding: 0 16mm;
   }
+}
+
+/* The customer's quote as paper, laid out as an invoice: masthead, parties, one table, totals
+   block. The calculators print it and the dashboard shows it on screen, so both read the same.
+   Berkeley Mono, declared in styles/global-fonts.scss: the quote is set in one face whatever font
+   the app is wearing, so a customer's copy does not change with the operator's picker. */
+.printed-quote {
+  font-family: 'Berkeley Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9pt;
+  line-height: 1.4;
+  color: #000;
+  background: #fff;
+}
+
+/* On screen the paper sits in the app, so it gets the margins the printer would give it. */
+@media screen {
+  .printed-quote {
+    max-width: 210mm;
+    padding: 12mm 16mm;
+  }
+}
+
+/* Line-printer capitals on the labels and names, the way a printed invoice has always read.
+   Specifications, notes and the footer stay in sentence case, where the length needs it. */
+.printed-quote__mark,
+.printed-quote__item,
+.printed-quote__party-name,
+.printed-quote__metadata td:first-child,
+.printed-quote__totals td:first-child {
+  text-transform: uppercase;
+}
+
+.printed-quote__rule {
+  height: 1.5mm;
+  background: #000;
+  margin-bottom: 8mm;
+}
+
+.printed-quote__masthead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8mm;
+}
+
+.printed-quote__title {
+  font-size: 16pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0 0 3mm;
+}
+
+.printed-quote__metadata td {
+  padding: 0 6mm 0.5mm 0;
+  vertical-align: top;
+}
+
+.printed-quote__metadata td:first-child {
+  color: #555;
+  letter-spacing: 0.05em;
+}
+
+.printed-quote__mark {
+  font-size: 12pt;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: right;
+}
+
+.printed-quote__parties {
+  display: grid;
+  grid-template-columns: 40% 60%;
+  margin-bottom: 8mm;
+}
+
+.printed-quote__party-name {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+/* What the customer is being asked to pay, stated once before the detail, as an invoice does. */
+.printed-quote__headline {
+  font-size: 14pt;
+  font-weight: 700;
+  margin-bottom: 6mm;
+}
+
+.printed-quote__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 4mm;
+}
+
+.printed-quote__table th {
+  text-align: left;
+  font-size: 8pt;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-bottom: 1.5mm;
+  border-bottom: 0.75pt solid #000;
+}
+
+.printed-quote__table td {
+  padding: 1.5mm 0;
+  vertical-align: top;
+}
+
+.printed-quote__line {
+  page-break-inside: avoid;
+}
+
+.printed-quote__line + .printed-quote__line td {
+  border-top: 0.25pt solid #ebebeb;
+}
+
+.printed-quote__spec {
+  font-size: 8pt;
+  color: #555;
+}
+
+.printed-quote__amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding-left: 4mm;
+}
+
+.printed-quote__totals td {
+  padding: 1mm 0;
+  border-top: 0.25pt solid #ebebeb;
+}
+
+.printed-quote__totals td:first-child {
+  letter-spacing: 0.05em;
+}
+
+.printed-quote__totals .printed-quote__amount {
+  padding-left: 4mm;
+}
+
+.printed-quote__due td {
+  border-top: 0.75pt solid #000;
+  font-weight: 700;
+}
+
+.printed-quote__note {
+  margin: 2mm 0 0;
+}
+
+.printed-quote__notes {
+  margin-top: 6mm;
+  page-break-inside: avoid;
+}
+
+.printed-quote__footer {
+  margin-top: 8mm;
+  padding-top: 2mm;
+  border-top: 0.25pt solid #ebebeb;
+  font-size: 8pt;
+  color: #555;
 }
 
 /* Rate severity in the window rates editor. Applied per cell: a class on a table row would

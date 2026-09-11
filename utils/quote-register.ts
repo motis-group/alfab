@@ -1,6 +1,9 @@
 import { QuoteStatus } from '@utils/quote-status';
+import { AwningCostingInput } from '@utils/awning-costing';
 import { SavedAwningCosting, listAwningCostings } from '@utils/awning-quote-store';
+import { CustomerQuote, QuoteLine, listCustomerQuotes } from '@utils/customer-quote-store';
 import { SavedGlassQuote, listGlassQuotes } from '@utils/glass-quote-store';
+import { WindowCostingInput } from '@utils/window-costing';
 import { SavedWindowCosting, listWindowCostings } from '@utils/window-quote-store';
 import { QuoteToOrderDraftInput } from '@utils/quote-to-order';
 
@@ -30,6 +33,10 @@ export interface QuoteRecord {
   customer: string;
   customerId: string | null;
   date: string;
+  /** What the customer reads off a printed quote, e.g. Q-3F2A9C1E. Null for a costing never printed. */
+  reference: string | null;
+  /** The lines as they were printed, unpriced ones included. Only a printed quote has them. */
+  printedLines?: QuoteLine[];
   /** Purchase order lines this quote would create. */
   lineCount: number;
   total: number;
@@ -43,6 +50,7 @@ function fromGlass(quote: SavedGlassQuote): QuoteRecord {
   return {
     id: quote.id,
     kind: 'glass',
+    reference: null,
     name: quote.name,
     customer: quote.customer,
     customerId: quote.customerId,
@@ -74,6 +82,7 @@ function fromWindow(costing: SavedWindowCosting): QuoteRecord {
   return {
     id: costing.id,
     kind: 'window',
+    reference: null,
     name: costing.name,
     customer: costing.customer,
     customerId: null,
@@ -100,6 +109,7 @@ function fromAwning(costing: SavedAwningCosting): QuoteRecord {
   return {
     id: costing.id,
     kind: 'awning',
+    reference: null,
     name: costing.name,
     customer: costing.customer,
     customerId: null,
@@ -122,9 +132,40 @@ function fromAwning(costing: SavedAwningCosting): QuoteRecord {
   };
 }
 
+/** A quote printed for a customer, with its lines as printed. */
+export function fromCustomerQuote(quote: CustomerQuote): QuoteRecord {
+  const priced = quote.lines.filter((line) => line.unitPrice != null);
+  const orderLine = (line: (typeof priced)[number]) => ({ description: line.description, quantity: line.quantity, unitPrice: line.unitPrice as number, ratesUpdatedAt: quote.ratesUpdatedAt });
+
+  return {
+    id: quote.id,
+    kind: quote.kind === 'window-quote' ? 'window' : 'awning',
+    reference: quote.reference,
+    printedLines: quote.lines,
+    name: quote.name,
+    customer: quote.customer,
+    customerId: quote.customerId,
+    date: quote.date,
+    lineCount: quote.lines.length,
+    total: quote.subtotal,
+    status: quote.status,
+    statusReason: quote.statusReason,
+    draft: priced.length
+      ? {
+          quoteName: quote.name,
+          customerName: quote.customer,
+          customerId: quote.customerId,
+          quoteDate: quote.date.slice(0, 10),
+          quoteNotes: quote.notes,
+          ...(quote.kind === 'window-quote' ? { windowLines: priced.map((line) => ({ ...orderLine(line), windowSpec: line.input as WindowCostingInput })) } : { awningLines: priced.map((line) => ({ ...orderLine(line), awningSpec: line.input as AwningCostingInput })) }),
+        }
+      : null,
+  };
+}
+
 /** Every saved quote, newest first. A calculator that fails to read is reported, not dropped. */
 export async function listQuoteRecords(): Promise<{ records: QuoteRecord[]; errors: string[] }> {
-  const [glass, windows, awnings] = await Promise.allSettled([listGlassQuotes(), listWindowCostings(), listAwningCostings()]);
+  const [glass, windows, awnings, printed] = await Promise.allSettled([listGlassQuotes(), listWindowCostings(), listAwningCostings(), listCustomerQuotes()]);
   const records: QuoteRecord[] = [];
   const errors: string[] = [];
 
@@ -142,6 +183,12 @@ export async function listQuoteRecords(): Promise<{ records: QuoteRecord[]; erro
     records.push(...awnings.value.map(fromAwning));
   } else {
     errors.push('Awning costings could not be read.');
+  }
+
+  if (printed.status === 'fulfilled') {
+    records.push(...printed.value.map(fromCustomerQuote));
+  } else {
+    errors.push('Printed quotes could not be read.');
   }
 
   records.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
@@ -207,10 +254,12 @@ export function mergeQuotesForOrder(records: QuoteRecord[]): MergedQuoteDraft | 
 
   const withCustomerId = priced.find((record) => record.customerId);
   const notes = priced.map((record) => record.draft!.quoteNotes).filter((note) => note && note.trim());
+  // A printed quote is named with its reference, so the order says which offer it came from.
+  const label = (record: QuoteRecord) => [record.reference, record.name].filter(Boolean).join(' ');
 
   return {
     draft: {
-      quoteName: priced.length === 1 ? priced[0].name : priced.map((record) => record.name).filter(Boolean).join(' + '),
+      quoteName: priced.length === 1 ? label(priced[0]) : priced.map(label).filter(Boolean).join(' + '),
       customerName: withCustomerId?.customer || priced[0].customer,
       customerId: withCustomerId?.customerId || null,
       quoteDate: priced[0].draft!.quoteDate,
