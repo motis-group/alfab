@@ -24,6 +24,7 @@ import {
   UserRole,
   calculateOrderTotal,
   formatCurrency,
+  orderDeleteRefusal,
   statusLabel,
   todayISODate,
   localISODate,
@@ -125,6 +126,8 @@ export default function OrderDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  // Shown in the purchase orders card, beside the row it is about, not at the top of the page.
+  const [orderNotice, setOrderNotice] = useState<string | null>(null);
 
   const [customerFilter, setCustomerFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<OrderStatus | ''>('');
@@ -223,6 +226,41 @@ export default function OrderDashboardPage() {
     const { records, errors } = await listQuoteRecords();
     setQuotes(records);
     setQuoteError(errors.length ? errors.join(' ') : null);
+  }
+
+  /** Archiving hides an order from the working lists and can be undone. */
+  async function setOrderArchived(order: PurchaseOrder, archived: boolean) {
+    const now = new Date().toISOString();
+    const { error } = await createClient()
+      .from(TABLE_PURCHASE_ORDERS)
+      .update({ archived_at: archived ? now : null, updated_at: now })
+      .eq('id', order.id);
+    if (error) {
+      setOrderNotice(error.message || 'Unable to archive the order.');
+      return;
+    }
+    setOrderNotice(null);
+    await loadData();
+  }
+
+  /** Deleting is for an order entered by mistake. One with work recorded is archived instead. */
+  async function deleteOrder(order: PurchaseOrder) {
+    const lines = linesByOrder[order.id] || [];
+    const refusal = orderDeleteRefusal(order, lines);
+    if (refusal) {
+      setOrderNotice(refusal);
+      return;
+    }
+    if (!window.confirm(`Delete PO ${order.po_number} and its ${lines.length} line${lines.length === 1 ? '' : 's'}? This cannot be undone. Archive hides it instead and can be undone.`)) {
+      return;
+    }
+    const { error } = await createClient().from(TABLE_PURCHASE_ORDERS).delete().eq('id', order.id);
+    if (error) {
+      setOrderNotice(error.message || 'Unable to delete the order.');
+      return;
+    }
+    setOrderNotice(null);
+    await loadData();
   }
 
   async function markQuote(id: string, status: QuoteStatus, reason?: string | null) {
@@ -470,6 +508,11 @@ export default function OrderDashboardPage() {
 
 
       <Card title="PURCHASE ORDERS">
+        {orderNotice ? (
+          <Text>
+            <span className="status-error">{orderNotice}</span>
+          </Text>
+        ) : null}
         {isLoading ? (
           <Text>Loading order data...</Text>
         ) : (
@@ -482,7 +525,7 @@ export default function OrderDashboardPage() {
               <TableColumn style={{ width: '16ch' }}>STATUS</TableColumn>
               <TableColumn style={{ width: '12ch' }}>LINES</TableColumn>
               <TableColumn style={{ width: '14ch' }}>TOTAL</TableColumn>
-              <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
+              <TableColumn style={{ width: '30ch' }}>ACTIONS</TableColumn>
             </TableRow>
 
             {filteredOrders.map((order) => {
@@ -507,8 +550,10 @@ export default function OrderDashboardPage() {
                   </TableColumn>
                   <TableColumn>{lines.length}</TableColumn>
                   <TableColumn>{formatCurrency(total)}</TableColumn>
-                  <TableColumn>
-                    <ActionButton onClick={() => router.push(`/glass/new?orderId=${order.id}`)}>View</ActionButton>
+                  <TableColumn style={{ whiteSpace: 'nowrap' }}>
+                    <ActionButton onClick={() => router.push(`/glass/new?orderId=${order.id}`)}>View</ActionButton>{' '}
+                    <ActionButton onClick={role === 'readonly' ? undefined : () => setOrderArchived(order, !isOrderArchived(order))}>{isOrderArchived(order) ? 'Restore' : 'Archive'}</ActionButton>{' '}
+                    <ActionButton onClick={role === 'readonly' ? undefined : () => deleteOrder(order)}>Delete</ActionButton>
                   </TableColumn>
                 </TableRow>
               );

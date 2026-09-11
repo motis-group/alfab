@@ -132,6 +132,20 @@ export function formatCurrency(value: number | null | undefined): string {
   return `$${amount.toFixed(2)}`;
 }
 
+/**
+ * Why an order cannot be deleted, or null when it can. Work recorded on an order is history nothing
+ * else can rebuild: the quantities made and the minutes they took, which correct the labour
+ * estimates. Such an order is archived instead, which hides it and can be undone.
+ */
+export function orderDeleteRefusal(order: Pick<PurchaseOrder, 'po_number' | 'status'>, lines: Pick<PurchaseOrderLine, 'quantity_fulfilled' | 'actual_minutes'>[]): string | null {
+  const name = `PO ${order.po_number || '(no number)'}`;
+  if (order.status === 'in_production' || order.status === 'fulfilled') {
+    return `${name} is ${statusLabel(order.status).toLowerCase()}, so it can only be archived.`;
+  }
+  const recorded = lines.some((line) => Number(line.quantity_fulfilled || 0) > 0 || (line.actual_minutes != null && String(line.actual_minutes).trim() !== ''));
+  return recorded ? `${name} has work recorded against it, so it can only be archived.` : null;
+}
+
 export function statusLabel(status: OrderStatus): string {
   switch (status) {
     case 'open':
