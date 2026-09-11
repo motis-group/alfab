@@ -332,9 +332,6 @@ export default function NewPurchaseOrderPage() {
     // for a walk-in typed by hand.
     const matchedCustomerId = quoteDraft.customerId || (matchedCustomers.length === 1 ? matchedCustomers[0].id : '');
 
-    // Both kinds of quote carry one line per priced item.
-    const glassLines = quoteDraft.glassLines.length ? quoteDraft.glassLines : quoteDraft.spec ? [{ description: '', quantity: quoteDraft.quantity, unitPrice: quoteDraft.unitPrice, markupPercent: quoteDraft.markupPercent, spec: quoteDraft.spec }] : [];
-
     const awningDraftLines = quoteDraft.awningLines.map((line) =>
       createLineDraft({
         pricingSource: 'awning_calculator',
@@ -349,7 +346,7 @@ export default function NewPurchaseOrderPage() {
     // A draft carries whatever it was built from: one quote of one kind, or several quotes of
     // several kinds converted together. Each array contributes its own lines.
     const draftLines = [
-      ...glassLines.map((line) =>
+      ...quoteDraft.glassLines.map((line) =>
         createLineDraft({
           pricingSource: 'adhoc_calculator',
           quantityOrdered: line.quantity,

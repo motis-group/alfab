@@ -11,7 +11,7 @@ customer gets one order and one number.
 | Convert one quote from its document | `app/glass/dashboard/page.tsx`, `components/QuoteDocument.tsx` |
 | Draft handover | `utils/quote-to-order.ts` |
 | Order side | `app/glass/new/page.tsx`, `applyQuoteDraft` |
-| Checks | `utils/quote-register.test.ts`, `utils/customer-quote-store.test.ts` |
+| Checks | `utils/quote-register.test.ts`, `utils/customer-quote-store.test.ts`, `utils/quote-to-order.test.ts` |
 
 ## Where a quote is converted
 
@@ -94,7 +94,3 @@ show where it came from.
 `persistQuoteToOrderDraft` writes the draft to session storage under `adhocQuoteToPurchaseOrderDraft`.
 On `/glass/new?fromQuote=1`, `consumeQuoteToOrderDraft` reads the draft once and removes it. It drops
 any line whose costing spec it does not recognize.
-
-`consumeQuoteToOrderDraft` checks only the lines that match the draft's `kind`. `mergeQuotesForOrder`
-sets no kind, so every converted draft reads as glass, and the check drops a draft with no glass line.
-Converting only window and awning quotes opens an empty order, after the page marks the quotes won.

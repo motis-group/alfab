@@ -4,8 +4,6 @@ import { AwningCostingInput } from '@utils/awning-costing';
 
 const QUOTE_TO_ORDER_STORAGE_KEY = 'adhocQuoteToPurchaseOrderDraft';
 
-export type QuoteToOrderDraftKind = 'glass' | 'window' | 'awning';
-
 /** One window costing on its way to a purchase order line. A quote can carry several. */
 export interface WindowQuoteLine {
   description: string;
@@ -36,37 +34,25 @@ export interface GlassQuoteLine {
 }
 
 export interface QuoteToOrderDraft {
-  kind: QuoteToOrderDraftKind;
   quoteName: string;
   customerName: string;
   /** The customer the quote was written against, so the order does not have to match on name. */
   customerId: string | null;
   quoteDate: string;
-  quantity: number;
-  unitPrice: number;
-  markupPercent: number;
   quoteNotes: string;
-  /** Glass calculator specification. Null for window costings. */
-  spec: GlassSpecification | null;
-  /** Glass pieces, one per purchase order line. Empty for window quotes. */
+  /** Glass pieces, one per purchase order line. */
   glassLines: GlassQuoteLine[];
-  /** Window costings, one per purchase order line. Empty for glass quotes. */
+  /** Window costings, one per purchase order line. */
   windowLines: WindowQuoteLine[];
-  /** Awning costings, one per purchase order line. Empty for every other kind. */
+  /** Awning costings, one per purchase order line. */
   awningLines: AwningQuoteLine[];
 }
 
-export type QuoteToOrderDraftInput = Omit<QuoteToOrderDraft, 'kind' | 'spec' | 'glassLines' | 'windowLines' | 'awningLines' | 'quantity' | 'unitPrice' | 'customerId' | 'markupPercent'> & {
-  kind?: QuoteToOrderDraftKind;
+export type QuoteToOrderDraftInput = Omit<QuoteToOrderDraft, 'glassLines' | 'windowLines' | 'awningLines' | 'customerId'> & {
   customerId?: string | null;
-  /** Legacy single-piece markup. Each line carries its own. */
-  markupPercent?: number;
-  spec?: GlassSpecification | null;
   glassLines?: GlassQuoteLine[];
   windowLines?: WindowQuoteLine[];
   awningLines?: AwningQuoteLine[];
-  quantity?: number;
-  unitPrice?: number;
 };
 
 function normalizeNumber(value: unknown, fallback = 0): number {
@@ -174,36 +160,20 @@ function isQuoteToOrderDraft(value: unknown): value is QuoteToOrderDraft {
     return false;
   }
 
-  if (draft.kind === 'window') {
-    return normalizeWindowLines(draft.windowLines).length > 0;
-  }
-  if (draft.kind === 'awning') {
-    return normalizeAwningLines(draft.awningLines).length > 0;
-  }
-  return normalizeGlassLines(draft.glassLines).length > 0 || isGlassSpecification(draft.spec);
+  // A draft can carry several quotes of several kinds, so any line makes it an order.
+  return normalizeGlassLines(draft.glassLines).length > 0 || normalizeWindowLines(draft.windowLines).length > 0 || normalizeAwningLines(draft.awningLines).length > 0;
 }
 
 function normalizeDraft(draft: QuoteToOrderDraftInput | QuoteToOrderDraft): QuoteToOrderDraft {
-  const kind: QuoteToOrderDraftKind = draft.kind === 'window' || draft.kind === 'awning' ? draft.kind : 'glass';
-  const windowLines = normalizeWindowLines(draft.windowLines);
-  const awningLines = normalizeAwningLines(draft.awningLines);
-  const glassLines = normalizeGlassLines(draft.glassLines);
-  const firstLine = windowLines[0] || awningLines[0] || glassLines[0];
-
   return {
-    kind,
     quoteName: draft.quoteName.trim(),
     customerName: draft.customerName.trim(),
     customerId: typeof draft.customerId === 'string' && draft.customerId ? draft.customerId : null,
     quoteDate: draft.quoteDate,
-    quantity: Math.max(1, normalizeNumber(draft.quantity, firstLine?.quantity ?? 1)),
-    unitPrice: Math.max(0, normalizeNumber(draft.unitPrice, firstLine?.unitPrice ?? 0)),
-    markupPercent: Math.max(0, normalizeNumber(draft.markupPercent, 0)),
     quoteNotes: draft.quoteNotes.trim(),
-    spec: kind === 'glass' && draft.spec ? { ...draft.spec } : null,
-    glassLines,
-    windowLines,
-    awningLines,
+    glassLines: normalizeGlassLines(draft.glassLines),
+    windowLines: normalizeWindowLines(draft.windowLines),
+    awningLines: normalizeAwningLines(draft.awningLines),
   };
 }
 
