@@ -44,6 +44,36 @@ export function isQuoteStatus(value: unknown): value is QuoteStatus {
   return typeof value === 'string' && (QUOTE_STATUS_ORDER as string[]).includes(value);
 }
 
+/** How long a quote's prices hold. The printed quote states it; an unanswered quote then expires. */
+export const QUOTE_HOLD_DAYS = 30;
+
+/** The calendar day a date or timestamp falls on, as the order list shows it. */
+function dayOf(stamp: string): string {
+  return stamp.slice(0, 10);
+}
+
+function addDays(day: string, days: number): string {
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * The status a quote reads as on `today` (YYYY-MM-DD). An open quote expires the day after its hold
+ * runs out. Setting it back to open by hand starts the hold again from that day.
+ *
+ * Computed, never written: the stored status stays open. Nothing has to run on a schedule, so
+ * nothing can stop running. SQL that reads `quotes.status` directly has to apply the same rule.
+ */
+export function effectiveQuoteStatus(quote: { status: QuoteStatus; date: string; statusChangedAt: string | null }, today: string): QuoteStatus {
+  if (quote.status !== 'open' || !/^\d{4}-\d{2}-\d{2}/.test(quote.date)) {
+    return quote.status;
+  }
+  const reopened = quote.statusChangedAt ? dayOf(quote.statusChangedAt) : '';
+  const holdStarts = reopened > dayOf(quote.date) ? reopened : dayOf(quote.date);
+  return today > addDays(holdStarts, QUOTE_HOLD_DAYS) ? 'expired' : 'open';
+}
+
 /** Read a status off a quote row, defaulting anything unrecognised to open. */
 export function readQuoteStatus(value: unknown): QuoteStatus {
   return isQuoteStatus(value) ? value : 'open';

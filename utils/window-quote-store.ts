@@ -19,6 +19,8 @@ export interface SavedWindowCosting {
   status: QuoteStatus;
   /** Why it was lost, when it was lost. */
   statusReason: string | null;
+  /** When someone last set the status by hand. Null for a quote nobody has marked. */
+  statusChangedAt: string | null;
   /** Stamp of the rates the saved price was calculated on. */
   ratesUpdatedAt: string | null;
 }
@@ -32,6 +34,7 @@ interface QuoteRow {
   cost: unknown;
   status?: unknown;
   status_reason?: string | null;
+  status_changed_at?: string | null;
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -71,6 +74,7 @@ function toSavedCosting(row: QuoteRow): SavedWindowCosting | null {
     glazing: Array.isArray(cost.glazing) ? (cost.glazing as CostLine[]) : [],
     status: readQuoteStatus(row.status),
     statusReason: typeof row.status_reason === 'string' ? row.status_reason : null,
+    statusChangedAt: typeof row.status_changed_at === 'string' ? row.status_changed_at : null,
     ratesUpdatedAt: typeof specification.ratesUpdatedAt === 'string' ? specification.ratesUpdatedAt : null,
   };
 }

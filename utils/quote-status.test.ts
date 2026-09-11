@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { QuoteStatus, lossReasons, readQuoteStatus, winRate } from './quote-status';
+import { QuoteStatus, effectiveQuoteStatus, lossReasons, readQuoteStatus, winRate } from './quote-status';
 
 const quote = (status: QuoteStatus, price: number | null = 100, statusReason: string | null = null) => ({ status, price, statusReason });
 
@@ -54,4 +54,36 @@ test('a loss with no reason is grouped rather than dropped', () => {
   const reasons = lossReasons([quote('lost', 100, null), quote('lost', 100, '   ')]);
 
   assert.deepEqual(reasons, [{ reason: 'Not given', count: 2 }]);
+});
+
+const dated = (status: QuoteStatus, date: string, statusChangedAt: string | null = null) => ({ status, date, statusChangedAt });
+
+test('an open quote holds for 30 days from its date and expires the day after', () => {
+  // Printed quotes are stored at midnight UTC; the day is what the order list shows.
+  const printed = dated('open', '2026-09-10T00:00:00.000Z');
+
+  assert.equal(effectiveQuoteStatus(printed, '2026-10-10'), 'open', 'the thirtieth day is inside the hold');
+  assert.equal(effectiveQuoteStatus(printed, '2026-10-11'), 'expired');
+  assert.equal(effectiveQuoteStatus(dated('open', '2026-01-31'), '2026-03-02'), 'open', 'counted in days, not months');
+  assert.equal(effectiveQuoteStatus(dated('open', '2026-01-31'), '2026-03-03'), 'expired');
+});
+
+test('only an open quote expires; a decided or already expired one keeps its status', () => {
+  const longAgo = '2025-01-01';
+
+  assert.equal(effectiveQuoteStatus(dated('won', longAgo), '2026-09-11'), 'won');
+  assert.equal(effectiveQuoteStatus(dated('lost', longAgo), '2026-09-11'), 'lost');
+  assert.equal(effectiveQuoteStatus(dated('expired', longAgo), '2026-09-11'), 'expired');
+});
+
+test('re-opening a quote by hand starts the hold again from that day', () => {
+  const reopened = dated('open', '2026-08-01', '2026-09-05T03:00:00.000Z');
+
+  assert.equal(effectiveQuoteStatus(reopened, '2026-10-05'), 'open');
+  assert.equal(effectiveQuoteStatus(reopened, '2026-10-06'), 'expired');
+  assert.equal(effectiveQuoteStatus(dated('open', '2026-09-10', '2026-09-01T00:00:00.000Z'), '2026-10-10'), 'open', 'a mark older than the date does not shorten the hold');
+});
+
+test('a quote with no date cannot run out, so it stays open', () => {
+  assert.equal(effectiveQuoteStatus(dated('open', ''), '2030-01-01'), 'open');
 });

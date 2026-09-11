@@ -131,7 +131,8 @@ the glass loading to 15% for every type.
   Otherwise the print shows "Draft, not issued" in place of the reference.
 - **Limits.** The reference is the first eight hex digits of the row id, so two quotes can share
   one. The chance stays under 1% until about 9,000 quotes. The footer promises a 30-day price hold
-  from the quote date. Nothing marks a quote expired after 30 days, so staff set `expired` by hand.
+  from the quote date. After it, an unanswered quote reads as expired, as
+  [feedback-loops.md](feedback-loops.md) describes.
 - **Copying.** "Copy Prices For Customer" is the same split in text. "Copy Cost Build-up
   (internal)" carries the build-up and is marked as not for a customer.
 - **Customer.** Picked from the customer list, so the purchase order does not have to match one by
