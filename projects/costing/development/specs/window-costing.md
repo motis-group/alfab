@@ -120,7 +120,8 @@ the glass loading to 15% for every type.
   prints as blank pages.
 - **Customer quote.** "Print Quote For Customer" prints `components/PrintedQuote.tsx`, which the
   awning calculator also uses. The layout follows an invoice: issuer, customer, one line for each
-  window, and a totals block with GST. The type is Berkeley Mono, served from `public/fonts`.
+  window, and a totals block with GST. The type is Berkeley Mono, served from `public/fonts`. The
+  dashboard quote view shows the same paper on screen, so the office reads what the customer read.
 - **Quote reference.** "Print Quote For Customer" saves the quote, then prints it with a reference
   such as `Q-3F2A9C1E`. The order list and the dashboard quote view show the same reference, so a
   customer can quote it back. An order made from the quote carries the reference in each line

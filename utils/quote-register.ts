@@ -1,7 +1,7 @@
 import { QuoteStatus } from '@utils/quote-status';
 import { AwningCostingInput } from '@utils/awning-costing';
 import { SavedAwningCosting, listAwningCostings } from '@utils/awning-quote-store';
-import { CustomerQuote, listCustomerQuotes } from '@utils/customer-quote-store';
+import { CustomerQuote, QuoteLine, listCustomerQuotes } from '@utils/customer-quote-store';
 import { SavedGlassQuote, listGlassQuotes } from '@utils/glass-quote-store';
 import { WindowCostingInput } from '@utils/window-costing';
 import { SavedWindowCosting, listWindowCostings } from '@utils/window-quote-store';
@@ -35,6 +35,8 @@ export interface QuoteRecord {
   date: string;
   /** What the customer reads off a printed quote, e.g. Q-3F2A9C1E. Null for a costing never printed. */
   reference: string | null;
+  /** The lines as they were printed, unpriced ones included. Only a printed quote has them. */
+  printedLines?: QuoteLine[];
   /** Purchase order lines this quote would create. */
   lineCount: number;
   total: number;
@@ -139,6 +141,7 @@ export function fromCustomerQuote(quote: CustomerQuote): QuoteRecord {
     id: quote.id,
     kind: quote.kind === 'window-quote' ? 'window' : 'awning',
     reference: quote.reference,
+    printedLines: quote.lines,
     name: quote.name,
     customer: quote.customer,
     customerId: quote.customerId,

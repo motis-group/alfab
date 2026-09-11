@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import PrintSheet from '@components/PrintSheet';
 import { GST_RATE, QuoteLine, quoteTotals } from '@utils/customer-quote-store';
-import { formatCurrency } from '@utils/order-management';
 
 /**
  * Who the quote comes from. The app has no company profile to read this from, so it lives here
@@ -18,10 +17,14 @@ export const QUOTE_ISSUER = {
   email: 'nick@alfab.com.au',
 };
 
+/** Amounts as an invoice prints them, grouped: $7,678.00. The app's own tables do not group. */
+const AUD = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' });
+const formatMoney = (value: number | null) => AUD.format(value ?? 0);
+
 /** Declared in styles/global-fonts.scss, where the app's font picker also reaches it. */
 const QUOTE_FONT = 'Berkeley Mono';
 
-interface PrintedQuoteProps {
+export interface QuotePaperProps {
   /** The saved quote's reference. Null prints a draft: content nobody has recorded is not an offer. */
   reference: string | null;
   quoteName: string;
@@ -32,23 +35,17 @@ interface PrintedQuoteProps {
 }
 
 /**
- * The customer's printed copy of a quote, laid out as an invoice: letterhead, the customer, one
- * table of lines, and a totals block. The window and awning calculators both print through it.
- * QuoteDocument is the on-screen view of a saved quote; this is the paper.
+ * The customer's copy of a quote, laid out as an invoice: letterhead, the customer, one table of
+ * lines, and a totals block. The calculators print it and the dashboard shows it, so the office
+ * reads the same document the customer was given.
  *
  * Monospace, like the app it comes out of.
  */
-export default function PrintedQuote({ reference, quoteName, customerName, quoteDate, notes, lines }: PrintedQuoteProps) {
-  // The sheet is display: none until the print dialog opens, and a hidden element fetches no font.
-  // Ask for it on mount, or the first print of a session comes out in the fallback monospace.
-  React.useEffect(() => {
-    document.fonts?.load(`9pt "${QUOTE_FONT}"`);
-  }, []);
-
+export function QuotePaper({ reference, quoteName, customerName, quoteDate, notes, lines }: QuotePaperProps) {
   const { amounts, subtotal, gst, total, anyUnpriced } = quoteTotals(lines);
 
   return (
-    <PrintSheet audience="customer">
+    <div className="printed-quote">
       <div className="printed-quote__rule" />
 
       <header className="printed-quote__masthead">
@@ -92,7 +89,7 @@ export default function PrintedQuote({ reference, quoteName, customerName, quote
         </div>
       </div>
 
-      <div className="printed-quote__headline">{formatCurrency(total)} AUD</div>
+      <div className="printed-quote__headline">{formatMoney(total)} AUD</div>
 
       <table className="printed-quote__table">
         <thead>
@@ -111,28 +108,28 @@ export default function PrintedQuote({ reference, quoteName, customerName, quote
                 {line.spec ? <div className="printed-quote__spec">{line.spec}</div> : null}
                 {(line.extras || []).map((extra) => (
                   <div key={extra.label} className="printed-quote__spec">
-                    Add for {extra.label}: {extra.total == null ? 'not priced' : formatCurrency(extra.total)}
+                    Add for {extra.label}: {extra.total == null ? 'not priced' : formatMoney(extra.total)}
                   </div>
                 ))}
               </td>
               <td className="printed-quote__amount">{line.quantity}</td>
-              <td className="printed-quote__amount">{line.unitPrice == null ? 'not priced' : formatCurrency(line.unitPrice)}</td>
-              <td className="printed-quote__amount">{amounts[index] == null ? '—' : formatCurrency(amounts[index])}</td>
+              <td className="printed-quote__amount">{line.unitPrice == null ? 'not priced' : formatMoney(line.unitPrice)}</td>
+              <td className="printed-quote__amount">{amounts[index] == null ? '—' : formatMoney(amounts[index])}</td>
             </tr>
           ))}
         </tbody>
         <tbody className="printed-quote__totals">
           <tr>
             <td colSpan={3}>Subtotal (excludes GST)</td>
-            <td className="printed-quote__amount">{formatCurrency(subtotal)}</td>
+            <td className="printed-quote__amount">{formatMoney(subtotal)}</td>
           </tr>
           <tr>
             <td colSpan={3}>GST ({GST_RATE * 100}%)</td>
-            <td className="printed-quote__amount">{formatCurrency(gst)}</td>
+            <td className="printed-quote__amount">{formatMoney(gst)}</td>
           </tr>
           <tr className="printed-quote__due">
             <td colSpan={3}>Total</td>
-            <td className="printed-quote__amount">{formatCurrency(total)}</td>
+            <td className="printed-quote__amount">{formatMoney(total)}</td>
           </tr>
         </tbody>
       </table>
@@ -147,6 +144,21 @@ export default function PrintedQuote({ reference, quoteName, customerName, quote
       ) : null}
 
       <footer className="printed-quote__footer">Confirm sizes before manufacture. Quoted prices hold for 30 days from the date above.</footer>
+    </div>
+  );
+}
+
+/** The paper, for the printer. Hidden on screen; printing hides the app around it. */
+export default function PrintedQuote(props: QuotePaperProps) {
+  // The sheet is display: none until the print dialog opens, and a hidden element fetches no font.
+  // Ask for it on mount, or the first print of a session comes out in the fallback monospace.
+  React.useEffect(() => {
+    document.fonts?.load(`9pt "${QUOTE_FONT}"`);
+  }, []);
+
+  return (
+    <PrintSheet audience="customer">
+      <QuotePaper {...props} />
     </PrintSheet>
   );
 }

@@ -74,6 +74,11 @@ test('a printed quote becomes an order at the prices offered, without its unpric
   assert.equal(record.kind, 'window');
   assert.equal(record.reference, 'Q-3F2A9C1E');
   assert.equal(record.lineCount, 2, 'the list counts every printed line');
+  assert.deepEqual(
+    record.printedLines?.map((printedLine) => printedLine.description),
+    ['Window 1', 'Highlight'],
+    'the dashboard shows the paper, unpriced line included'
+  );
   assert.equal(record.total, 4960);
   assert.equal(record.draft?.quoteDate, '2026-09-10');
   assert.deepEqual(record.draft?.windowLines, [{ description: 'Window 1', quantity: 4, unitPrice: 1240, ratesUpdatedAt: 'r-1', windowSpec: input }]);

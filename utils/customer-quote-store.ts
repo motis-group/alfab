@@ -89,8 +89,9 @@ export async function saveCustomerQuote(quote: CustomerQuoteContent & { issuedBy
   const { data, error } = await db
     .from(TABLE)
     .insert({
-      name: quote.name.trim() || 'Customer quote',
-      client: quote.customer.trim() || 'No Client',
+      // As printed, blank included: the paper supplies its own wording for a blank.
+      name: quote.name.trim(),
+      client: quote.customer.trim(),
       // Midnight UTC, so the day printed is the day read back whatever time zone the database runs in.
       date: `${quote.date}T00:00:00Z`,
       specification: {
@@ -155,7 +156,7 @@ export function toCustomerQuote(row: QuoteRow): CustomerQuote | null {
     id: row.id,
     reference: quoteReference(row.id),
     kind,
-    name: row.name || 'Customer quote',
+    name: row.name || '',
     customer: row.client || '',
     customerId: text(specification.customerId),
     date: row.date || '',
