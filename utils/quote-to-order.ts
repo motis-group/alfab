@@ -174,13 +174,8 @@ function isQuoteToOrderDraft(value: unknown): value is QuoteToOrderDraft {
     return false;
   }
 
-  if (draft.kind === 'window') {
-    return normalizeWindowLines(draft.windowLines).length > 0;
-  }
-  if (draft.kind === 'awning') {
-    return normalizeAwningLines(draft.awningLines).length > 0;
-  }
-  return normalizeGlassLines(draft.glassLines).length > 0 || isGlassSpecification(draft.spec);
+  // A draft can carry several quotes of several kinds, so any line makes it an order.
+  return normalizeGlassLines(draft.glassLines).length > 0 || normalizeWindowLines(draft.windowLines).length > 0 || normalizeAwningLines(draft.awningLines).length > 0 || isGlassSpecification(draft.spec);
 }
 
 function normalizeDraft(draft: QuoteToOrderDraftInput | QuoteToOrderDraft): QuoteToOrderDraft {
