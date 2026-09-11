@@ -392,7 +392,6 @@ export default function AwningCostingPage() {
     }
 
     persistQuoteToOrderDraft({
-      kind: 'awning',
       quoteName,
       customerName: selectedCustomer?.name || customerName,
       customerId: customerId || null,

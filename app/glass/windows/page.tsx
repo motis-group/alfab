@@ -494,7 +494,6 @@ export default function WindowCostingPage() {
     }
 
     persistQuoteToOrderDraft({
-      kind: 'window',
       quoteName,
       customerName: selectedCustomer?.name || customerName,
       customerId: customerId || null,
