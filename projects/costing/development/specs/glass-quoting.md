@@ -7,8 +7,13 @@ at `/glass/windows`, which prices made-up aluminium windows. Both feed the same 
 ## A quote is a job, not a piece
 
 A quote holds as many pieces as the job has. Price a piece, name it, add it to the quote, price the
-next. Each piece keeps its own size, glass, markup and quantity, and becomes one purchase order
-line. The quote total is what the customer is told.
+next. Each piece keeps its own size, glass and quantity, and becomes one purchase order line. The
+markup is set once for the quote, under the quote notes, and prices every piece. A change to it
+reprices the whole quote. A piece with a manual unit price keeps that price. The quote total is
+what the customer is told.
+
+When the calculator opens from an order to price one line, there is no quote around the line, so
+the line's own markup field is on the piece.
 
 Pieces are priced one at a time, or read off a customer's order in one go; see [order-import.md](order-import.md).
 
@@ -52,5 +57,5 @@ the same job could give different numbers and nobody could tell whose were right
 The window and awning rates hold their own glass prices, and they are not the same numbers as these.
 **Settings → Price Drift** reports where they disagree and by how much; see
 [pricing-health.md](pricing-health.md). Whether a gap is an error is still open: these prices are a
-base a per-piece markup is applied to, while the window costing's feed a window that carries margin
+base the quote's markup is applied to, while the window costing's feed a window that carries margin
 and uplift afterwards.

@@ -31,13 +31,12 @@ import { fetchCurrentSessionUser } from '@utils/session-client';
 
 const TABLE_CUSTOMERS = 'customers';
 
-/** One piece on the quote. A job is usually several sizes, not one. */
+/** One piece on the quote. A job is usually several sizes, not one. Its markup is the quote's. */
 interface QuoteItem {
   localId: string;
   name: string;
   spec: GlassSpecification;
   quantity: number;
-  markupPercent: number;
   useRecommendedPrice: boolean;
   manualUnitPrice: number;
 }
@@ -116,19 +115,19 @@ export default function AdhocQuotePage() {
 
   const selectedCustomer = customers.find((entry) => entry.id === customerId) || null;
 
-  // Every piece on the quote, priced on today's rates. One line each on the order.
+  // Every piece on the quote, priced on today's rates at the quote's markup. One line each on the order.
   const quoteLines = useMemo(() => {
     return quoteItems.map((item) => {
       try {
         const breakdown = calculateCost(item.spec, pricingData);
-        const recommended = breakdown.total * (1 + item.markupPercent / 100);
+        const recommended = breakdown.total * (1 + markupPercent / 100);
         const unitPrice = item.useRecommendedPrice ? recommended : Math.max(0, item.manualUnitPrice);
         return { item, breakdown, unitPrice, total: unitPrice * Math.max(1, item.quantity), error: null as string | null };
       } catch (costError: any) {
         return { item, breakdown: null, unitPrice: 0, total: 0, error: costError?.message || 'Unable to price this piece.' };
       }
     });
-  }, [pricingData, quoteItems]);
+  }, [markupPercent, pricingData, quoteItems]);
 
   const quoteTotal = quoteLines.reduce((sum, line) => sum + line.total, 0);
   const quotePieceCount = quoteLines.reduce((sum, line) => sum + Math.max(1, line.item.quantity), 0);
@@ -280,7 +279,6 @@ export default function AdhocQuotePage() {
         name: itemName.trim(),
         spec: { ...spec },
         quantity: Math.max(1, quantity),
-        markupPercent,
         useRecommendedPrice,
         manualUnitPrice,
       },
@@ -289,7 +287,7 @@ export default function AdhocQuotePage() {
     setStatus({ tone: 'success', message: `Added. ${quoteItems.length + 1} piece${quoteItems.length ? 's' : ''} on this quote.` });
   }
 
-  /** Pieces from an imported order. Each takes the markup currently on the form. */
+  /** Pieces from an imported order, priced at the quote's markup like every other piece. */
   function addImportedPieces(pieces: ExtractedPiece[]) {
     if (!pieces.length) {
       return;
@@ -303,7 +301,6 @@ export default function AdhocQuotePage() {
         name: piece.name,
         spec: { ...piece.spec },
         quantity: Math.max(1, piece.quantity),
-        markupPercent,
         useRecommendedPrice: true,
         manualUnitPrice: 0,
       })),
@@ -321,7 +318,6 @@ export default function AdhocQuotePage() {
     setSpec({ ...item.spec });
     setItemName(item.name);
     setQuantity(item.quantity);
-    setMarkupPercent(item.markupPercent);
     setUseRecommendedPrice(item.useRecommendedPrice);
     setManualUnitPrice(item.manualUnitPrice);
     setQuoteItems((prev) => prev.filter((entry) => entry.localId !== localId));
@@ -349,7 +345,7 @@ export default function AdhocQuotePage() {
           name: line.item.name,
           spec: line.item.spec,
           quantity: line.item.quantity,
-          markupPercent: line.item.markupPercent,
+          markupPercent,
           unitPrice: line.unitPrice,
           breakdown: line.breakdown,
         })),
@@ -382,7 +378,7 @@ export default function AdhocQuotePage() {
           description: line.item.name,
           quantity: line.item.quantity,
           unitPrice: line.unitPrice,
-          markupPercent: line.item.markupPercent,
+          markupPercent,
           spec: line.item.spec,
         }))
       : calculation.error
@@ -669,7 +665,8 @@ export default function AdhocQuotePage() {
         <GlassSpecificationFields spec={spec} onChange={setSpec} basePrices={pricingData.basePrices} />
         <br />
         <Input label="QUANTITY" type="number" name="quote_quantity" value={String(quantity)} onChange={(event) => setQuantity(Math.max(1, numberOrFallback(event.target.value, 1)))} min="1" />
-        <Input label="MARKUP (%)" type="number" name="quote_markup" value={String(markupPercent)} onChange={(event) => setMarkupPercent(Math.max(0, numberOrFallback(event.target.value, 0)))} min="0" />
+        {/* An order line has no quote around it, so its markup is set here. A quote sets one for every piece. */}
+        {lineEdit ? <Input label="MARKUP (%)" type="number" name="line_markup" value={String(markupPercent)} onChange={(event) => setMarkupPercent(Math.max(0, numberOrFallback(event.target.value, 0)))} min="0" /> : null}
 
         <label>
           <input type="checkbox" checked={useRecommendedPrice} onChange={(event) => setUseRecommendedPrice(event.target.checked)} /> Use recommended unit price
@@ -710,6 +707,7 @@ export default function AdhocQuotePage() {
           <br />
           <Input label="QUOTE DATE" type="date" name="quote_date" value={quoteDate} onChange={(event) => setQuoteDate(event.target.value)} />
           <Input label="QUOTE NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
+          <Input label="MARKUP (%)" type="number" name="quote_markup" value={String(markupPercent)} onChange={(event) => setMarkupPercent(Math.max(0, numberOrFallback(event.target.value, 0)))} min="0" />
         </CardDouble>
       )}
 
