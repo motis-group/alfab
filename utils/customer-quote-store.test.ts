@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { CustomerQuoteContent, CustomerQuoteLine, quoteFingerprint, quoteReference, quoteTotals, saveCustomerQuote, toCustomerQuote } from './customer-quote-store';
-import { fromCustomerQuote } from './quote-register';
+import { fromCustomerQuote, isMergeRefusal, mergeQuotesForOrder } from './quote-register';
 import { WindowCostingInput } from './window-costing';
 
 const input = { productId: '500-5573' } as unknown as WindowCostingInput;
@@ -76,6 +76,14 @@ test('a printed quote becomes an order at the prices offered, without its unpric
   assert.equal(record.lineCount, 2, 'the list counts every printed line');
   assert.equal(record.total, 4960);
   assert.equal(record.draft?.quoteDate, '2026-09-10');
-  assert.match(record.draft?.quoteName || '', /^Q-3F2A9C1E /, 'the order names the quote it came from');
   assert.deepEqual(record.draft?.windowLines, [{ description: 'Window 1', quantity: 4, unitPrice: 1240, ratesUpdatedAt: 'r-1', windowSpec: input }]);
+
+  // Every conversion goes through the merge, alone or with other quotes.
+  const alone = mergeQuotesForOrder([record]);
+  assert.ok(alone && !isMergeRefusal(alone));
+  assert.equal(alone.draft.quoteName, 'Q-3F2A9C1E Smith residence', 'the order names the offer it came from');
+
+  const together = mergeQuotesForOrder([record, { ...record, id: 'costing', reference: null, name: 'Kitchen hopper' }]);
+  assert.ok(together && !isMergeRefusal(together));
+  assert.equal(together.draft.quoteName, 'Q-3F2A9C1E Smith residence + Kitchen hopper');
 });

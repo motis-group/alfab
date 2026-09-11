@@ -28,11 +28,11 @@ import {
   todayISODate,
   localISODate,
 } from '@utils/order-management';
-import JobPanel, { useJob } from '@components/JobPanel';
 import QuoteStatusControl from '@components/QuoteStatusControl';
-import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, listQuoteRecords } from '@utils/quote-register';
+import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
 import { QUOTE_STATUS_LABELS, QUOTE_STATUS_ORDER, QuoteStatus, setQuoteStatus } from '@utils/quote-status';
 import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
+import { overdueOrders } from '@utils/order-metrics';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
@@ -119,7 +119,8 @@ export default function OrderDashboardPage() {
   const [orderLines, setOrderLines] = useState<PurchaseOrderLine[]>([]);
   const [quotes, setQuotes] = useState<QuoteRecord[]>([]);
   const [quoteError, setQuoteError] = useState<string | null>(null);
-  const [job, setJob] = useJob();
+  // Quotes ticked for one order. A boat's windows, awnings and cut glass are three quotes.
+  const [selectedQuotes, setSelectedQuotes] = useState<Set<string>>(new Set());
 
   const [isLoading, setIsLoading] = useState(true);
   const [schemaError, setSchemaError] = useState<string | null>(null);
@@ -183,66 +184,9 @@ export default function OrderDashboardPage() {
     });
   }, [quotes, customerFilter, quoteStatusFilter]);
 
-  const openOrdersByCustomer = useMemo(() => {
-    const counts: Record<string, number> = {};
-    ordersInScope.forEach((order) => {
-      if (order.status !== 'open') {
-        return;
-      }
-      counts[order.customer_id] = (counts[order.customer_id] || 0) + 1;
-    });
-
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([customerId, count]) => ({
-        customerId,
-        count,
-        name: customerMap[customerId]?.name || 'Unknown Customer',
-      }));
-  }, [ordersInScope, customerMap]);
-
-  // Past its required date and not finished. Nothing showed these: dueInSevenDays starts at today,
-  // so an order went quiet on the dashboard the moment it became the one worth ringing about.
-  const overdue = useMemo(() => {
-    const today = todayISODate();
-    return ordersInScope.filter((order) => {
-      const requiredDate = normalizeDateValue(order.required_date);
-      if (!requiredDate || order.status === 'fulfilled' || order.status === 'cancelled') {
-        return false;
-      }
-      return requiredDate < today;
-    });
-  }, [ordersInScope]);
+  const overdue = useMemo(() => overdueOrders(ordersInScope, todayISODate()), [ordersInScope]);
 
   const overdueIds = useMemo(() => new Set(overdue.map((order) => order.id)), [overdue]);
-
-  const dueInSevenDays = useMemo(() => {
-    const today = todayISODate();
-    const inSevenDays = new Date();
-    inSevenDays.setDate(inSevenDays.getDate() + 7);
-    const maxDate = localISODate(inSevenDays);
-
-    return ordersInScope.filter((order) => {
-      const requiredDate = normalizeDateValue(order.required_date);
-      if (!requiredDate) {
-        return false;
-      }
-      if (order.status === 'fulfilled' || order.status === 'cancelled') {
-        return false;
-      }
-      return requiredDate >= today && requiredDate <= maxDate;
-    });
-  }, [ordersInScope]);
-
-  const recentOrders = useMemo(() => {
-    return [...ordersInScope]
-      .sort((a, b) => {
-        const aDate = a.updated_at || a.created_at || a.received_date || '';
-        const bDate = b.updated_at || b.created_at || b.received_date || '';
-        return bDate.localeCompare(aDate);
-      })
-      .slice(0, 5);
-  }, [ordersInScope]);
 
   async function loadData() {
     setIsLoading(true);
@@ -292,29 +236,52 @@ export default function OrderDashboardPage() {
 
   /**
    * A purchase order is an approved quote, so converting is a deliberate act rather than something
-   * that happens when a quote is marked won. It marks the quote won and opens the order for editing.
+   * that happens when a quote is marked won. Several quotes convert into one order, which is how a
+   * boat's windows, awnings and cut glass reach the customer as one number. Each is marked won.
    */
-  async function convertQuote(quote: QuoteRecord) {
-    if (!quote.draft) {
-      setFormError('That quote has no priced line to put on an order.');
+  async function convertQuotes(records: QuoteRecord[]) {
+    const merged = mergeQuotesForOrder(records);
+    if (!merged) {
+      setFormError('Those quotes have no priced line to put on an order.');
+      return;
+    }
+    if (isMergeRefusal(merged)) {
+      setFormError(merged.reason);
       return;
     }
 
-    if (quote.status !== 'won') {
-      await markQuote(quote.id, 'won');
+    setFormError(merged.warnings.length ? merged.warnings.join(' ') : null);
+
+    for (const record of records) {
+      if (record.draft && record.status !== 'won') {
+        await markQuote(record.id, 'won');
+      }
     }
 
-    persistQuoteToOrderDraft(quote.draft);
+    persistQuoteToOrderDraft(merged.draft);
     router.push('/glass/new?fromQuote=1');
   }
 
-  function createOrderForJob() {
-    if (!job.lines.length) {
-      return;
-    }
-    persistQuoteToOrderDraft({ kind: 'job', quoteName: job.name, customerName: job.customerName, customerId: job.customerId, quoteDate: '', quoteNotes: job.notes, jobLines: job.lines });
-    router.push('/glass/new?fromQuote=1');
+  const selectedRecords = quotes.filter((quote) => selectedQuotes.has(quote.id));
+  const selectedCount = selectedRecords.length;
+  const selectedTotal = selectedRecords.reduce((sum, quote) => sum + quote.total, 0);
+  // Checked before the button is offered, so a selection that cannot become one order says why
+  // instead of failing on the click.
+  const selectionMerge = selectedCount > 1 ? mergeQuotesForOrder(selectedRecords) : null;
+  const selectionRefusal = selectionMerge && isMergeRefusal(selectionMerge) ? selectionMerge.reason : null;
+
+  function toggleQuote(id: string) {
+    setSelectedQuotes((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   }
+
 
   async function loadSessionUser() {
     const nextUser = await fetchCurrentSessionUser();
@@ -349,77 +316,6 @@ export default function OrderDashboardPage() {
       sidebarMobileOrder="top"
       sidebar={
         <>
-          <Card title="ORDER DASHBOARD">
-            <RowSpaceBetween>
-              <Text>OPEN ORDERS</Text>
-              <Text>
-                <span className="status-warning">{ordersInScope.filter((order) => order.status === 'open').length}</span>
-              </Text>
-            </RowSpaceBetween>
-            <RowSpaceBetween>
-              <Text>IN PRODUCTION</Text>
-              <Text>
-                <span className="status-warning">{ordersInScope.filter((order) => order.status === 'in_production').length}</span>
-              </Text>
-            </RowSpaceBetween>
-            <RowSpaceBetween>
-              <Text>DUE WITHIN 7 DAYS</Text>
-              <Text>
-                <span className="status-warning">{dueInSevenDays.length}</span>
-              </Text>
-            </RowSpaceBetween>
-            <RowSpaceBetween>
-              <Text>OVERDUE</Text>
-              <Text>
-                <span className={overdue.length ? 'status-error' : undefined}>{overdue.length}</span>
-              </Text>
-            </RowSpaceBetween>
-
-            <br />
-            <Text>OPEN ORDERS BY CUSTOMER</Text>
-            <Table>
-              <TableRow>
-                <TableColumn style={{ width: '26ch' }}>CUSTOMER</TableColumn>
-                <TableColumn>OPEN ORDERS</TableColumn>
-              </TableRow>
-              {openOrdersByCustomer.map((entry) => (
-                <TableRow key={entry.customerId}>
-                  <TableColumn>{entry.name}</TableColumn>
-                  <TableColumn>{entry.count}</TableColumn>
-                </TableRow>
-              ))}
-              {!openOrdersByCustomer.length && (
-                <TableRow>
-                  <TableColumn colSpan={2} style={{ textAlign: 'center' }}>
-                    No open orders.
-                  </TableColumn>
-                </TableRow>
-              )}
-            </Table>
-
-            <br />
-            <Text>RECENT ORDERS</Text>
-            <Table>
-              <TableRow>
-                <TableColumn style={{ width: '16ch' }}>PO</TableColumn>
-                <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
-                <TableColumn style={{ width: '16ch' }}>STATUS</TableColumn>
-              </TableRow>
-              {recentOrders.map((order) => (
-                <TableRow key={order.id}>
-                  <TableColumn>{order.po_number}</TableColumn>
-                  <TableColumn>{customerMap[order.customer_id]?.name || 'Unknown'}</TableColumn>
-                  <TableColumn>
-                    <>
-                      <span className={orderStatusClassName(order.status)}>{statusLabel(order.status)}</span>
-                      {isOrderArchived(order) ? <span className="status-pill status-pill-warning">ARCHIVED</span> : null}
-                    </>
-                  </TableColumn>
-                </TableRow>
-              ))}
-            </Table>
-          </Card>
-
           <Card title="ORDER LIST FILTERS">
             <Text>CUSTOMER</Text>
             <select value={customerFilter} onChange={(event) => setCustomerFilter(event.target.value)}>
@@ -506,6 +402,19 @@ export default function OrderDashboardPage() {
       )}
 
       <Card title={`QUOTES (${filteredQuotes.length})`}>
+        <RowSpaceBetween>
+          <Text>
+            {selectionRefusal ? <span className="status-warning">{selectionRefusal}</span> : selectedCount ? `${selectedCount} ticked${selectedTotal ? ` · ${formatCurrency(selectedTotal)}` : ''}` : 'Tick more than one to put them on a single order. They must be for the same customer.'}
+          </Text>
+          <Text>
+            {selectedCount > 1 && !selectionRefusal ? (
+              <>
+                <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuotes(selectedRecords)}>Convert {selectedCount} To One Order</ActionButton>{' '}
+              </>
+            ) : null}
+            {selectedCount ? <ActionButton onClick={() => setSelectedQuotes(new Set())}>Clear</ActionButton> : null}
+          </Text>
+        </RowSpaceBetween>
         {quoteError ? (
           <Text>
             <span className="status-warning">{quoteError}</span>
@@ -516,6 +425,7 @@ export default function OrderDashboardPage() {
         ) : (
           <Table>
             <TableRow>
+              <TableColumn style={{ width: '4ch' }}>ON</TableColumn>
               <TableColumn>QUOTE</TableColumn>
               <TableColumn style={{ width: '10ch' }}>PRODUCT</TableColumn>
               <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
@@ -528,6 +438,9 @@ export default function OrderDashboardPage() {
 
             {filteredQuotes.map((quote) => (
               <TableRow key={quote.id}>
+                <TableColumn>
+                  <input type="checkbox" checked={selectedQuotes.has(quote.id)} disabled={!quote.draft} aria-label={`Put ${quote.name || 'this quote'} on an order`} onChange={() => toggleQuote(quote.id)} />
+                </TableColumn>
                 <TableColumn>{[quote.reference, quote.name || 'Untitled'].filter(Boolean).join(' · ')}</TableColumn>
                 <TableColumn>{QUOTE_KIND_LABELS[quote.kind]}</TableColumn>
                 <TableColumn>{quote.customer || 'Walk-in'}</TableColumn>
@@ -539,14 +452,14 @@ export default function OrderDashboardPage() {
                 </TableColumn>
                 <TableColumn style={{ whiteSpace: 'nowrap' }}>
                   <ActionButton onClick={() => router.push(QUOTE_KIND_HREFS[quote.kind])}>Open</ActionButton>{' '}
-                  <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuote(quote)}>Convert</ActionButton>
+                  <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuotes([quote])}>Convert</ActionButton>
                 </TableColumn>
               </TableRow>
             ))}
 
             {!filteredQuotes.length && (
               <TableRow>
-                <TableColumn colSpan={8} style={{ textAlign: 'center' }}>
+                <TableColumn colSpan={9} style={{ textAlign: 'center' }}>
                   No quotes match the filters.
                 </TableColumn>
               </TableRow>
@@ -555,7 +468,6 @@ export default function OrderDashboardPage() {
         )}
       </Card>
 
-      <JobPanel job={job} onChange={setJob} onCreateOrder={createOrderForJob} />
 
       <Card title="PURCHASE ORDERS">
         {isLoading ? (

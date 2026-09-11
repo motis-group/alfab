@@ -1,7 +1,7 @@
 'use client';
 
 import PrintSheet from '@components/PrintSheet';
-import QuoteDocument from '@components/QuoteDocument';
+import PrintedQuote from '@components/PrintedQuote';
 import { CustomerQuoteLine } from '@utils/customer-quote-store';
 import { formatCurrency } from '@utils/order-management';
 import { productFullName } from '@utils/window-catalogue';
@@ -55,7 +55,7 @@ function formatQty(line: CostLine): string {
  */
 export default function WindowCostingSheet({ audience, reference, quoteName, customerName, quoteDate, notes, ratesLabel, rates, windows }: WindowCostingSheetProps) {
   if (audience === 'customer') {
-    return <QuoteDocument reference={reference} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={notes} lines={windowQuoteLines(windows, rates)} />;
+    return <PrintedQuote reference={reference} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={notes} lines={windowQuoteLines(windows, rates)} />;
   }
 
   return (

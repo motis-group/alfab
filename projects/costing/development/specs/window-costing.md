@@ -118,14 +118,14 @@ the glass loading to 15% for every type.
   carries a sheet to the bench. Both documents render at the end of `<body>`, outside the app, so
   printing takes the app out of the layout. A sheet hidden in place keeps the height of the app and
   prints as blank pages.
-- **Customer quote.** "Print Quote For Customer" prints `components/QuoteDocument.tsx`, which the
+- **Customer quote.** "Print Quote For Customer" prints `components/PrintedQuote.tsx`, which the
   awning calculator also uses. The layout follows an invoice: issuer, customer, one line for each
   window, and a totals block with GST. The type is Berkeley Mono, served from `public/fonts`.
 - **Quote reference.** "Print Quote For Customer" saves the quote, then prints it with a reference
-  such as `Q-3F2A9C1E`. The order list shows the same reference, so a customer can quote it back.
-  An order made from the quote carries the reference in each line description. A reprint of
-  unchanged content uses the saved quote again. Changed content is a new offer and gets a new
-  reference. If the save fails, nothing prints.
+  such as `Q-3F2A9C1E`. The order list and the dashboard quote view show the same reference, so a
+  customer can quote it back. An order made from the quote carries the reference in each line
+  description. A reprint of unchanged content uses the saved quote again. Changed content is a new
+  offer and gets a new reference. If the save fails, nothing prints.
 - **Drafts.** A browser Cmd+P prints the reference only when the screen matches the saved quote.
   Otherwise the print shows "Draft, not issued" in place of the reference.
 - **Limits.** The reference is the first eight hex digits of the row id, so two quotes can share

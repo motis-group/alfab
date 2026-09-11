@@ -7,7 +7,6 @@ import { useRouter } from 'next/navigation';
 
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
-import CadImportPanel from '@components/CadImportPanel';
 import Card from '@components/Card';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
@@ -17,11 +16,12 @@ import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 
-import { usePricing } from '@components/PricingProvider';
 import JobSheet from '@components/JobSheet';
-import { CostBreakdown, GlassSpecification, calculateCost, describeGlassSpecification, getAvailableGlassTypes, getAvailableThicknesses } from '@utils/calculations';
+import { GlassSpecification, describeGlassSpecification } from '@utils/calculations';
+import { LineDraft, OrderFormState, createLineDraft, defaultAdhocSpec } from '@utils/order-draft';
+import { OrderSnapshot, applyLineEditResult, calculatorFor, consumeLineEditResult, persistLineEditRequest } from '@utils/line-editing';
 import { Customer, CustomerProduct, ORDER_STATUS_OPTIONS, OrderStatus, ParsedLineNotes, PricingSource, PurchaseOrder, PurchaseOrderLine, UserRole, formatCurrency, parseCustomerProductNotes, parseLineNotes, serializeLineNotes, statusLabel, todayISODate } from '@utils/order-management';
-import { QuoteToOrderDraft, buildAwningLineDescription, buildGlassLineDescription, buildJobLineDescription, buildWindowLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
+import { QuoteToOrderDraft, buildAwningLineDescription, buildGlassLineDescription, buildWindowLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
 import { WindowCostingInput, describeWindow } from '@utils/window-costing';
 import { AwningCostingInput, describeAwning } from '@utils/awning-costing';
 import { AwningRates, mergeAwningRates } from '@utils/awning-costing-rates';
@@ -39,69 +39,6 @@ const TABLE_PURCHASE_ORDER_LINES = 'purchase_order_lines';
 
 const EDGEWORK_OPTIONS: GlassSpecification['edgework'][] = ['ROUGH ARRIS', 'FLAT GRIND - STRAIGHT', 'FLAT GRIND - CURVED', 'FLAT POLISH - STRAIGHT', 'FLAT POLISH - CURVED'];
 
-
-const defaultAdhocSpec: GlassSpecification = {
-  width: 1000,
-  height: 1000,
-  thickness: 4,
-  glassType: 'Clear',
-  edgework: 'ROUGH ARRIS',
-  ceramicBand: false,
-  shape: 'RECTANGLE',
-  holes: false,
-  numHoles: 0,
-  radiusCorners: false,
-  scanning: false,
-};
-
-interface OrderFormState {
-  id: string | null;
-  customerId: string;
-  poNumber: string;
-  receivedDate: string;
-  requiredDate: string;
-  status: OrderStatus;
-  notes: string;
-}
-
-interface LineDraft {
-  localId: string;
-  id?: string;
-  quantityOrdered: number;
-  quantityFulfilled: number;
-  unitPriceAtOrder: number;
-  lineNote: string;
-  pricingSource: PricingSource;
-  customerProductId: string;
-  adhocSpec: GlassSpecification;
-  windowSpec: WindowCostingInput | null;
-  windowRatesUpdatedAt: string | null;
-  awningSpec: AwningCostingInput | null;
-  awningRatesUpdatedAt: string | null;
-  /** Minutes the line really took, for the whole line. Empty until the job is done. */
-  actualMinutes: number | null;
-  markupPercent: number;
-}
-
-function createLineDraft(partial?: Partial<LineDraft>): LineDraft {
-  return {
-    localId: partial?.localId || `line-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-    id: partial?.id,
-    quantityOrdered: partial?.quantityOrdered ?? 1,
-    quantityFulfilled: partial?.quantityFulfilled ?? 0,
-    unitPriceAtOrder: partial?.unitPriceAtOrder ?? 0,
-    lineNote: partial?.lineNote || '',
-    pricingSource: partial?.pricingSource || 'existing_config',
-    customerProductId: partial?.customerProductId || '',
-    adhocSpec: partial?.adhocSpec || { ...defaultAdhocSpec },
-    windowSpec: partial?.windowSpec ?? null,
-    windowRatesUpdatedAt: partial?.windowRatesUpdatedAt ?? null,
-    awningSpec: partial?.awningSpec ?? null,
-    awningRatesUpdatedAt: partial?.awningRatesUpdatedAt ?? null,
-    actualMinutes: partial?.actualMinutes ?? null,
-    markupPercent: partial?.markupPercent ?? 20,
-  };
-}
 
 function numberOrFallback(value: string, fallback = 0): number {
   const parsed = Number(value);
@@ -124,7 +61,6 @@ function normalizeCustomerLookupName(value: string): string {
 
 export default function NewPurchaseOrderPage() {
   const router = useRouter();
-  const { pricingData } = usePricing();
 
   const [role, setRole] = useState<UserRole>('readonly');
 
@@ -275,6 +211,20 @@ export default function NewPurchaseOrderPage() {
         setRole(user.effectiveRole as UserRole);
         const { customers: loadedCustomers } = await loadBaseData();
 
+        // A line came back from a calculator. The whole order travelled with it, so the page picks
+        // up where it left off whether or not the order had been saved.
+        const lineResult = consumeLineEditResult();
+        if (lineResult) {
+          restoreOrderSnapshot(applyLineEditResult(lineResult));
+          setActiveLineId(lineResult.localId);
+          if (typeof window !== 'undefined') {
+            const nextUrl = new URL(window.location.href);
+            nextUrl.searchParams.delete('lineEdited');
+            window.history.replaceState({}, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+          }
+          return;
+        }
+
         const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
         const editOrderId = searchParams?.get('orderId');
         if (editOrderId) {
@@ -311,6 +261,31 @@ export default function NewPurchaseOrderPage() {
       setActiveLineId(lineDrafts[0].localId);
     }
   }, [lineDrafts, activeLineId]);
+
+  /** Puts the page back exactly as it was when a line was sent to a calculator. */
+  function restoreOrderSnapshot(snapshot: OrderSnapshot) {
+    setOrderForm(snapshot.orderForm);
+    setLineDrafts(snapshot.lineDrafts.length ? snapshot.lineDrafts : [createLineDraft()]);
+    setLoadedLineIds(snapshot.loadedLineIds);
+    setIsEditingOrder(snapshot.isEditingOrder);
+    setArchivedAt(snapshot.archivedAt);
+  }
+
+  /** Sends one line to the calculator that prices it, carrying the order so nothing is lost. */
+  function editLineInCalculator(line: LineDraft) {
+    const href = calculatorFor(line.pricingSource);
+    if (!href) {
+      setFormError('A customer product is priced on the order, not in a calculator.');
+      return;
+    }
+
+    persistLineEditRequest({
+      order: { orderForm, lineDrafts, loadedLineIds, isEditingOrder, archivedAt },
+      localId: line.localId,
+      returnTo: '/glass/new?lineEdited=1',
+    });
+    router.push(`${href}?editLine=1`);
+  }
 
   function resetOrderForm() {
     const defaultLine = createLineDraft();
@@ -350,24 +325,6 @@ export default function NewPurchaseOrderPage() {
     setLineDrafts((prev) => prev.map((line) => (line.localId === localId ? updater(line) : line)));
   }
 
-  function getLineCost(line: LineDraft): { breakdown: CostBreakdown | null; recommendedUnitPrice: number; error: string | null } {
-    try {
-      const breakdown = calculateCost(line.adhocSpec, pricingData);
-      const recommendedUnitPrice = breakdown.total * (1 + line.markupPercent / 100);
-      return {
-        breakdown,
-        recommendedUnitPrice,
-        error: null,
-      };
-    } catch (error: any) {
-      return {
-        breakdown: null,
-        recommendedUnitPrice: 0,
-        error: error?.message || 'Unable to calculate ad hoc price.',
-      };
-    }
-  }
-
   function applyQuoteDraft(quoteDraft: QuoteToOrderDraft, availableCustomers: Customer[]) {
     const normalizedQuoteCustomer = normalizeCustomerLookupName(quoteDraft.customerName);
     const matchedCustomers = normalizedQuoteCustomer ? availableCustomers.filter((customer) => customer.is_active !== false && normalizeCustomerLookupName(customer.name) === normalizedQuoteCustomer) : [];
@@ -389,48 +346,31 @@ export default function NewPurchaseOrderPage() {
       })
     );
 
-    // A job carries more than one product type, so each entry picks its own pricing source.
-    const jobDraftLines = quoteDraft.jobLines.map((line) =>
-      createLineDraft({
-        pricingSource: line.kind === 'window' ? 'window_calculator' : line.kind === 'awning' ? 'awning_calculator' : 'adhoc_calculator',
-        quantityOrdered: line.quantity,
-        unitPriceAtOrder: line.unitPrice,
-        lineNote: buildJobLineDescription(quoteDraft.quoteName, line),
-        windowSpec: line.kind === 'window' ? line.windowSpec : null,
-        windowRatesUpdatedAt: line.kind === 'window' ? line.ratesUpdatedAt : null,
-        awningSpec: line.kind === 'awning' ? line.awningSpec : null,
-        awningRatesUpdatedAt: line.kind === 'awning' ? line.ratesUpdatedAt : null,
-        adhocSpec: line.kind === 'glass' ? { ...line.spec } : undefined,
-        markupPercent: line.kind === 'glass' ? line.markupPercent : undefined,
-      })
-    );
-
-    const draftLines =
-      quoteDraft.kind === 'job'
-        ? jobDraftLines
-        : quoteDraft.kind === 'awning'
-          ? awningDraftLines
-          : quoteDraft.kind === 'window'
-            ? quoteDraft.windowLines.map((line) =>
-                createLineDraft({
-                  pricingSource: 'window_calculator',
-                  quantityOrdered: line.quantity,
-                  unitPriceAtOrder: line.unitPrice,
-                  lineNote: buildWindowLineDescription(quoteDraft.quoteName, line),
-                  windowSpec: line.windowSpec,
-                  windowRatesUpdatedAt: line.ratesUpdatedAt,
-                })
-              )
-            : glassLines.map((line) =>
-                createLineDraft({
-                  pricingSource: 'adhoc_calculator',
-                  quantityOrdered: line.quantity,
-                  unitPriceAtOrder: line.unitPrice,
-                  lineNote: buildGlassLineDescription(quoteDraft.quoteName, line),
-                  adhocSpec: { ...line.spec },
-                  markupPercent: line.markupPercent,
-                })
-              );
+    // A draft carries whatever it was built from: one quote of one kind, or several quotes of
+    // several kinds converted together. Each array contributes its own lines.
+    const draftLines = [
+      ...glassLines.map((line) =>
+        createLineDraft({
+          pricingSource: 'adhoc_calculator',
+          quantityOrdered: line.quantity,
+          unitPriceAtOrder: line.unitPrice,
+          lineNote: buildGlassLineDescription(quoteDraft.quoteName, line),
+          adhocSpec: { ...line.spec },
+          markupPercent: line.markupPercent,
+        })
+      ),
+      ...quoteDraft.windowLines.map((line) =>
+        createLineDraft({
+          pricingSource: 'window_calculator',
+          quantityOrdered: line.quantity,
+          unitPriceAtOrder: line.unitPrice,
+          lineNote: buildWindowLineDescription(quoteDraft.quoteName, line),
+          windowSpec: line.windowSpec,
+          windowRatesUpdatedAt: line.ratesUpdatedAt,
+        })
+      ),
+      ...awningDraftLines,
+    ];
 
     if (!draftLines.length) {
       return;
@@ -684,7 +624,6 @@ export default function NewPurchaseOrderPage() {
     };
   });
 
-  const activeLineCost = activeLine ? getLineCost(activeLine) : null;
 
   return (
     <AppFrame
@@ -859,11 +798,24 @@ export default function NewPurchaseOrderPage() {
               <TableColumn onClick={() => setActiveLineId(summary.id)}>{summary.qty}</TableColumn>
               <TableColumn onClick={() => setActiveLineId(summary.id)}>{formatCurrency(summary.unitPrice)}</TableColumn>
               <TableColumn onClick={() => setActiveLineId(summary.id)}>{formatCurrency(summary.total)}</TableColumn>
-              <TableColumn>
-                <RowSpaceBetween>
+              <TableColumn style={{ whiteSpace: 'nowrap' }}>
+                {/* A line priced in a calculator is edited there. A customer product is priced on
+                    the order, so it stays here. */}
+                {calculatorFor(lineDrafts.find((line) => line.localId === summary.id)?.pricingSource || 'existing_config') ? (
+                  <ActionButton
+                    onClick={() => {
+                      const line = lineDrafts.find((entry) => entry.localId === summary.id);
+                      if (line) {
+                        editLineInCalculator(line);
+                      }
+                    }}
+                  >
+                    Price
+                  </ActionButton>
+                ) : (
                   <ActionButton onClick={() => setActiveLineId(summary.id)}>Edit</ActionButton>
-                  <ActionButton onClick={() => removeLineDraft(summary.id)}>Remove</ActionButton>
-                </RowSpaceBetween>
+                )}{' '}
+                <ActionButton onClick={() => removeLineDraft(summary.id)}>Remove</ActionButton>
               </TableColumn>
             </TableRow>
           ))}
@@ -949,326 +901,16 @@ export default function NewPurchaseOrderPage() {
               disabled={!canEditOrders}
             />
 
+            {/* The glass is priced in the calculator that prices glass. This says what the line is
+                and offers the way in; the form used to be duplicated here. */}
             {activeLine.pricingSource === 'adhoc_calculator' && (
               <>
                 <br />
-                <Text>AD HOC CALCULATOR</Text>
+                <Text>GLASS</Text>
+                <Text>{describeGlassSpecification(activeLine.adhocSpec)}</Text>
+                {activeLine.adhocSpec.cadOutline ? <Text>Cut to {activeLine.adhocSpec.cadOutline.fileName}.</Text> : null}
                 <br />
-
-                <Text>CAD FILE</Text>
-                <CadImportPanel
-                  key={activeLine.localId}
-                  spec={activeLine.adhocSpec}
-                  disabled={!canEditOrders}
-                  onApply={(result) => updateLineDraft(activeLine.localId, (current) => ({ ...current, adhocSpec: result.spec }))}
-                  onClear={() =>
-                    updateLineDraft(activeLine.localId, (current) => ({
-                      ...current,
-                      adhocSpec: { ...current.adhocSpec, cadOutline: null },
-                    }))
-                  }
-                />
-                <br />
-
-                <Text>GLASS THICKNESS (MM)</Text>
-                <select
-                  value={String(activeLine.adhocSpec.thickness)}
-                  disabled={!canEditOrders}
-                  onChange={(event) => {
-                    const nextThickness = Number(event.target.value) as GlassSpecification['thickness'];
-                    updateLineDraft(activeLine.localId, (current) => {
-                      const nextAvailableTypes = getAvailableGlassTypes(nextThickness);
-                      const currentType = nextAvailableTypes.includes(current.adhocSpec.glassType) ? current.adhocSpec.glassType : nextAvailableTypes[0];
-
-                      return {
-                        ...current,
-                        adhocSpec: {
-                          ...current.adhocSpec,
-                          thickness: nextThickness,
-                          glassType: currentType,
-                        },
-                      };
-                    });
-                  }}
-                >
-                  {getAvailableThicknesses(activeLine.adhocSpec.glassType, pricingData.basePrices).map((thickness) => (
-                    <option key={thickness} value={thickness}>
-                      {thickness}
-                    </option>
-                  ))}
-                </select>
-                <br />
-
-                <Text>GLASS TYPE</Text>
-                <select
-                  value={activeLine.adhocSpec.glassType}
-                  disabled={!canEditOrders}
-                  onChange={(event) =>
-                    updateLineDraft(activeLine.localId, (current) => ({
-                      ...current,
-                      adhocSpec: {
-                        ...current.adhocSpec,
-                        glassType: event.target.value as GlassSpecification['glassType'],
-                      },
-                    }))
-                  }
-                >
-                  {getAvailableGlassTypes(activeLine.adhocSpec.thickness).map((glassType) => (
-                    <option key={glassType} value={glassType}>
-                      {glassType}
-                    </option>
-                  ))}
-                </select>
-                <br />
-
-                <Text>DIMENSIONS</Text>
-                <Input
-                  label="HEIGHT (MM)"
-                  type="number"
-                  name={`height_${activeLine.localId}`}
-                  value={String(activeLine.adhocSpec.height)}
-                  onChange={(event) =>
-                    updateLineDraft(activeLine.localId, (current) => ({
-                      ...current,
-                      adhocSpec: {
-                        ...current.adhocSpec,
-                        height: Math.max(0, numberOrFallback(event.target.value, 0)),
-                      },
-                    }))
-                  }
-                  disabled={!canEditOrders}
-                />
-                <Input
-                  label="WIDTH (MM)"
-                  type="number"
-                  name={`width_${activeLine.localId}`}
-                  value={String(activeLine.adhocSpec.width)}
-                  onChange={(event) =>
-                    updateLineDraft(activeLine.localId, (current) => ({
-                      ...current,
-                      adhocSpec: {
-                        ...current.adhocSpec,
-                        width: Math.max(0, numberOrFallback(event.target.value, 0)),
-                      },
-                    }))
-                  }
-                  disabled={!canEditOrders}
-                />
-
-                <Text>PRICING</Text>
-                <Input
-                  label="MARKUP (%)"
-                  type="number"
-                  name={`markup_${activeLine.localId}`}
-                  value={String(activeLine.markupPercent)}
-                  onChange={(event) =>
-                    updateLineDraft(activeLine.localId, (current) => ({
-                      ...current,
-                      markupPercent: Math.max(0, numberOrFallback(event.target.value, 0)),
-                    }))
-                  }
-                  disabled={!canEditOrders}
-                />
-                <br />
-
-                <Text>EDGEWORK</Text>
-                <select
-                  value={activeLine.adhocSpec.edgework}
-                  disabled={!canEditOrders}
-                  onChange={(event) =>
-                    updateLineDraft(activeLine.localId, (current) => ({
-                      ...current,
-                      adhocSpec: {
-                        ...current.adhocSpec,
-                        edgework: event.target.value as GlassSpecification['edgework'],
-                      },
-                    }))
-                  }
-                >
-                  {EDGEWORK_OPTIONS.map((edgework) => (
-                    <option key={edgework} value={edgework}>
-                      {edgework}
-                    </option>
-                  ))}
-                </select>
-                <br />
-
-                <Text>ADDITIONAL OPTIONS</Text>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={activeLine.adhocSpec.ceramicBand}
-                    disabled={!canEditOrders}
-                    onChange={(event) =>
-                      updateLineDraft(activeLine.localId, (current) => ({
-                        ...current,
-                        adhocSpec: {
-                          ...current.adhocSpec,
-                          ceramicBand: event.target.checked,
-                        },
-                      }))
-                    }
-                  />{' '}
-                  Ceramic Banding
-                </label>
-                <br />
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={activeLine.adhocSpec.holes}
-                    disabled={!canEditOrders}
-                    onChange={(event) =>
-                      updateLineDraft(activeLine.localId, (current) => ({
-                        ...current,
-                        adhocSpec: {
-                          ...current.adhocSpec,
-                          holes: event.target.checked,
-                          numHoles: event.target.checked ? Math.max(1, current.adhocSpec.numHoles || 4) : 0,
-                        },
-                      }))
-                    }
-                  />{' '}
-                  Include Holes
-                </label>
-                <br />
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={activeLine.adhocSpec.scanning}
-                    disabled={!canEditOrders}
-                    onChange={(event) =>
-                      updateLineDraft(activeLine.localId, (current) => ({
-                        ...current,
-                        adhocSpec: {
-                          ...current.adhocSpec,
-                          scanning: event.target.checked,
-                        },
-                      }))
-                    }
-                  />{' '}
-                  Scanning
-                </label>
-                <br />
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={activeLine.adhocSpec.radiusCorners}
-                    disabled={!canEditOrders}
-                    onChange={(event) =>
-                      updateLineDraft(activeLine.localId, (current) => ({
-                        ...current,
-                        adhocSpec: {
-                          ...current.adhocSpec,
-                          radiusCorners: event.target.checked,
-                        },
-                      }))
-                    }
-                  />{' '}
-                  Radius Corners
-                </label>
-
-                <Input
-                  label="NUMBER OF HOLES"
-                  type="number"
-                  name={`num_holes_${activeLine.localId}`}
-                  value={String(activeLine.adhocSpec.numHoles)}
-                  onChange={(event) =>
-                    updateLineDraft(activeLine.localId, (current) => ({
-                      ...current,
-                      adhocSpec: {
-                        ...current.adhocSpec,
-                        numHoles: Math.max(0, numberOrFallback(event.target.value, 0)),
-                      },
-                    }))
-                  }
-                  disabled={!canEditOrders || !activeLine.adhocSpec.holes}
-                />
-
-                <Text>SHAPE TYPE</Text>
-                <select
-                  value={activeLine.adhocSpec.shape}
-                  disabled={!canEditOrders}
-                  onChange={(event) =>
-                    updateLineDraft(activeLine.localId, (current) => ({
-                      ...current,
-                      adhocSpec: {
-                        ...current.adhocSpec,
-                        shape: event.target.value as GlassSpecification['shape'],
-                      },
-                    }))
-                  }
-                >
-                  <option value="RECTANGLE">Rectangle</option>
-                  <option value="TRIANGLE">Triangle</option>
-                  <option value="SIMPLE">Simple Shape</option>
-                  <option value="COMPLEX">Complex Shape</option>
-                </select>
-
-                <br />
-                <Card title="PRICE BREAKDOWN">
-                  {activeLineCost?.error ? (
-                    <Text>
-                      <span className="status-error">{activeLineCost.error}</span>
-                    </Text>
-                  ) : (
-                    <>
-                      <Table>
-                        <TableRow>
-                          <TableColumn style={{ width: '20ch' }}>COMPONENT</TableColumn>
-                          <TableColumn>COST</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>Base Glass</TableColumn>
-                          <TableColumn>${(activeLineCost?.breakdown?.baseGlass || 0).toFixed(2)}</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>Edgework</TableColumn>
-                          <TableColumn>${(activeLineCost?.breakdown?.edgework || 0).toFixed(2)}</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>Holes</TableColumn>
-                          <TableColumn>${(activeLineCost?.breakdown?.holes || 0).toFixed(2)}</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>Shape</TableColumn>
-                          <TableColumn>${(activeLineCost?.breakdown?.shape || 0).toFixed(2)}</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>Ceramic</TableColumn>
-                          <TableColumn>${(activeLineCost?.breakdown?.ceramic || 0).toFixed(2)}</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>Scanning</TableColumn>
-                          <TableColumn>${(activeLineCost?.breakdown?.scanning || 0).toFixed(2)}</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>Subtotal</TableColumn>
-                          <TableColumn>${(activeLineCost?.breakdown?.total || 0).toFixed(2)}</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>Markup ({activeLine.markupPercent}%)</TableColumn>
-                          <TableColumn>${(((activeLineCost?.breakdown?.total || 0) * activeLine.markupPercent) / 100).toFixed(2)}</TableColumn>
-                        </TableRow>
-                        <TableRow>
-                          <TableColumn>TOTAL</TableColumn>
-                          <TableColumn>${(activeLineCost?.recommendedUnitPrice || 0).toFixed(2)}</TableColumn>
-                        </TableRow>
-                      </Table>
-
-                      <br />
-                      <ActionButton
-                        onClick={() =>
-                          updateLineDraft(activeLine.localId, (current) => ({
-                            ...current,
-                            unitPriceAtOrder: Number((activeLineCost?.recommendedUnitPrice || 0).toFixed(2)),
-                          }))
-                        }
-                      >
-                        Apply Calculator Price
-                      </ActionButton>
-                    </>
-                  )}
-                </Card>
+                <ActionButton onClick={() => editLineInCalculator(activeLine)}>Price In The Calculator</ActionButton>
               </>
             )}
 

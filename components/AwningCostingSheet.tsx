@@ -1,7 +1,7 @@
 'use client';
 
 import PrintSheet from '@components/PrintSheet';
-import QuoteDocument from '@components/QuoteDocument';
+import PrintedQuote from '@components/PrintedQuote';
 import { CustomerQuoteLine } from '@utils/customer-quote-store';
 import { formatCurrency } from '@utils/order-management';
 import { AwningCostResult, AwningCostingInput, AwningRates, CostLine, describeAwning } from '@utils/awning-costing';
@@ -51,7 +51,7 @@ function formatQty(line: CostLine): string {
  */
 export default function AwningCostingSheet({ audience, reference, quoteName, customerName, quoteDate, notes, ratesLabel, rates, awnings }: AwningCostingSheetProps) {
   if (audience === 'customer') {
-    return <QuoteDocument reference={reference} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={notes} lines={awningQuoteLines(awnings, rates)} />;
+    return <PrintedQuote reference={reference} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={notes} lines={awningQuoteLines(awnings, rates)} />;
   }
 
   return (

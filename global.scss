@@ -807,28 +807,28 @@ select option {
 
   /* Line-printer capitals on the labels and names, the way a printed invoice has always read.
      Specifications, notes and the footer stay in sentence case, where the length needs it. */
-  .quote-doc__mark,
-  .quote-doc__item,
-  .quote-doc__party-name,
-  .quote-doc__metadata td:first-child,
-  .quote-doc__totals td:first-child {
+  .printed-quote__mark,
+  .printed-quote__item,
+  .printed-quote__party-name,
+  .printed-quote__metadata td:first-child,
+  .printed-quote__totals td:first-child {
     text-transform: uppercase;
   }
 
-  .quote-doc__rule {
+  .printed-quote__rule {
     height: 1.5mm;
     background: #000;
     margin-bottom: 8mm;
   }
 
-  .quote-doc__masthead {
+  .printed-quote__masthead {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     margin-bottom: 8mm;
   }
 
-  .quote-doc__title {
+  .printed-quote__title {
     font-size: 16pt;
     font-weight: 700;
     letter-spacing: 0.08em;
@@ -836,48 +836,48 @@ select option {
     margin: 0 0 3mm;
   }
 
-  .quote-doc__metadata td {
+  .printed-quote__metadata td {
     padding: 0 6mm 0.5mm 0;
     vertical-align: top;
   }
 
-  .quote-doc__metadata td:first-child {
+  .printed-quote__metadata td:first-child {
     color: #555;
     letter-spacing: 0.05em;
   }
 
-  .quote-doc__mark {
+  .printed-quote__mark {
     font-size: 12pt;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-align: right;
   }
 
-  .quote-doc__parties {
+  .printed-quote__parties {
     display: grid;
     grid-template-columns: 40% 60%;
     margin-bottom: 8mm;
   }
 
-  .quote-doc__party-name {
+  .printed-quote__party-name {
     font-weight: 700;
     letter-spacing: 0.05em;
   }
 
   /* What the customer is being asked to pay, stated once before the detail, as an invoice does. */
-  .quote-doc__headline {
+  .printed-quote__headline {
     font-size: 14pt;
     font-weight: 700;
     margin-bottom: 6mm;
   }
 
-  .quote-doc__table {
+  .printed-quote__table {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 4mm;
   }
 
-  .quote-doc__table th {
+  .printed-quote__table th {
     text-align: left;
     font-size: 8pt;
     font-weight: 700;
@@ -887,59 +887,59 @@ select option {
     border-bottom: 0.75pt solid #000;
   }
 
-  .quote-doc__table td {
+  .printed-quote__table td {
     padding: 1.5mm 0;
     vertical-align: top;
   }
 
-  .quote-doc__line {
+  .printed-quote__line {
     page-break-inside: avoid;
   }
 
-  .quote-doc__line + .quote-doc__line td {
+  .printed-quote__line + .printed-quote__line td {
     border-top: 0.25pt solid #ebebeb;
   }
 
-  .quote-doc__spec {
+  .printed-quote__spec {
     font-size: 8pt;
     color: #555;
   }
 
-  .quote-doc__amount {
+  .printed-quote__amount {
     text-align: right;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
     padding-left: 4mm;
   }
 
-  .quote-doc__totals td {
+  .printed-quote__totals td {
     padding: 1mm 0;
     border-top: 0.25pt solid #ebebeb;
   }
 
-  .quote-doc__totals td:first-child {
+  .printed-quote__totals td:first-child {
     letter-spacing: 0.05em;
   }
 
-  .quote-doc__totals .quote-doc__amount {
+  .printed-quote__totals .printed-quote__amount {
     padding-left: 4mm;
   }
 
-  .quote-doc__due td {
+  .printed-quote__due td {
     border-top: 0.75pt solid #000;
     font-weight: 700;
   }
 
-  .quote-doc__note {
+  .printed-quote__note {
     margin: 2mm 0 0;
   }
 
-  .quote-doc__notes {
+  .printed-quote__notes {
     margin-top: 6mm;
     page-break-inside: avoid;
   }
 
-  .quote-doc__footer {
+  .printed-quote__footer {
     margin-top: 8mm;
     padding-top: 2mm;
     border-top: 0.25pt solid #ebebeb;
