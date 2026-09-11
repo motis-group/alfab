@@ -47,6 +47,11 @@ high, and it is the first time the app has been able to produce it.
 `purchase_order_lines` carries `actual_minutes`: the minutes the line really took, for the whole
 line rather than per unit. It is typed on the order line when the job is done.
 
+An order can be deleted only while it is open or cancelled and records no work: no quantity made and
+no minutes. Deleting it takes its lines with it, so `orderDeleteRefusal` in
+`utils/order-management.ts` refuses any other order. The order list offers Archive for those, which
+hides the order and can be undone.
+
 `measureAccuracy` recomputes what the costing predicted for each measured line and reports the ratio
 by product type. The estimate is the per-unit minutes multiplied back up by the line quantity, since
 the costing already divides setup across the run.
