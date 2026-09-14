@@ -10,7 +10,7 @@
  */
 
 import { LineEditResult } from '@utils/line-editing';
-import { SavedQuoteLine } from '@utils/quote-store';
+import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuoteLine, applyQuoteMargin } from '@utils/quote-store';
 import { createLineDraft } from '@utils/order-draft';
 import { todayISODate } from '@utils/order-management';
 
@@ -25,6 +25,8 @@ export interface QuoteDraft {
   /** The date on the quote. Format: yyyy-mm-dd. */
   date: string;
   notes: string;
+  /** Percent on cost. It prices every line that has a cost. */
+  marginPercent: number;
   lines: SavedQuoteLine[];
   /**
    * A line that the operator added but did not price.
@@ -36,7 +38,7 @@ export interface QuoteDraft {
 }
 
 export function emptyQuoteDraft(): QuoteDraft {
-  return { id: null, name: '', customer: '', customerId: '', date: todayISODate(), notes: '', lines: [], pendingLineId: null };
+  return { id: null, name: '', customer: '', customerId: '', date: todayISODate(), notes: '', marginPercent: DEFAULT_QUOTE_MARGIN_PERCENT, lines: [], pendingLineId: null };
 }
 
 export function persistQuoteDraft(draft: QuoteDraft): void {
@@ -56,7 +58,11 @@ export function peekQuoteDraft(): QuoteDraft | null {
   }
   try {
     const draft = JSON.parse(raw) as QuoteDraft;
-    return draft && Array.isArray(draft.lines) ? draft : null;
+    if (!draft || !Array.isArray(draft.lines)) {
+      return null;
+    }
+    // A draft written before quotes had a margin. Without a number, a returning line prices as NaN.
+    return typeof draft.marginPercent === 'number' ? draft : { ...draft, marginPercent: DEFAULT_QUOTE_MARGIN_PERCENT };
   } catch {
     window.sessionStorage.removeItem(DRAFT_KEY);
     return null;
@@ -74,20 +80,31 @@ export function clearQuoteDraft(): void {
  *
  * The calculator sets the price, the quantity, the note and the specification. The quote owns the
  * other fields of the line. This function therefore copies only the fields of the calculator.
+ *
+ * A calculator prices a quote line at cost. The margin of the quote makes the price.
  */
 export function applyQuoteLineResult(draft: QuoteDraft, result: LineEditResult): QuoteDraft {
   const existing = draft.lines.find((line) => line.draft.localId === result.localId);
-  const priced: SavedQuoteLine = {
-    draft: { ...(existing?.draft ?? createLineDraft({ localId: result.localId })), ...result.line },
-    spec: result.spec,
-    extras: result.extras,
-  };
+  const priced = applyQuoteMargin(
+    {
+      draft: { ...(existing?.draft ?? createLineDraft({ localId: result.localId })), ...result.line },
+      unitCost: result.line.unitPriceAtOrder,
+      spec: result.spec,
+      extras: result.extras.map((extra) => ({ ...extra, cost: extra.total })),
+    },
+    draft.marginPercent
+  );
 
   return {
     ...draft,
     lines: existing ? draft.lines.map((line) => (line.draft.localId === result.localId ? priced : line)) : [...draft.lines, priced],
     pendingLineId: null,
   };
+}
+
+/** Sets the margin of the quote and prices every line that has a cost again. */
+export function setQuoteMargin(draft: QuoteDraft, marginPercent: number): QuoteDraft {
+  return { ...draft, marginPercent, lines: draft.lines.map((line) => applyQuoteMargin(line, marginPercent)) };
 }
 
 /** Removes a line that the operator added but did not price. */

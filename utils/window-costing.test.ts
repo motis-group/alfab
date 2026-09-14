@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { DEFAULT_WINDOW_RATES, WINDOW_RATES_AS_TRANSCRIBED, mergeWindowRates } from './window-costing-rates';
+import { DEFAULT_WINDOW_RATES, WINDOW_RATES_AS_TRANSCRIBED, mergeWindowRates, withoutMargins } from './window-costing-rates';
 import { GLASS_GROUP_ORDER, GLAZING_ORDER, WINDOW_TYPE_ORDER, WINDOW_TYPES, WindowTypeId, applyWindowOptions, costWindow, costWindowBatches, createWindowInput, describeWindow, glazingFits, switchWindowType, windowOptions } from './window-costing';
 
 // The golden cases prove the transcription, so they price on the sheet's own numbers. What the app
@@ -150,6 +150,13 @@ test('marine window service lowers selected margins and the glass loading', () =
   near(costWindow(createWindowInput('T8610', { mws: true }), rates).marginRate, 0.225, 'T8610 margin');
   near(costWindow(createWindowInput('T5573', { mws: true }), rates).marginRate, 0.4, 'T5573 margin unchanged');
   near(costWindow(createWindowInput('T5573', { mws: true, glazingId: 'ap8_clear' }), rates).glazing[0].rate, 145.02 * 1.15, 'glass loading');
+});
+
+test('without margins a window is priced at cost: packing and uplift stay, the margin goes', () => {
+  const atCost = costWindow(createWindowInput('T5573', { heightMm: 1000, lengthMm: 1200, qtyToSize: 1, qtyShaped: 0, develop: false, glazingId: 'ap5_clear', finish: 'etch', trims: 'none' }), withoutMargins(rates));
+  near(atCost.margin, 0, 'margin');
+  near(atCost.price, (atCost.subtotal + atCost.packing) * (1 + atCost.upliftRate), 'price at cost');
+  near(costWindow(createWindowInput('T8610', { mws: true }), withoutMargins(rates)).marginRate, 0, 'the Marine Window Service margin goes too');
 });
 
 test('extras: trims, second glazing, reinforcement replaces packing', () => {

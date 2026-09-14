@@ -13,7 +13,8 @@ reprices the whole quote. A piece with a manual unit price keeps that price. The
 what the customer is told.
 
 When the calculator opens from an order to price one line, there is no quote around the line, so
-the line's own markup field is on the piece.
+the line's own markup field is on the piece. A line of a quote for a job is priced at cost, with no
+markup field, because that quote sets the margin. See [quotes.md](quotes.md).
 
 Pieces are priced one at a time, or read off a customer's order in one go; see [order-import.md](order-import.md).
 

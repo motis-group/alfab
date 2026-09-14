@@ -49,6 +49,9 @@ polish are all cut to the glass perimeter.
 There is no uplift, no packing, no finish, no trims and no per-pair option: the awning sheet has
 none of them.
 
+The calculator prices a line of a quote for a job with the margin at zero, because that quote sets
+one margin for all its lines. See [quotes.md](quotes.md).
+
 ## Working with a costing
 
 - **Batch price.** The sidebar prices the same awning at runs of 1, 2, 5 and 10. Setup minutes

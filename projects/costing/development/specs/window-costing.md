@@ -106,6 +106,9 @@ mullions, so those extras are not entered by hand.
 Marine Window Service lowers the margin to 22.5% for T5836, T8610 and sash & frame only, and
 the glass loading to 15% for every type.
 
+The calculator prices a line of a quote for a job with every margin at zero, because that quote
+sets one margin for all its lines. See [quotes.md](quotes.md).
+
 ## Working with a costing
 
 - **Batch price.** The sidebar prices the same window at batches of 1, 2, 5 and 10. Setup and
@@ -253,7 +256,7 @@ that needs it: 5, 6 and 8 mm toughened, but not the 10 and 12 in the same group,
 blocking (decision 4.4).
 
 `applyWindowOptions` puts a costing back inside those limits when the product or the type changes,
-so the form never holds a lock, trim or glass its own dropdown no longer lists.
+so the form holds only a lock, trim and glass that its own dropdowns list.
 
 ## Recipes not taken from the sheet
 

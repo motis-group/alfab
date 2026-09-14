@@ -15,7 +15,7 @@
  * the shape.
  */
 
-import { GST_RATE, QuoteLine, quoteReference, quoteTotals } from '@utils/customer-quote-store';
+import { GST_RATE, QuoteLine, quoteReference, quoteTotals, toCents } from '@utils/customer-quote-store';
 import { LineDraft } from '@utils/order-draft';
 import { StoredQuoteStatus, readQuoteStatus } from '@utils/quote-status';
 import { createClient } from '@utils/db-client';
@@ -25,10 +25,20 @@ const TABLE = 'quotes';
 /** The value of specification.kind for a quote for a job. */
 export const QUOTE_KIND = 'quote';
 
+/** The margin a new quote starts at, in percent on cost. The glass calculator's markup starts at the same figure. */
+export const DEFAULT_QUOTE_MARGIN_PERCENT = 20;
+
 /** One line on a quote. The line holds the price and the calculator input. */
 export interface SavedQuoteLine {
   /** The line as the calculator returns it. The same calculator can edit the line again. */
   draft: LineDraft;
+  /**
+   * One unit at cost, as the calculator priced it. The margin of the quote makes the price.
+   *
+   * A line priced before quotes had a margin has no cost, because its price already holds a margin.
+   * That line keeps its price until the operator prices it again.
+   */
+  unitCost?: number | null;
   /**
    * The specification in the words of the calculator, as printed.
    *
@@ -36,7 +46,8 @@ export interface SavedQuoteLine {
    * A later change to the catalogue must not change the text.
    */
   spec: string;
-  extras: { label: string; total: number | null }[];
+  /** Items charged in addition. An item has a cost when the margin of the quote prices it. */
+  extras: { label: string; total: number | null; cost?: number | null }[];
 }
 
 /** The content of the quote. */
@@ -47,6 +58,8 @@ export interface SavedQuoteContent {
   /** The date on the quote. The 30-day price hold starts on this date. */
   date: string;
   notes: string;
+  /** Percent on cost. It prices every line that has a cost. */
+  marginPercent: number;
   lines: SavedQuoteLine[];
 }
 
@@ -70,7 +83,8 @@ export function paperLine(line: SavedQuoteLine): QuoteLine {
     spec: line.spec,
     quantity: line.draft.quantityOrdered,
     unitPrice: line.draft.unitPriceAtOrder,
-    extras: line.extras,
+    // The customer reads the price of an extra, never its cost.
+    extras: line.extras.map(({ label, total }) => ({ label, total })),
   };
 }
 
@@ -81,6 +95,43 @@ export function quotePaperLines(lines: SavedQuoteLine[]): QuoteLine[] {
 /** The total of the lines, with GST included. */
 export function quoteTotal(lines: SavedQuoteLine[]): number {
   return quoteTotals(quotePaperLines(lines)).total;
+}
+
+/** One unit at the margin, to the cent, so the printed unit price times the quantity is the printed amount. */
+export function priceAtMargin(cost: number, marginPercent: number): number {
+  return toCents(cost * (1 + marginPercent / 100));
+}
+
+/** Prices a line from its cost at the margin of the quote. A line with no cost keeps its price. */
+export function applyQuoteMargin(line: SavedQuoteLine, marginPercent: number): SavedQuoteLine {
+  if (typeof line.unitCost !== 'number') {
+    return line;
+  }
+  return {
+    ...line,
+    // An order made from the quote reads the margin of a glass line from its markup.
+    draft: { ...line.draft, unitPriceAtOrder: priceAtMargin(line.unitCost, marginPercent), markupPercent: marginPercent },
+    extras: line.extras.map((extra) => (typeof extra.cost === 'number' ? { ...extra, total: priceAtMargin(extra.cost, marginPercent) } : extra)),
+  };
+}
+
+/**
+ * What the margin adds, for the office. The customer reads only the prices.
+ *
+ * A line with no cost keeps its own price, so it counts in neither the cost nor the margin. The
+ * three parts add up to the subtotal that the paper prints.
+ */
+export function quoteMarginSummary(lines: SavedQuoteLine[]): { cost: number; margin: number; fixed: number; subtotal: number } {
+  const { amounts, subtotal } = quoteTotals(quotePaperLines(lines));
+  let cost = 0;
+  let atMargin = 0;
+  lines.forEach((line, index) => {
+    if (typeof line.unitCost === 'number') {
+      cost += toCents(line.unitCost * line.draft.quantityOrdered);
+      atMargin += amounts[index] ?? 0;
+    }
+  });
+  return { cost: toCents(cost), margin: toCents(atMargin - cost), fixed: toCents(subtotal - atMargin), subtotal };
 }
 
 function rowFields(quote: SavedQuoteContent & { issuedBy: string | null; ratesUpdatedAt: string | null }) {
@@ -94,6 +145,7 @@ function rowFields(quote: SavedQuoteContent & { issuedBy: string | null; ratesUp
       kind: QUOTE_KIND,
       customerId: quote.customerId,
       notes: quote.notes,
+      marginPercent: quote.marginPercent,
       lines: quote.lines,
       issuedBy: quote.issuedBy,
       issuedAt: new Date().toISOString(),
@@ -178,6 +230,9 @@ export function toSavedQuote(row: QuoteRow): SavedQuote | null {
     customerId: text(specification.customerId),
     date: row.date || '',
     notes: text(specification.notes) || '',
+    // A quote saved before quotes had a margin reads at the default. Its lines have no cost, so the
+    // default prices none of them.
+    marginPercent: typeof specification.marginPercent === 'number' ? specification.marginPercent : DEFAULT_QUOTE_MARGIN_PERCENT,
     lines,
     // The stored total is the offer. Calculate the total again only if the row has no total.
     subtotal: typeof cost.subtotal === 'number' ? cost.subtotal : totals.subtotal,
