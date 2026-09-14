@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { CustomerQuoteContent, CustomerQuoteLine, quoteFingerprint, quoteReference, quoteTotals, saveCustomerQuote, toCustomerQuote } from './customer-quote-store';
+import { CustomerQuoteContent, CustomerQuoteLine, QuoteLine, quoteFingerprint, quoteReference, quoteTotals, saveCustomerQuote, toCustomerQuote } from './customer-quote-store';
 import { fromCustomerQuote, isMergeRefusal, mergeQuotesForOrder } from './quote-register';
 import { WindowCostingInput } from './window-costing';
 
@@ -92,4 +92,37 @@ test('a printed quote becomes an order at the prices offered, without its unpric
   assert.ok(together && !isMergeRefusal(together));
   assert.equal(together.draft.quoteName, 'Q-3F2A9C1E Smith residence + Kitchen hopper');
   assert.deepEqual(together.draft.quoteIds, [record.id, 'costing'], 'saving the order links every quote on it');
+});
+
+test('the printed column adds up to the printed total', () => {
+  // Unit prices carry more than two decimals. The paper prints each amount to the cent, so the
+  // totals must be built from amounts of the same size.
+  const lines: QuoteLine[] = [
+    { description: 'Side panel', spec: '', quantity: 3, unitPrice: 85.005 },
+    { description: 'Sliding window', spec: '', quantity: 4, unitPrice: 1200.337 },
+    { description: 'Awning window', spec: '', quantity: 2, unitPrice: 1090.119 },
+  ];
+
+  const { amounts, subtotal, gst, total } = quoteTotals(lines);
+
+  assert.deepEqual(amounts, [255.02, 4801.35, 2180.24], 'each amount is the amount that is printed');
+  // A person adds the column in cents, not in binary fractions. Add integer cents to model that.
+  const addedByHand = amounts.reduce<number>((sum, amount) => sum + Math.round((amount ?? 0) * 100), 0) / 100;
+  assert.equal(addedByHand, subtotal, 'a customer who adds the column reaches the printed subtotal');
+  assert.equal(subtotal, 7236.61);
+  assert.equal(gst, 723.66, 'GST is a cent amount too');
+  assert.equal(total, 7960.27);
+  assert.equal((Math.round(subtotal * 100) + Math.round(gst * 100)) / 100, total, 'and the last line adds up as well');
+});
+
+test('an unpriced line does not break the arithmetic', () => {
+  const lines: QuoteLine[] = [
+    { description: 'Priced', spec: '', quantity: 3, unitPrice: 85.005 },
+    { description: 'Not priced', spec: '', quantity: 1, unitPrice: null },
+  ];
+
+  const { amounts, subtotal, total } = quoteTotals(lines);
+  assert.deepEqual(amounts, [255.02, null]);
+  assert.equal(subtotal, 255.02, 'the line with no price adds nothing');
+  assert.equal(total, 280.52);
 });
