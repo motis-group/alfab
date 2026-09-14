@@ -1,6 +1,8 @@
 .root {
   vertical-align: top;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-weight: 400;
   text-align: center;
   margin: 0;
@@ -9,8 +11,8 @@
   font-family: var(--font-family-mono);
   width: 100%;
   font-size: var(--font-size);
-  line-height: calc(var(--theme-line-height-base) * 2em);
-  min-height: calc(var(--theme-line-height-base) * (var(--font-size) * 2));
+  line-height: calc(var(--theme-line-height-base) * 1rem);
+  min-height: var(--theme-target-size);
   padding: 0 2ch 0 2ch;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -24,10 +26,12 @@
 
   &:hover {
     background: var(--theme-focused-foreground);
+    color: var(--theme-focused-text, var(--theme-text));
   }
 
   &:focus {
     background: var(--theme-focused-foreground);
+    color: var(--theme-focused-text, var(--theme-text));
   }
 }
 

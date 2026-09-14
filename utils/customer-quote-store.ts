@@ -59,11 +59,23 @@ export interface CustomerQuote extends CustomerQuoteContent {
   purchaseOrderId: string | null;
 }
 
+/**
+ * Money to the cent.
+ *
+ * The paper prints each amount to the cent. The totals must therefore be built from amounts of the
+ * same size. A customer who adds the column must reach the printed total.
+ */
+function toCents(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
 export function quoteTotals(lines: QuoteLine[]) {
-  const amounts = lines.map((line) => (line.unitPrice == null ? null : line.unitPrice * line.quantity));
-  const subtotal = amounts.reduce<number>((total, amount) => total + (amount ?? 0), 0);
-  const gst = subtotal * GST_RATE;
-  return { amounts, subtotal, gst, total: subtotal + gst, anyUnpriced: amounts.some((amount) => amount == null) };
+  // Round each amount before it is added, because each amount is printed. A sum of unrounded
+  // products can differ from the sum of the printed column by a cent.
+  const amounts = lines.map((line) => (line.unitPrice == null ? null : toCents(line.unitPrice * line.quantity)));
+  const subtotal = toCents(amounts.reduce<number>((total, amount) => total + (amount ?? 0), 0));
+  const gst = toCents(subtotal * GST_RATE);
+  return { amounts, subtotal, gst, total: toCents(subtotal + gst), anyUnpriced: amounts.some((amount) => amount == null) };
 }
 
 /**

@@ -23,6 +23,8 @@ import { consumeLineEditResult, calculatorFor, persistLineEditRequest } from '@u
 import { Customer, PricingSource, formatCurrency, todayISODate } from '@utils/order-management';
 import { LineDraft, createLineDraft } from '@utils/order-draft';
 import { QuoteDraft, applyQuoteLineResult, clearQuoteDraft, dropPendingLine, emptyQuoteDraft, peekQuoteDraft, persistQuoteDraft } from '@utils/quote-draft';
+import { quoteTotals } from '@utils/customer-quote-store';
+import { quoteEmail } from '@utils/quote-email';
 import { QuoteRecord, findQuoteRecord, isMergeRefusal, mergeQuotesForOrder } from '@utils/quote-register';
 import { SavedQuoteLine, createQuote, findQuote, quotePaperLines, quoteReference, updateQuote } from '@utils/quote-store';
 import { createClient } from '@utils/db-client';
@@ -147,7 +149,8 @@ export default function QuotePage() {
   }
 
   const paperLines = quotePaperLines(draft.lines);
-  const total = paperLines.reduce((sum, line) => sum + (line.unitPrice ?? 0) * line.quantity, 0);
+  // The same figures the paper prints. The page must not state a total that the document contradicts.
+  const { subtotal: total } = quoteTotals(paperLines);
   const reference = draft.id ? quoteReference(draft.id) : null;
 
   /** Sends one line to the calculator that prices it. The quote waits in its draft. */
@@ -180,6 +183,25 @@ export default function QuotePage() {
 
   function editLine(line: SavedQuoteLine, index: number) {
     priceLine(line.draft, `Line ${index + 1}`, false);
+  }
+
+  /** Opens the mail client of the operator with the quotation written. */
+  function sendQuote() {
+    if (!paperLines.length) {
+      setStatus(null);
+      setError('A quote with no line is not an offer. Add a line first.');
+      return;
+    }
+
+    const customer = customers.find((entry) => entry.id === draft.customerId);
+    const email = quoteEmail({ reference, quoteName: draft.name, customerName: customer?.name || draft.customer, quoteDate: draft.date, notes: draft.notes, lines: paperLines }, customer?.contact_email || '');
+
+    setError(null);
+    setStatus(email.omitted ? `Opening a message. ${email.omitted} ${email.omitted === 1 ? 'line is' : 'lines are'} on the printed quote instead, because the message would be too long to open.` : 'Opening a message in your mail client.');
+
+    if (typeof window !== 'undefined') {
+      window.location.href = email.href;
+    }
   }
 
   function removeLine(localId: string) {
@@ -368,7 +390,7 @@ export default function QuotePage() {
               <ActionButton onClick={() => router.push('/glass')}>CLOSE</ActionButton>
             </span>
             <span>
-              {draft.lines.length ? <ActionButton onClick={() => window.print()}>PRINT</ActionButton> : null} <ActionButton onClick={save}>{isSaving ? 'SAVING...' : 'SAVE QUOTE'}</ActionButton>
+              {draft.lines.length ? <ActionButton onClick={() => window.print()}>PRINT</ActionButton> : null} {draft.lines.length ? <ActionButton onClick={sendQuote}>SEND</ActionButton> : null} <ActionButton onClick={save}>{isSaving ? 'SAVING...' : 'SAVE QUOTE'}</ActionButton>
             </span>
           </RowSpaceBetween>
         </>
