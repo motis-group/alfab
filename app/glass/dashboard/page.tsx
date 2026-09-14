@@ -8,7 +8,6 @@ import { useRouter } from 'next/navigation';
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
 import Card from '@components/Card';
-import QuoteDocument from '@components/QuoteDocument';
 import CardDouble from '@components/CardDouble';
 import RowSpaceBetween from '@components/RowSpaceBetween';
 import Table from '@components/Table';
@@ -18,9 +17,8 @@ import Text from '@components/Text';
 
 import { Customer, PurchaseOrder, formatCurrency, statusLabel, todayISODate } from '@utils/order-management';
 import { openOrdersByCustomer, ordersDueWithin, ordersWithStatus, overdueOrders, recentOrders, tallyQuotes } from '@utils/order-metrics';
-import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
+import { QuoteRecord, listQuoteRecords } from '@utils/quote-register';
 import { QUOTE_STATUS_LABELS, winRate } from '@utils/quote-status';
-import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
@@ -35,7 +33,6 @@ export default function DashboardPage() {
   const [quotes, setQuotes] = useState<QuoteRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [openQuote, setOpenQuote] = useState<QuoteRecord | null>(null);
 
   const today = todayISODate();
 
@@ -89,18 +86,6 @@ export default function DashboardPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  /** A quote reads better as the document the customer was sent than as a row. */
-  async function convertOpenQuote(quote: QuoteRecord) {
-    const merged = mergeQuotesForOrder([quote]);
-    if (!merged || isMergeRefusal(merged)) {
-      setError(merged && isMergeRefusal(merged) ? merged.reason : 'That quote has no priced line to put on an order.');
-      return;
-    }
-
-    persistQuoteToOrderDraft(merged.draft);
-    router.push('/glass/new?fromQuote=1');
-  }
 
   return (
     <AppFrame
@@ -193,18 +178,6 @@ export default function DashboardPage() {
         </>
       }
     >
-      {openQuote ? (
-        <>
-          <QuoteDocument
-            quote={openQuote}
-            onClose={() => setOpenQuote(null)}
-            onOpen={() => router.push(QUOTE_KIND_HREFS[openQuote.kind])}
-            onConvert={() => convertOpenQuote(openQuote)}
-          />
-          <br />
-        </>
-      ) : null}
-
       {/* Only what is late or nearly late. A row here is a phone call, so an empty card says so. */}
       <CardDouble title={overdue.length ? `OVERDUE (${overdue.length})` : 'NOTHING OVERDUE'}>
         {overdue.length ? (
@@ -279,12 +252,12 @@ export default function DashboardPage() {
               .map((quote) => (
                 <TableRow key={quote.id}>
                   <TableColumn>{quote.name || 'Untitled'}</TableColumn>
-                  <TableColumn>{QUOTE_KIND_LABELS[quote.kind]}</TableColumn>
+                  <TableColumn>{quote.kindLabel}</TableColumn>
                   <TableColumn>{quote.customer || 'Walk-in'}</TableColumn>
                   <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
                   <TableColumn>{formatCurrency(quote.total)}</TableColumn>
                   <TableColumn>
-                    <ActionButton onClick={() => setOpenQuote(quote)}>View</ActionButton>
+                    <ActionButton onClick={() => router.push(`/glass/quotes/${quote.id}`)}>View</ActionButton>
                   </TableColumn>
                 </TableRow>
               ))}

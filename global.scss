@@ -687,9 +687,11 @@ select option {
 }
 
 @media print {
-  /* The sheet is a child of <body>. Removing body's other children from the layout leaves only the
-     sheet; visibility: hidden would keep the app's height. */
-  body > *:not(.window-costing-sheet) {
+  /* The sheet is a child of <body>. Remove the other children of body from the layout. Only the
+     sheet then remains. Do not use visibility: hidden, because the app keeps its height.
+     Apply this rule only if a sheet is present. Without the test, a page that has no sheet hides
+     the app and prints a blank page. */
+  body:has(> .window-costing-sheet) > *:not(.window-costing-sheet) {
     display: none !important;
   }
 

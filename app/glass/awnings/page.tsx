@@ -136,7 +136,6 @@ export default function AwningCostingPage() {
     return () => window.removeEventListener('afterprint', restore);
   }, []);
 
-
   const selectedCustomer = customers.find((entry) => entry.id === customerId) || null;
 
   useEffect(() => {
@@ -155,18 +154,18 @@ export default function AwningCostingPage() {
         setCanSaveCostings(userCan(user, 'quotes:write'));
         setUsername(user.username);
 
-        // Opened from an order to price one of its lines: load that line into the form.
+        // An order or a quote sent one line to be priced. Load that line into the form.
         const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
         if (params?.get('editLine') === '1') {
           const request = peekLineEditRequest();
-          const line = request?.order.lineDrafts.find((entry) => entry.localId === request.localId);
+          const line = request?.line;
           if (request && line) {
             setLineEdit(request);
             if (line.awningSpec) {
               setInput({ ...line.awningSpec });
             }
             setAwningName(line.lineNote);
-            setCustomerId(request.order.orderForm.customerId);
+            setCustomerId(request.customerId);
           }
         }
 
@@ -178,7 +177,6 @@ export default function AwningCostingPage() {
         setRatesSource(loaded.source);
         setRatesUpdatedAt(loaded.updatedAt);
         setRatesError(loaded.error);
-
       } catch (loadError: any) {
         setError(loadError?.message || 'Unable to load awning costing.');
       } finally {
@@ -195,8 +193,8 @@ export default function AwningCostingPage() {
     update({ [field]: Math.max(minimum, numberOrFallback(value, minimum)) } as Partial<AwningCostingInput>);
   }
 
-  /** Hands the priced line back to the order it came from. */
-  function saveLineToOrder() {
+  /** Returns the priced line to the order or the quote that sent it. */
+  function saveLineToDocument() {
     if (!lineEdit) {
       return;
     }
@@ -206,24 +204,26 @@ export default function AwningCostingPage() {
     }
 
     persistLineEditResult({
-      order: lineEdit.order,
+      origin: lineEdit.origin,
       localId: lineEdit.localId,
       line: {
         quantityOrdered: Math.max(1, result.qty),
         unitPriceAtOrder: result.price,
         lineNote: awningName.trim(),
         markupPercent: 0,
-        adhocSpec: lineEdit.order.lineDrafts.find((entry) => entry.localId === lineEdit.localId)?.adhocSpec ?? defaultAdhocSpec,
+        adhocSpec: lineEdit.line.adhocSpec,
         awningSpec: { ...input },
         awningRatesUpdatedAt: ratesUpdatedAt,
         windowSpec: null,
         windowRatesUpdatedAt: null,
       },
+      spec: describe(input),
+      extras: [],
     });
     router.push(lineEdit.returnTo);
   }
 
-  /** Leaves the line as the order had it. */
+  /** Leaves the line as the order or the quote holds it. */
   function cancelLineEdit() {
     if (!lineEdit) {
       return;
@@ -407,7 +407,7 @@ export default function AwningCostingPage() {
       previewPixelSRC="/pixel.gif"
       logo="⬡"
       navRight={<ActionButton onClick={() => router.push('/glass')}>ORDER DASHBOARD</ActionButton>}
-      heading={lineEdit ? `PRICING A LINE OF ${(lineEdit.order.orderForm.poNumber || 'A NEW ORDER').toUpperCase()}` : 'AWNING COSTING'}
+      heading={lineEdit ? `PRICING A LINE OF ${lineEdit.origin.label.toUpperCase()}` : 'AWNING COSTING'}
       badge={isLoading ? 'LOADING' : `${role.toUpperCase()} SESSION`}
       sidebarWidthCh={48}
       sidebarMobileOrder="top"
@@ -474,10 +474,6 @@ export default function AwningCostingPage() {
               </Table>
             </Card>
           ) : null}
-
-
-
-
 
           {/* Analysis cards are tabbed; only the open panel is rendered. */}
           <SidebarTabs
@@ -607,8 +603,6 @@ export default function AwningCostingPage() {
               },
             ]}
           />
-
-
         </>
       }
       actionItems={[
@@ -645,15 +639,15 @@ export default function AwningCostingPage() {
         </Card>
       )}
 
-      {/* Opened from an order. The quote below is not what is being edited, so the way back is the
-          first thing on the page. */}
+      {/* An order or a quote sent this line. The form below is that line. It is not the quote of
+          this calculator. The way back is therefore at the top of the page. */}
       {lineEdit ? (
-        <CardDouble title="EDITING AN ORDER LINE">
+        <CardDouble title={lineEdit.origin.kind === 'order' ? 'EDITING AN ORDER LINE' : 'EDITING A QUOTE LINE'}>
           <Text>
-            Line {(lineEdit.order.lineDrafts.findIndex((line) => line.localId === lineEdit.localId) + 1) || 1} of {lineEdit.order.orderForm.poNumber || 'a new order'}. Changing the awning below changes that line.
+            {lineEdit.lineLabel} of {lineEdit.origin.label}. Changing the awning below changes that line.
           </Text>
           <br />
-          <ActionButton onClick={saveLineToOrder}>Save To Order</ActionButton> <ActionButton onClick={cancelLineEdit}>Cancel</ActionButton>
+          <ActionButton onClick={saveLineToDocument}>{lineEdit.origin.kind === 'order' ? 'Save To Order' : 'Save To Quote'}</ActionButton> <ActionButton onClick={cancelLineEdit}>Cancel</ActionButton>
         </CardDouble>
       ) : null}
 

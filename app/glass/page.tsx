@@ -29,10 +29,11 @@ import {
   todayISODate,
   localISODate,
 } from '@utils/order-management';
-import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
+import { QuoteRecord, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
 import { QUOTE_STATUS_LABELS, QUOTE_STATUS_ORDER, QUOTE_STATUS_TONE, QuoteStatus, deleteQuote, quoteDeleteRefusal } from '@utils/quote-status';
 import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { overdueOrders } from '@utils/order-metrics';
+import { useConfirm } from '@components/modals/ModalConfirm';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 
@@ -111,6 +112,7 @@ function matchesArchiveFilter(order: PurchaseOrder, filter: ArchiveFilter): bool
 
 export default function OrderDashboardPage() {
   const router = useRouter();
+  const confirm = useConfirm();
 
   const [role, setRole] = useState<UserRole>('readonly');
 
@@ -230,7 +232,7 @@ export default function OrderDashboardPage() {
       return;
     }
     const warning = quote.reference ? `Delete ${quote.reference}? It was printed for a customer, so the number they hold will point at nothing. This cannot be undone.` : `Delete ${label}? This cannot be undone.`;
-    if (!window.confirm(warning)) {
+    if (!(await confirm('DELETE QUOTE', warning))) {
       return;
     }
     try {
@@ -270,7 +272,7 @@ export default function OrderDashboardPage() {
       setOrderNotice(refusal);
       return;
     }
-    if (!window.confirm(`Delete PO ${order.po_number} and its ${lines.length} line${lines.length === 1 ? '' : 's'}? This cannot be undone. Archive hides it instead and can be undone.`)) {
+    if (!(await confirm('DELETE ORDER', `Delete PO ${order.po_number} and its ${lines.length} line${lines.length === 1 ? '' : 's'}? This cannot be undone. Archive hides it instead and can be undone.`))) {
       return;
     }
     const { error } = await createClient().from(TABLE_PURCHASE_ORDERS).delete().eq('id', order.id);
@@ -453,7 +455,8 @@ export default function OrderDashboardPage() {
                 <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuotes(selectedRecords)}>Convert {selectedCount} To One Order</ActionButton>{' '}
               </>
             ) : null}
-            {selectedCount ? <ActionButton onClick={() => setSelectedQuotes(new Set())}>Clear</ActionButton> : null}
+            {selectedCount ? <ActionButton onClick={() => setSelectedQuotes(new Set())}>Clear</ActionButton> : null}{' '}
+            <ActionButton onClick={role === 'readonly' ? undefined : () => router.push('/glass/quotes/new')}>New Quote</ActionButton>
           </Text>
         </RowSpaceBetween>
         {quoteError ? (
@@ -483,7 +486,7 @@ export default function OrderDashboardPage() {
                   <input type="checkbox" checked={selectedQuotes.has(quote.id)} disabled={!quote.draft} aria-label={`Put ${quote.name || 'this quote'} on an order`} onChange={() => toggleQuote(quote.id)} />
                 </TableColumn>
                 <TableColumn>{[quote.reference, quote.name || 'Untitled'].filter(Boolean).join(' · ')}</TableColumn>
-                <TableColumn>{QUOTE_KIND_LABELS[quote.kind]}</TableColumn>
+                <TableColumn>{quote.kindLabel}</TableColumn>
                 <TableColumn>{quote.customer || 'Walk-in'}</TableColumn>
                 <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
                 <TableColumn>{quote.lineCount}</TableColumn>
@@ -492,7 +495,7 @@ export default function OrderDashboardPage() {
                   <span className={QUOTE_STATUS_TONE[quote.status]}>{QUOTE_STATUS_LABELS[quote.status]}</span>
                 </TableColumn>
                 <TableColumn style={{ whiteSpace: 'nowrap' }}>
-                  <ActionButton onClick={() => router.push(QUOTE_KIND_HREFS[quote.kind])}>Open</ActionButton>{' '}
+                  <ActionButton onClick={() => router.push(`/glass/quotes/${quote.id}`)}>Open</ActionButton>{' '}
                   <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuotes([quote])}>Convert</ActionButton>{' '}
                   <ActionButton onClick={role === 'readonly' ? undefined : () => removeQuote(quote)}>Delete</ActionButton>
                 </TableColumn>

@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import ActionButton from '@components/ActionButton';
-import { QuotePaper } from '@components/PrintedQuote';
+import PrintedQuote, { QuotePaper, QuotePaperProps } from '@components/PrintedQuote';
 import RowSpaceBetween from '@components/RowSpaceBetween';
 import Text from '@components/Text';
 import Window from '@components/Window';
@@ -17,8 +17,6 @@ interface QuoteDocumentProps {
   onClose: () => void;
   /** Offered when the quote has something to put on an order. */
   onConvert?: () => void;
-  /** Opens the calculator the quote was priced in. */
-  onOpen?: () => void;
 }
 
 /** A printed quote has its lines as printed. Any other quote shows the lines it would order. */
@@ -34,15 +32,41 @@ function paperLines(quote: QuoteRecord): QuoteLine[] {
  * A quote as the customer reads it, rather than as a row in a list: the same paper the calculators
  * print. It does not reprice, because a saved quote holds the number the customer was given.
  */
-export default function QuoteDocument({ quote, onClose, onConvert, onOpen }: QuoteDocumentProps) {
+export default function QuoteDocument({ quote, onClose, onConvert }: QuoteDocumentProps) {
   const lines = paperLines(quote);
+
+  // Both copies below use one set of properties. The paper on screen and the paper in the printer
+  // therefore stay the same.
+  const paper: QuotePaperProps = {
+    reference: quote.reference,
+    quoteName: quote.name,
+    customerName: quote.customer,
+    quoteDate: quote.date ? quote.date.slice(0, 10) : '',
+    notes: quote.draft?.quoteNotes || '',
+    lines,
+  };
+
+  function printQuote() {
+    if (typeof window !== 'undefined') {
+      window.print();
+    }
+  }
 
   return (
     <Window aria-label={`Quote ${quote.reference || quote.name || 'untitled'}`}>
       <Text>Status: {QUOTE_STATUS_LABELS[quote.status]}</Text>
       <br />
 
-      {lines.length ? <QuotePaper reference={quote.reference} quoteName={quote.name} customerName={quote.customer} quoteDate={quote.date ? quote.date.slice(0, 10) : ''} notes={quote.draft?.quoteNotes || ''} lines={lines} /> : <Text>This quote has no priced line. Open it in the calculator to price it.</Text>}
+      {lines.length ? (
+        <>
+          <QuotePaper {...paper} />
+          {/* The copy for the printer. The print styles keep only a sheet that is a child of
+              <body>. Without this sheet, the printer produces a blank page. */}
+          <PrintedQuote {...paper} />
+        </>
+      ) : (
+        <Text>This quote has no priced line. Open it in the calculator to price it.</Text>
+      )}
       <br />
 
       <RowSpaceBetween>
@@ -52,7 +76,7 @@ export default function QuoteDocument({ quote, onClose, onConvert, onOpen }: Quo
           </ActionButton>
         </span>
         <span>
-          {onOpen ? <ActionButton onClick={onOpen}>OPEN IN CALCULATOR</ActionButton> : null} {onConvert && quote.draft ? <ActionButton onClick={onConvert}>CONVERT TO ORDER</ActionButton> : null}
+          {lines.length ? <ActionButton onClick={printQuote}>PRINT</ActionButton> : null} {onConvert && quote.draft ? <ActionButton onClick={onConvert}>CONVERT TO ORDER</ActionButton> : null}
         </span>
       </RowSpaceBetween>
     </Window>
