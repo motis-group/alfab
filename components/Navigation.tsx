@@ -15,7 +15,14 @@ interface NavigationProps extends React.HTMLAttributes<HTMLElement> {
 }
 
 const Navigation: React.FC<NavigationProps> = ({ children, logoHref, logoTarget, onClickLogo, logo, left, right }) => {
-  let logoElement = <button className={styles.logo}>{logo}</button>;
+  // A logo that does nothing is a mark, not a control. A button with no action still takes focus
+  // and still announces itself as a button, and it cannot meet a target size because there is no
+  // target. Render a control only when there is something to press.
+  let logoElement = (
+    <span className={styles.logo} aria-hidden="true">
+      {logo}
+    </span>
+  );
 
   if (onClickLogo) {
     logoElement = (

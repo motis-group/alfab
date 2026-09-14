@@ -1,4 +1,7 @@
 .hotkey {
+  align-items: center;
+  display: inline-flex;
+  min-height: var(--theme-target-size);
   background: var(--theme-button-foreground);
   color: var(--theme-text);
   cursor: pointer;
@@ -10,6 +13,9 @@
 }
 
 .content {
+  align-items: center;
+  display: inline-flex;
+  min-height: var(--theme-target-size);
   background: var(--theme-button-background);
   box-shadow: inset 0 0 0 2px var(--theme-button-foreground);
   cursor: pointer;
@@ -25,6 +31,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
+  min-height: var(--theme-target-size);
   cursor: pointer;
   outline: 0;
   border: 0;
