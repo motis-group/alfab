@@ -16,6 +16,13 @@ if [[ ! -d "${APP_DIR}" ]]; then
   exit 1
 fi
 
+# This script does not build. The deploy workflow builds on the runner. The release carries .next.
+# If .next has no build, stop before this script changes the host.
+if [[ ! -f "${APP_DIR}/.next/BUILD_ID" ]]; then
+  echo "The directory ${APP_DIR}/.next does not contain a build. Run npm run build in ${APP_DIR}. Then run this script again." >&2
+  exit 1
+fi
+
 if [[ "$(id -u)" -eq 0 ]]; then
   SUDO=""
 else
@@ -281,8 +288,6 @@ set +a
 if [[ -x scripts/apply-aws-postgres-schema.sh ]]; then
   bash scripts/apply-aws-postgres-schema.sh
 fi
-
-npm run build
 
 if [[ -x scripts/apply-db-migrations.sh && -d db/migrations ]]; then
   bash scripts/apply-db-migrations.sh db/migrations

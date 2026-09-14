@@ -88,13 +88,15 @@ jobs:
 
           chmod 600 ~/.ssh/known_hosts
 
+      # The release carries .next from the Build step. The host does not build again.
+      # .next/cache is build cache. The server does not read it. It is most of the size of .next.
       - name: Package release
         run: |
           set -euo pipefail
           tar \
             --exclude='.git' \
             --exclude='.github' \
-            --exclude='.next' \
+            --exclude='.next/cache' \
             --exclude='node_modules' \
             --exclude='tsconfig.tsbuildinfo' \
             -czf "/tmp/alfab-${RELEASE_ID}.tgz" .
