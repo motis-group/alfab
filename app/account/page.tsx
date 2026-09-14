@@ -78,7 +78,7 @@ export default function AccountSettingsPage() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⚙"
-      heading="APPEARANCE"
+      heading="ACCOUNT"
       sectionNavigationItems={APP_ACCOUNT_SECTION_ITEMS}
       badge={badgeText}
       sidebarWidthCh={48}

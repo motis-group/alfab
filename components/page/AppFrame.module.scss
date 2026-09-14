@@ -12,6 +12,23 @@
   gap: 0.75ch;
 }
 
+.heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 1ch;
+}
+
+.title {
+  font-size: var(--font-size);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.badge {
+  background: var(--theme-border);
+}
+
 .singleColumn {
   display: grid;
   gap: var(--app-gap);
