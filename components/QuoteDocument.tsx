@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import ActionButton from '@components/ActionButton';
-import { QuotePaper } from '@components/PrintedQuote';
+import PrintedQuote, { QuotePaper, QuotePaperProps } from '@components/PrintedQuote';
 import RowSpaceBetween from '@components/RowSpaceBetween';
 import Text from '@components/Text';
 import Window from '@components/Window';
@@ -37,12 +37,38 @@ function paperLines(quote: QuoteRecord): QuoteLine[] {
 export default function QuoteDocument({ quote, onClose, onConvert, onOpen }: QuoteDocumentProps) {
   const lines = paperLines(quote);
 
+  // One set of props for both copies below, so the paper on screen and the paper in the printer
+  // cannot drift apart.
+  const paper: QuotePaperProps = {
+    reference: quote.reference,
+    quoteName: quote.name,
+    customerName: quote.customer,
+    quoteDate: quote.date ? quote.date.slice(0, 10) : '',
+    notes: quote.draft?.quoteNotes || '',
+    lines,
+  };
+
+  function printQuote() {
+    if (typeof window !== 'undefined') {
+      window.print();
+    }
+  }
+
   return (
     <Window aria-label={`Quote ${quote.reference || quote.name || 'untitled'}`}>
       <Text>Status: {QUOTE_STATUS_LABELS[quote.status]}</Text>
       <br />
 
-      {lines.length ? <QuotePaper reference={quote.reference} quoteName={quote.name} customerName={quote.customer} quoteDate={quote.date ? quote.date.slice(0, 10) : ''} notes={quote.draft?.quoteNotes || ''} lines={lines} /> : <Text>This quote has no priced line. Open it in the calculator to price it.</Text>}
+      {lines.length ? (
+        <>
+          <QuotePaper {...paper} />
+          {/* The printer's copy. Print styles keep only a sheet that is a child of <body>, so a quote
+              read here and printed without one comes out as a blank page. */}
+          <PrintedQuote {...paper} />
+        </>
+      ) : (
+        <Text>This quote has no priced line. Open it in the calculator to price it.</Text>
+      )}
       <br />
 
       <RowSpaceBetween>
@@ -52,7 +78,7 @@ export default function QuoteDocument({ quote, onClose, onConvert, onOpen }: Quo
           </ActionButton>
         </span>
         <span>
-          {onOpen ? <ActionButton onClick={onOpen}>OPEN IN CALCULATOR</ActionButton> : null} {onConvert && quote.draft ? <ActionButton onClick={onConvert}>CONVERT TO ORDER</ActionButton> : null}
+          {lines.length ? <ActionButton onClick={printQuote}>PRINT</ActionButton> : null} {onOpen ? <ActionButton onClick={onOpen}>OPEN IN CALCULATOR</ActionButton> : null} {onConvert && quote.draft ? <ActionButton onClick={onConvert}>CONVERT TO ORDER</ActionButton> : null}
         </span>
       </RowSpaceBetween>
     </Window>
