@@ -17,8 +17,6 @@ interface QuoteDocumentProps {
   onClose: () => void;
   /** Offered when the quote has something to put on an order. */
   onConvert?: () => void;
-  /** Opens the calculator the quote was priced in. */
-  onOpen?: () => void;
 }
 
 /** A printed quote has its lines as printed. Any other quote shows the lines it would order. */
@@ -34,7 +32,7 @@ function paperLines(quote: QuoteRecord): QuoteLine[] {
  * A quote as the customer reads it, rather than as a row in a list: the same paper the calculators
  * print. It does not reprice, because a saved quote holds the number the customer was given.
  */
-export default function QuoteDocument({ quote, onClose, onConvert, onOpen }: QuoteDocumentProps) {
+export default function QuoteDocument({ quote, onClose, onConvert }: QuoteDocumentProps) {
   const lines = paperLines(quote);
 
   // One set of props for both copies below, so the paper on screen and the paper in the printer
@@ -78,7 +76,7 @@ export default function QuoteDocument({ quote, onClose, onConvert, onOpen }: Quo
           </ActionButton>
         </span>
         <span>
-          {lines.length ? <ActionButton onClick={printQuote}>PRINT</ActionButton> : null} {onOpen ? <ActionButton onClick={onOpen}>OPEN IN CALCULATOR</ActionButton> : null} {onConvert && quote.draft ? <ActionButton onClick={onConvert}>CONVERT TO ORDER</ActionButton> : null}
+          {lines.length ? <ActionButton onClick={printQuote}>PRINT</ActionButton> : null} {onConvert && quote.draft ? <ActionButton onClick={onConvert}>CONVERT TO ORDER</ActionButton> : null}
         </span>
       </RowSpaceBetween>
     </Window>

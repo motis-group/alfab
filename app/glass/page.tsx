@@ -29,7 +29,7 @@ import {
   todayISODate,
   localISODate,
 } from '@utils/order-management';
-import { QUOTE_KIND_HREFS, QUOTE_KIND_LABELS, QuoteRecord, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
+import { QUOTE_KIND_LABELS, QuoteRecord, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
 import { QUOTE_STATUS_LABELS, QUOTE_STATUS_ORDER, QUOTE_STATUS_TONE, QuoteStatus, deleteQuote, quoteDeleteRefusal } from '@utils/quote-status';
 import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { overdueOrders } from '@utils/order-metrics';
@@ -494,7 +494,7 @@ export default function OrderDashboardPage() {
                   <span className={QUOTE_STATUS_TONE[quote.status]}>{QUOTE_STATUS_LABELS[quote.status]}</span>
                 </TableColumn>
                 <TableColumn style={{ whiteSpace: 'nowrap' }}>
-                  <ActionButton onClick={() => router.push(QUOTE_KIND_HREFS[quote.kind])}>Open</ActionButton>{' '}
+                  <ActionButton onClick={() => router.push(`/glass/quotes/${quote.id}`)}>Open</ActionButton>{' '}
                   <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuotes([quote])}>Convert</ActionButton>{' '}
                   <ActionButton onClick={role === 'readonly' ? undefined : () => removeQuote(quote)}>Delete</ActionButton>
                 </TableColumn>

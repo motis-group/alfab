@@ -16,13 +16,6 @@ export const QUOTE_KIND_LABELS: Record<QuoteKind, string> = {
   awning: 'Awning',
 };
 
-/** Where a quote of this kind is opened for editing. */
-export const QUOTE_KIND_HREFS: Record<QuoteKind, string> = {
-  glass: '/glass/quote',
-  window: '/glass/windows',
-  awning: '/glass/awnings',
-};
-
 /**
  * One saved quote, whichever calculator priced it. The three calculators write to the same table
  * with different shapes; this is the shape the order list reads.
@@ -276,6 +269,16 @@ export function mergeQuotesForOrder(records: QuoteRecord[]): MergedQuoteDraft | 
     },
     warnings,
   };
+}
+
+/**
+ * One saved quote by id, whichever calculator priced it. The four stores have no reader for a
+ * single row, and a shop has hundreds of quotes rather than millions, so this reads the register
+ * and picks. Null when nothing has that id.
+ */
+export async function findQuoteRecord(id: string): Promise<{ record: QuoteRecord | null; errors: string[] }> {
+  const { records, errors } = await listQuoteRecords();
+  return { record: records.find((record) => record.id === id) || null, errors };
 }
 
 /** Whether a merge came back refused. */
