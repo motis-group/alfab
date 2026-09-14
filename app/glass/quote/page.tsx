@@ -17,6 +17,7 @@ import RowSpaceBetween from '@components/RowSpaceBetween';
 import Table from '@components/Table';
 import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
+import PrintedQuote from '@components/PrintedQuote';
 import Text from '@components/Text';
 
 import { usePricing } from '@components/PricingProvider';
@@ -25,6 +26,10 @@ import { Customer, UserRole, formatCurrency, todayISODate } from '@utils/order-m
 import { GlassQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { ExtractedPiece } from '@utils/import/model';
 import { LineEditRequest, clearLineEditRequest, peekLineEditRequest, persistLineEditResult } from '@utils/line-editing';
+import { QuoteLine } from '@utils/customer-quote-store';
+import { SavedQuoteLine, createQuote, quoteReference } from '@utils/quote-store';
+import { createLineDraft } from '@utils/order-draft';
+import { userCan } from '@utils/session-client';
 import { saveGlassQuote } from '@utils/glass-quote-store';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
@@ -84,6 +89,10 @@ export default function AdhocQuotePage() {
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerId, setCustomerId] = useState('');
+  // The quote last issued for the customer, and the content it was issued with.
+  const [issued, setIssued] = useState<{ id: string; fingerprint: string } | null>(null);
+  const [canIssue, setCanIssue] = useState(false);
+  const [username, setUsername] = useState<string | null>(null);
   const [status, setStatus] = useState<{ tone: 'success' | 'warning' | 'error'; message: string } | null>(null);
   // Set when the calculator was opened to price one line of a purchase order.
   const [lineEdit, setLineEdit] = useState<LineEditRequest | null>(null);
@@ -181,6 +190,8 @@ export default function AdhocQuotePage() {
         }
 
         setRole(user.effectiveRole as UserRole);
+        setCanIssue(userCan(user, 'quotes:write'));
+        setUsername(user.username);
 
         // An order or a quote sent one line to be priced. Load that line into the form.
         const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -328,6 +339,74 @@ export default function AdhocQuotePage() {
 
   function removeQuoteItem(localId: string) {
     setQuoteItems((prev) => prev.filter((entry) => entry.localId !== localId));
+  }
+
+  // The customer's copy of what is on the quote.
+  //
+  // A piece the calculator could not price carries no price. It must not print as $0.00, because a
+  // customer reads that as free. quoteTotals excludes a line with no price from the total.
+  const paperLines: QuoteLine[] = quoteLines.map((line, index) => ({
+    description: line.item.name || `Piece ${index + 1}`,
+    spec: describeGlassSpecification(line.item.spec),
+    quantity: Math.max(1, line.item.quantity),
+    unitPrice: line.error ? null : line.unitPrice,
+  }));
+
+  const paperCustomer = selectedCustomer?.name || customerName;
+  // Two prints of the same content are one offer. A change is a different offer and needs a number
+  // of its own, so the print issues a new quote.
+  const paperFingerprint = JSON.stringify({ quoteName, paperCustomer, customerId, quoteDate, quoteNotes, paperLines });
+  const reference = issued && issued.fingerprint === paperFingerprint ? quoteReference(issued.id) : null;
+
+  /** Saves the customer copy so the print carries a number. False, with the reason on screen, when it cannot. */
+  async function issueQuote(): Promise<boolean> {
+    if (!canIssue) {
+      setStatus({ tone: 'warning', message: 'A numbered quote is saved as it prints, and saving quotes needs access. Cmd+P prints a draft.' });
+      return false;
+    }
+    if (!paperLines.some((line) => line.unitPrice != null)) {
+      setStatus({ tone: 'warning', message: 'Nothing on this quote has a price, so there is no offer to print.' });
+      return false;
+    }
+
+    // The same shape a quote page line has, so the issued quote opens there for editing.
+    const lines: SavedQuoteLine[] = quoteLines.map((line, index) => ({
+      draft: createLineDraft({
+        pricingSource: 'adhoc_calculator',
+        adhocSpec: line.item.spec,
+        quantityOrdered: Math.max(1, line.item.quantity),
+        unitPriceAtOrder: line.error ? 0 : line.unitPrice,
+        lineNote: line.item.name || `Piece ${index + 1}`,
+        markupPercent,
+      }),
+      spec: describeGlassSpecification(line.item.spec),
+      extras: [],
+    }));
+
+    try {
+      const id = await createQuote({ name: quoteName, customer: paperCustomer, customerId: customerId || null, date: quoteDate, notes: quoteNotes, lines, issuedBy: username, ratesUpdatedAt: updatedAt });
+      setIssued({ id, fingerprint: paperFingerprint });
+      setStatus({ tone: 'success', message: `Quote ${quoteReference(id)} saved. It is in the quote list.` });
+      return true;
+    } catch (saveError: any) {
+      setStatus({ tone: 'warning', message: `The quote was not saved, so it was not printed. ${saveError?.message || ''}`.trim() });
+      return false;
+    }
+  }
+
+  /** Prints the customer's copy. A quote with no number is issued first, so the customer can quote it back. */
+  async function printQuote() {
+    if (!paperLines.length) {
+      setStatus({ tone: 'warning', message: 'Add a piece before printing.' });
+      return;
+    }
+    if (!reference && !(await issueQuote())) {
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      // Let the sheet re-render with the new number before the print dialog reads the page.
+      window.setTimeout(() => window.print(), 50);
+    }
   }
 
   async function handleSaveQuote() {
@@ -623,6 +702,7 @@ export default function AdhocQuotePage() {
             { icon: '⊹', children: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
           ],
         },
+        { body: 'Print Quote', onClick: printQuote },
         { body: 'Copy Quote', onClick: copyQuoteToClipboard },
         {
           body: 'Use Recommended Price',
@@ -767,6 +847,9 @@ export default function AdhocQuotePage() {
       <CardDouble title="READ A CUSTOMER'S ORDER OR DRAWING">
         <ImportPanel spec={spec} cadPanelKey={cadPanelKey} disabled={role === 'readonly'} onApplyCad={(result) => setSpec(result.spec)} onClearCad={() => setSpec((prev) => ({ ...prev, cadOutline: null }))} onAddPieces={addImportedPieces} />
       </CardDouble>
+
+      {/* The copy for the printer. It is hidden on screen. Printing hides the app around it. */}
+      {paperLines.length ? <PrintedQuote reference={reference} quoteName={quoteName} customerName={paperCustomer} quoteDate={quoteDate} notes={quoteNotes} lines={paperLines} /> : null}
     </AppFrame>
   );
 }
