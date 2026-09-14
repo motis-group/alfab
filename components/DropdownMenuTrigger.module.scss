@@ -1,6 +1,4 @@
 .root {
-  align-items: stretch;
-  display: inline-flex;
-  min-height: var(--theme-target-size);
+  display: inline-block;
   position: relative;
 }

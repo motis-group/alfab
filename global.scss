@@ -569,9 +569,6 @@ body {
   --theme-text: var(--color-black-100);
   --theme-line-height-base: 1.25;
   --font-size: 16px;
-  /* The smallest height of anything the operator taps or clicks. WCAG 2.2 asks for 24px. 44px is
-     what a finger needs, and the shop uses this app on a tablet at the bench. */
-  --theme-target-size: 44px;
 
   --z-index-page: 1;
   --z-index-page-select: 3;
