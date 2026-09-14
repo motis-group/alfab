@@ -282,7 +282,17 @@ if [[ -x scripts/apply-aws-postgres-schema.sh ]]; then
   bash scripts/apply-aws-postgres-schema.sh
 fi
 
-npm run build
+# The build needs more heap than the server does.
+#
+# /etc/alfab.env sets NODE_OPTIONS for the service. On a 1 GB host that value is small, because the
+# service must not exhaust the machine. The lines above export it, so the build inherits it and
+# fails when the heap fills. Next.js reports "JavaScript heap out of memory" during the type check.
+#
+# Give the build its own limit for this command only. The service keeps the value in
+# /etc/alfab.env. A limit is a ceiling, not a reservation, so a build that needs less uses less.
+BUILD_NODE_OPTIONS="${BUILD_NODE_OPTIONS:---max-old-space-size=1536}"
+echo "Building with NODE_OPTIONS=${BUILD_NODE_OPTIONS}"
+NODE_OPTIONS="${BUILD_NODE_OPTIONS}" npm run build
 
 if [[ -x scripts/apply-db-migrations.sh && -d db/migrations ]]; then
   bash scripts/apply-db-migrations.sh db/migrations
