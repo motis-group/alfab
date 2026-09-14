@@ -19,7 +19,7 @@ import Text from '@components/Text';
 import JobSheet from '@components/JobSheet';
 import { GlassSpecification, describeGlassSpecification } from '@utils/calculations';
 import { LineDraft, OrderFormState, createLineDraft, defaultAdhocSpec } from '@utils/order-draft';
-import { OrderSnapshot, applyLineEditResult, calculatorFor, consumeLineEditResult, persistLineEditRequest } from '@utils/line-editing';
+import { OrderSnapshot, applyOrderLineEditResult, calculatorFor, consumeLineEditResult, persistLineEditRequest } from '@utils/line-editing';
 import { Customer, CustomerProduct, ORDER_STATUS_OPTIONS, OrderStatus, ParsedLineNotes, PricingSource, PurchaseOrder, PurchaseOrderLine, UserRole, formatCurrency, parseCustomerProductNotes, parseLineNotes, serializeLineNotes, statusLabel, todayISODate } from '@utils/order-management';
 import { QuoteToOrderDraft, buildAwningLineDescription, buildGlassLineDescription, buildWindowLineDescription, consumeQuoteToOrderDraft } from '@utils/quote-to-order';
 import { WindowCostingInput, describeWindow } from '@utils/window-costing';
@@ -215,10 +215,11 @@ export default function NewPurchaseOrderPage() {
         const { customers: loadedCustomers } = await loadBaseData();
 
         // A line came back from a calculator. The whole order travelled with it, so the page picks
-        // up where it left off whether or not the order had been saved.
+        // up where it left off whether or not the order had been saved. A line sent by a quote
+        // comes back to the quote, not here.
         const lineResult = consumeLineEditResult();
-        if (lineResult) {
-          restoreOrderSnapshot(applyLineEditResult(lineResult));
+        if (lineResult && lineResult.origin.kind === 'order') {
+          restoreOrderSnapshot(applyOrderLineEditResult(lineResult.origin.order, lineResult));
           setActiveLineId(lineResult.localId);
           if (typeof window !== 'undefined') {
             const nextUrl = new URL(window.location.href);
@@ -283,8 +284,11 @@ export default function NewPurchaseOrderPage() {
     }
 
     persistLineEditRequest({
-      order: { orderForm, lineDrafts, loadedLineIds, isEditingOrder, archivedAt },
+      origin: { kind: 'order', order: { orderForm, lineDrafts, loadedLineIds, isEditingOrder, archivedAt }, label: orderForm.poNumber || 'a new order' },
       localId: line.localId,
+      line,
+      customerId: orderForm.customerId,
+      lineLabel: `Line ${lineDrafts.findIndex((entry) => entry.localId === line.localId) + 1 || 1}`,
       returnTo: '/glass/new?lineEdited=1',
     });
     router.push(`${href}?editLine=1`);

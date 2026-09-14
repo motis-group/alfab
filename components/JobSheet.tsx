@@ -23,9 +23,9 @@ function dateOnly(value?: string | null): string {
 }
 
 /**
- * The works order for the floor. Carries what to make, not what it costs: no prices, no margin.
+ * The works order for the floor. It states what to make. It shows no price and no margin.
  *
- * Hidden on screen, printed by the same rules as the costing sheet.
+ * The sheet is hidden on screen. It prints by the same rules as the costing sheet.
  */
 export default function JobSheet({ order, customer, lines }: JobSheetProps) {
   return (
