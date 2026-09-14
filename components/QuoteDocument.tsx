@@ -35,8 +35,8 @@ function paperLines(quote: QuoteRecord): QuoteLine[] {
 export default function QuoteDocument({ quote, onClose, onConvert }: QuoteDocumentProps) {
   const lines = paperLines(quote);
 
-  // One set of props for both copies below, so the paper on screen and the paper in the printer
-  // cannot drift apart.
+  // Both copies below use one set of properties. The paper on screen and the paper in the printer
+  // therefore stay the same.
   const paper: QuotePaperProps = {
     reference: quote.reference,
     quoteName: quote.name,
@@ -60,8 +60,8 @@ export default function QuoteDocument({ quote, onClose, onConvert }: QuoteDocume
       {lines.length ? (
         <>
           <QuotePaper {...paper} />
-          {/* The printer's copy. Print styles keep only a sheet that is a child of <body>, so a quote
-              read here and printed without one comes out as a blank page. */}
+          {/* The copy for the printer. The print styles keep only a sheet that is a child of
+              <body>. Without this sheet, the printer produces a blank page. */}
           <PrintedQuote {...paper} />
         </>
       ) : (

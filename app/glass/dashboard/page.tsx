@@ -17,7 +17,7 @@ import Text from '@components/Text';
 
 import { Customer, PurchaseOrder, formatCurrency, statusLabel, todayISODate } from '@utils/order-management';
 import { openOrdersByCustomer, ordersDueWithin, ordersWithStatus, overdueOrders, recentOrders, tallyQuotes } from '@utils/order-metrics';
-import { QUOTE_KIND_LABELS, QuoteRecord, listQuoteRecords } from '@utils/quote-register';
+import { QuoteRecord, listQuoteRecords } from '@utils/quote-register';
 import { QUOTE_STATUS_LABELS, winRate } from '@utils/quote-status';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
@@ -252,7 +252,7 @@ export default function DashboardPage() {
               .map((quote) => (
                 <TableRow key={quote.id}>
                   <TableColumn>{quote.name || 'Untitled'}</TableColumn>
-                  <TableColumn>{QUOTE_KIND_LABELS[quote.kind]}</TableColumn>
+                  <TableColumn>{quote.kindLabel}</TableColumn>
                   <TableColumn>{quote.customer || 'Walk-in'}</TableColumn>
                   <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
                   <TableColumn>{formatCurrency(quote.total)}</TableColumn>

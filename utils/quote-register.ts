@@ -6,14 +6,22 @@ import { CustomerQuote, QuoteLine, listCustomerQuotes } from '@utils/customer-qu
 import { SavedGlassQuote, listGlassQuotes } from '@utils/glass-quote-store';
 import { WindowCostingInput } from '@utils/window-costing';
 import { SavedWindowCosting, listWindowCostings } from '@utils/window-quote-store';
-import { QuoteToOrderDraftInput } from '@utils/quote-to-order';
+import { AwningQuoteLine, GlassQuoteLine, QuoteToOrderDraftInput, WindowQuoteLine } from '@utils/quote-to-order';
+import { SavedQuote, listQuotes, quotePaperLines } from '@utils/quote-store';
 
-export type QuoteKind = 'glass' | 'window' | 'awning';
+/**
+ * The kind 'quote' is a quote for a job. It holds lines of any kind.
+ *
+ * The other three kinds are the documents of the calculators. Each holds one kind of line. The
+ * register reads them so that old quotes continue to work.
+ */
+export type QuoteKind = 'glass' | 'window' | 'awning' | 'quote';
 
 export const QUOTE_KIND_LABELS: Record<QuoteKind, string> = {
   glass: 'Glass',
   window: 'Window',
   awning: 'Awning',
+  quote: 'Job',
 };
 
 /**
@@ -23,6 +31,10 @@ export const QUOTE_KIND_LABELS: Record<QuoteKind, string> = {
 export interface QuoteRecord {
   id: string;
   kind: QuoteKind;
+  /** The name of the kind in a list. The kind of a job quote comes from its lines. */
+  kindLabel: string;
+  /** True if the quote page can change the quote. The document of a calculator is read-only. */
+  editable: boolean;
   name: string;
   customer: string;
   customerId: string | null;
@@ -45,6 +57,8 @@ function fromGlass(quote: SavedGlassQuote): QuoteRecord {
   return {
     id: quote.id,
     kind: 'glass',
+    kindLabel: QUOTE_KIND_LABELS['glass'],
+    editable: false,
     reference: null,
     name: quote.name,
     customer: quote.customer,
@@ -77,6 +91,8 @@ function fromWindow(costing: SavedWindowCosting): QuoteRecord {
   return {
     id: costing.id,
     kind: 'window',
+    kindLabel: QUOTE_KIND_LABELS['window'],
+    editable: false,
     reference: null,
     name: costing.name,
     customer: costing.customer,
@@ -104,6 +120,8 @@ function fromAwning(costing: SavedAwningCosting): QuoteRecord {
   return {
     id: costing.id,
     kind: 'awning',
+    kindLabel: QUOTE_KIND_LABELS['awning'],
+    editable: false,
     reference: null,
     name: costing.name,
     customer: costing.customer,
@@ -135,6 +153,8 @@ export function fromCustomerQuote(quote: CustomerQuote): QuoteRecord {
   return {
     id: quote.id,
     kind: quote.kind === 'window-quote' ? 'window' : 'awning',
+    kindLabel: QUOTE_KIND_LABELS[quote.kind === 'window-quote' ? 'window' : 'awning'],
+    editable: false,
     reference: quote.reference,
     printedLines: quote.lines,
     name: quote.name,
@@ -158,9 +178,75 @@ export function fromCustomerQuote(quote: CustomerQuote): QuoteRecord {
   };
 }
 
+/** The kinds of line on a job quote, as one string for one column of a list. */
+function linesLabel(quote: SavedQuote): string {
+  const seen = new Set<string>();
+  for (const line of quote.lines) {
+    if (line.draft.pricingSource === 'window_calculator') {
+      seen.add('Window');
+    } else if (line.draft.pricingSource === 'awning_calculator') {
+      seen.add('Awning');
+    } else if (line.draft.pricingSource === 'adhoc_calculator') {
+      seen.add('Glass');
+    }
+  }
+  return seen.size ? Array.from(seen).join(' + ') : QUOTE_KIND_LABELS.quote;
+}
+
+/** Reads a quote for a job. Each line has a price from the calculator for its kind. */
+export function fromSavedQuote(quote: SavedQuote): QuoteRecord {
+  const glassLines: GlassQuoteLine[] = [];
+  const windowLines: WindowQuoteLine[] = [];
+  const awningLines: AwningQuoteLine[] = [];
+
+  for (const line of quote.lines) {
+    const draft = line.draft;
+    const common = { description: draft.lineNote || 'Item', quantity: draft.quantityOrdered, unitPrice: draft.unitPriceAtOrder };
+
+    if (draft.pricingSource === 'window_calculator' && draft.windowSpec) {
+      windowLines.push({ ...common, windowSpec: draft.windowSpec, ratesUpdatedAt: draft.windowRatesUpdatedAt });
+    } else if (draft.pricingSource === 'awning_calculator' && draft.awningSpec) {
+      awningLines.push({ ...common, awningSpec: draft.awningSpec, ratesUpdatedAt: draft.awningRatesUpdatedAt });
+    } else if (draft.pricingSource === 'adhoc_calculator') {
+      glassLines.push({ ...common, markupPercent: draft.markupPercent, spec: draft.adhocSpec });
+    }
+  }
+
+  const orderLines = glassLines.length + windowLines.length + awningLines.length;
+
+  return {
+    id: quote.id,
+    kind: 'quote',
+    kindLabel: linesLabel(quote),
+    editable: true,
+    reference: quote.reference,
+    printedLines: quotePaperLines(quote.lines),
+    name: quote.name,
+    customer: quote.customer,
+    customerId: quote.customerId,
+    date: quote.date,
+    lineCount: quote.lines.length,
+    total: quote.subtotal,
+    status: quote.status,
+    purchaseOrderId: quote.purchaseOrderId,
+    draft: orderLines
+      ? {
+          quoteName: quote.name,
+          customerName: quote.customer,
+          customerId: quote.customerId,
+          quoteDate: quote.date ? quote.date.slice(0, 10) : '',
+          quoteNotes: quote.notes,
+          glassLines,
+          windowLines,
+          awningLines,
+        }
+      : null,
+  };
+}
+
 /** Every saved quote, newest first. A calculator that fails to read is reported, not dropped. */
 export async function listQuoteRecords(): Promise<{ records: QuoteRecord[]; errors: string[] }> {
-  const [glass, windows, awnings, printed] = await Promise.allSettled([listGlassQuotes(), listWindowCostings(), listAwningCostings(), listCustomerQuotes()]);
+  const [glass, windows, awnings, printed, jobs] = await Promise.allSettled([listGlassQuotes(), listWindowCostings(), listAwningCostings(), listCustomerQuotes(), listQuotes()]);
   const records: QuoteRecord[] = [];
   const errors: string[] = [];
 
@@ -184,6 +270,12 @@ export async function listQuoteRecords(): Promise<{ records: QuoteRecord[]; erro
     records.push(...printed.value.map(fromCustomerQuote));
   } else {
     errors.push('Printed quotes could not be read.');
+  }
+
+  if (jobs.status === 'fulfilled') {
+    records.push(...jobs.value.map(fromSavedQuote));
+  } else {
+    errors.push('Quotes could not be read.');
   }
 
   records.sort((a, b) => (b.date || '').localeCompare(a.date || ''));

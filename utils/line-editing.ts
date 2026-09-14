@@ -1,16 +1,18 @@
 /**
- * Editing one order line in the calculator that prices it.
+ * Line edit handoff between a document page and a calculator.
  *
- * The order owns who a purchase order is for and which lines are on it. What a line *is* — the
- * glass, the window, the awning — belongs to the calculator that prices it, so a line is edited
- * there rather than in a second copy of the same form on the order page.
+ * A document is a purchase order or a quote. The document owns the customer and the list of lines.
+ * The calculator owns the specification of one line. The operator therefore edits a line in the
+ * calculator. A second copy of the same form on the document page is not necessary.
  *
- * The whole order travels with the request, not just the line. A new order's lines exist only in
- * the page's state until it is saved, and being sent away to save a half-finished order before a
- * line could be priced would be worse than the duplication this replaces.
+ * The request carries the line. The calculator loads the line. The calculator does not test which
+ * document sent the line.
  *
- * Session storage, like the calculator-to-order handoff it mirrors: a round trip is finished in one
- * sitting, and nothing here is a record of anything.
+ * An order also sends its full state. The lines of an unsaved order exist only in page state. The
+ * order must not be saved to make the trip. A quote does not send its state. The quote page holds
+ * its own draft. Refer to utils/quote-draft.ts.
+ *
+ * This module uses session storage. One trip completes in one sitting. This module keeps no record.
  */
 
 import { LineDraft, OrderFormState } from '@utils/order-draft';
@@ -18,7 +20,7 @@ import { LineDraft, OrderFormState } from '@utils/order-draft';
 const REQUEST_KEY = 'alfabLineEditRequest';
 const RESULT_KEY = 'alfabLineEditResult';
 
-/** Everything the order page needs to come back to exactly where it was. */
+/** The state the order page restores after a trip to a calculator. */
 export interface OrderSnapshot {
   orderForm: OrderFormState;
   lineDrafts: LineDraft[];
@@ -27,19 +29,41 @@ export interface OrderSnapshot {
   archivedAt: string | null;
 }
 
+/**
+ * The document that sent the line. The banner shows the label.
+ *
+ * An order sends its full state. A quote sends only its label. The quote page keeps its own draft.
+ */
+export type LineEditOrigin = { kind: 'order'; order: OrderSnapshot; label: string } | { kind: 'quote'; label: string };
+
 export interface LineEditRequest {
-  order: OrderSnapshot;
+  origin: LineEditOrigin;
   /** The line being edited, by its draft id. */
   localId: string;
+  /** The line before the edit. The calculator loads this line. */
+  line: LineDraft;
+  /** The customer of the document. The calculator shows the same customer. */
+  customerId: string;
+  /** The name of the line in the banner. Example: "Line 3". */
+  lineLabel: string;
   /** Where the calculator returns to. */
   returnTo: string;
 }
 
-/** The line as the calculator left it. Only the fields a calculator decides. */
+/** The line after the edit. The result holds only the fields that the calculator sets. */
 export interface LineEditResult {
-  order: OrderSnapshot;
+  origin: LineEditOrigin;
   localId: string;
   line: Pick<LineDraft, 'quantityOrdered' | 'unitPriceAtOrder' | 'lineNote' | 'markupPercent' | 'adhocSpec' | 'windowSpec' | 'windowRatesUpdatedAt' | 'awningSpec' | 'awningRatesUpdatedAt'>;
+  /**
+   * The specification in the words of the calculator.
+   *
+   * A quote stores this text and prints it. The text must stay the same after the catalogue
+   * changes. An order builds its own text and ignores this field.
+   */
+  spec: string;
+  /** Items that the calculator charges in addition. Examples: trims, second glazing. */
+  extras: { label: string; total: number | null }[];
 }
 
 function read<T>(key: string): T | null {
@@ -65,12 +89,14 @@ export function persistLineEditRequest(request: LineEditRequest): void {
 }
 
 /**
- * The request, left in place. A calculator reads it on every render of the banner, and only takes
- * it when the estimator saves or cancels.
+ * Reads the request and leaves it in place.
+ *
+ * The calculator reads the request on each render of the banner. The calculator removes the request
+ * only when the operator saves or cancels.
  */
 export function peekLineEditRequest(): LineEditRequest | null {
   const request = read<LineEditRequest>(REQUEST_KEY);
-  return request && request.localId && request.order && Array.isArray(request.order.lineDrafts) ? request : null;
+  return request && request.localId && request.line && request.origin ? request : null;
 }
 
 export function clearLineEditRequest(): void {
@@ -79,7 +105,7 @@ export function clearLineEditRequest(): void {
   }
 }
 
-/** Hands the line back and ends the request, so returning twice cannot apply it twice. */
+/** Returns the line and ends the request. A second return cannot apply the same line twice. */
 export function persistLineEditResult(result: LineEditResult): void {
   if (typeof window !== 'undefined') {
     window.sessionStorage.setItem(RESULT_KEY, JSON.stringify(result));
@@ -92,18 +118,20 @@ export function consumeLineEditResult(): LineEditResult | null {
   if (typeof window !== 'undefined') {
     window.sessionStorage.removeItem(RESULT_KEY);
   }
-  return result && result.localId && result.order && result.line ? result : null;
+  return result && result.localId && result.origin && result.line ? { ...result, spec: result.spec || '', extras: result.extras || [] } : null;
 }
 
-/** The order with one line replaced by what the calculator returned. */
-export function applyLineEditResult(result: LineEditResult): OrderSnapshot {
-  return {
-    ...result.order,
-    lineDrafts: result.order.lineDrafts.map((line) => (line.localId === result.localId ? { ...line, ...result.line } : line)),
-  };
+/** Replaces one line with the line that the calculator returned. */
+export function applyLineEditResult(lines: LineDraft[], result: LineEditResult): LineDraft[] {
+  return lines.map((line) => (line.localId === result.localId ? { ...line, ...result.line } : line));
 }
 
-/** Which calculator prices a line of this kind, or null when the order itself owns it. */
+/** Replaces one line of the order with the line that the calculator returned. */
+export function applyOrderLineEditResult(order: OrderSnapshot, result: LineEditResult): OrderSnapshot {
+  return { ...order, lineDrafts: applyLineEditResult(order.lineDrafts, result) };
+}
+
+/** The calculator that prices a line of this kind. Null if the document prices the line. */
 export function calculatorFor(pricingSource: LineDraft['pricingSource']): string | null {
   switch (pricingSource) {
     case 'adhoc_calculator':

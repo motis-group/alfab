@@ -29,7 +29,7 @@ import {
   todayISODate,
   localISODate,
 } from '@utils/order-management';
-import { QUOTE_KIND_LABELS, QuoteRecord, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
+import { QuoteRecord, isMergeRefusal, listQuoteRecords, mergeQuotesForOrder } from '@utils/quote-register';
 import { QUOTE_STATUS_LABELS, QUOTE_STATUS_ORDER, QUOTE_STATUS_TONE, QuoteStatus, deleteQuote, quoteDeleteRefusal } from '@utils/quote-status';
 import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { overdueOrders } from '@utils/order-metrics';
@@ -455,7 +455,8 @@ export default function OrderDashboardPage() {
                 <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuotes(selectedRecords)}>Convert {selectedCount} To One Order</ActionButton>{' '}
               </>
             ) : null}
-            {selectedCount ? <ActionButton onClick={() => setSelectedQuotes(new Set())}>Clear</ActionButton> : null}
+            {selectedCount ? <ActionButton onClick={() => setSelectedQuotes(new Set())}>Clear</ActionButton> : null}{' '}
+            <ActionButton onClick={role === 'readonly' ? undefined : () => router.push('/glass/quotes/new')}>New Quote</ActionButton>
           </Text>
         </RowSpaceBetween>
         {quoteError ? (
@@ -485,7 +486,7 @@ export default function OrderDashboardPage() {
                   <input type="checkbox" checked={selectedQuotes.has(quote.id)} disabled={!quote.draft} aria-label={`Put ${quote.name || 'this quote'} on an order`} onChange={() => toggleQuote(quote.id)} />
                 </TableColumn>
                 <TableColumn>{[quote.reference, quote.name || 'Untitled'].filter(Boolean).join(' · ')}</TableColumn>
-                <TableColumn>{QUOTE_KIND_LABELS[quote.kind]}</TableColumn>
+                <TableColumn>{quote.kindLabel}</TableColumn>
                 <TableColumn>{quote.customer || 'Walk-in'}</TableColumn>
                 <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
                 <TableColumn>{quote.lineCount}</TableColumn>

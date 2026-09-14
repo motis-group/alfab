@@ -26,35 +26,7 @@ import { LineEditRequest, clearLineEditRequest, peekLineEditRequest, persistLine
 import { createClient } from '@utils/db-client';
 import { WindowQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
-import {
-  CostExtra,
-  CostLine,
-  FINISH_LABELS,
-  Finish,
-  GLASS_GROUP_LABELS,
-  GLAZING_ORDER,
-  LOCK_LABELS,
-  LabourPart,
-  LockType,
-  MullionKind,
-  Reinforcement,
-  STRUT_LABELS,
-  StayType,
-  StrutKind,
-  TRIM_LABELS,
-  TrimMode,
-  WINDOW_TYPES,
-  WindowCostingInput,
-  WindowTypeId,
-  applyWindowOptions,
-  costWindow,
-  glazingFits,
-  costWindowBatches,
-  createWindowInput,
-  describeWindow,
-  switchWindowType,
-  windowOptions,
-} from '@utils/window-costing';
+import { CostExtra, CostLine, FINISH_LABELS, Finish, GLASS_GROUP_LABELS, GLAZING_ORDER, LOCK_LABELS, LabourPart, LockType, MullionKind, Reinforcement, STRUT_LABELS, StayType, StrutKind, TRIM_LABELS, TrimMode, WINDOW_TYPES, WindowCostingInput, WindowTypeId, applyWindowOptions, costWindow, glazingFits, costWindowBatches, createWindowInput, describeWindow, switchWindowType, windowOptions } from '@utils/window-costing';
 import { WINDOW_SERIES, WindowProduct, findProduct, productFullName, productLabel, productForInput, seriesOfProduct, visibleSeries } from '@utils/window-catalogue';
 import { DEFAULT_WINDOW_RATES, GlazingId, WindowRates, mergeWindowRates } from '@utils/window-costing-rates';
 import { loadWindowRates, loadWindowRatesVersion } from '@utils/window-costing-store';
@@ -204,7 +176,6 @@ export default function WindowCostingPage() {
     return () => window.removeEventListener('afterprint', restore);
   }, []);
 
-
   const selectedCustomer = customers.find((entry) => entry.id === customerId) || null;
 
   useEffect(() => {
@@ -223,18 +194,18 @@ export default function WindowCostingPage() {
         setCanSaveCostings(userCan(user, 'quotes:write'));
         setUsername(user.username);
 
-        // Opened from an order to price one of its lines: load that line into the form.
+        // An order or a quote sent one line to be priced. Load that line into the form.
         const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
         if (params?.get('editLine') === '1') {
           const request = peekLineEditRequest();
-          const line = request?.order.lineDrafts.find((entry) => entry.localId === request.localId);
+          const line = request?.line;
           if (request && line) {
             setLineEdit(request);
             if (line.windowSpec) {
               setInput({ ...line.windowSpec });
             }
             setWindowName(line.lineNote);
-            setCustomerId(request.order.orderForm.customerId);
+            setCustomerId(request.customerId);
           }
         }
 
@@ -246,7 +217,6 @@ export default function WindowCostingPage() {
         setRatesSource(loaded.source);
         setRatesUpdatedAt(loaded.updatedAt);
         setRatesError(loaded.error);
-
       } catch (loadError: any) {
         setError(loadError?.message || 'Unable to load window costing.');
       } finally {
@@ -291,8 +261,8 @@ export default function WindowCostingPage() {
     updateNumber(field, value);
   }
 
-  /** Hands the priced line back to the order it came from. */
-  function saveLineToOrder() {
+  /** Returns the priced line to the order or the quote that sent it. */
+  function saveLineToDocument() {
     if (!lineEdit) {
       return;
     }
@@ -302,24 +272,26 @@ export default function WindowCostingPage() {
     }
 
     persistLineEditResult({
-      order: lineEdit.order,
+      origin: lineEdit.origin,
       localId: lineEdit.localId,
       line: {
         quantityOrdered: Math.max(1, orderQuantity),
         unitPriceAtOrder: result.price,
         lineNote: windowName.trim(),
         markupPercent: 0,
-        adhocSpec: lineEdit.order.lineDrafts.find((entry) => entry.localId === lineEdit.localId)?.adhocSpec ?? defaultAdhocSpec,
+        adhocSpec: lineEdit.line.adhocSpec,
         windowSpec: { ...input },
         windowRatesUpdatedAt: ratesUpdatedAt,
         awningSpec: null,
         awningRatesUpdatedAt: null,
       },
+      spec: describe(input),
+      extras: extrasList.map((extra) => ({ label: extra.label, total: extra.total })),
     });
     router.push(lineEdit.returnTo);
   }
 
-  /** Leaves the line as the order had it. */
+  /** Leaves the line as the order or the quote holds it. */
   function cancelLineEdit() {
     if (!lineEdit) {
       return;
@@ -509,7 +481,7 @@ export default function WindowCostingPage() {
       previewPixelSRC="/pixel.gif"
       logo="⬡"
       navRight={<ActionButton onClick={() => router.push('/glass')}>ORDER DASHBOARD</ActionButton>}
-      heading={lineEdit ? `PRICING A LINE OF ${(lineEdit.order.orderForm.poNumber || 'A NEW ORDER').toUpperCase()}` : 'WINDOW COSTING'}
+      heading={lineEdit ? `PRICING A LINE OF ${lineEdit.origin.label.toUpperCase()}` : 'WINDOW COSTING'}
       badge={isLoading ? 'LOADING' : `${role.toUpperCase()} SESSION`}
       sidebarWidthCh={48}
       sidebarMobileOrder="top"
@@ -588,12 +560,6 @@ export default function WindowCostingPage() {
               </Table>
             </Card>
           ) : null}
-
-
-
-
-
-
 
           {/* Analysis cards are tabbed; only the open panel is rendered. */}
           <SidebarTabs
@@ -736,8 +702,6 @@ export default function WindowCostingPage() {
               },
             ]}
           />
-
-
         </>
       }
       actionItems={[
@@ -774,15 +738,15 @@ export default function WindowCostingPage() {
         </Card>
       )}
 
-      {/* Opened from an order. The quote below is not what is being edited, so the way back is the
-          first thing on the page. */}
+      {/* An order or a quote sent this line. The form below is that line. It is not the quote of
+          this calculator. The way back is therefore at the top of the page. */}
       {lineEdit ? (
-        <CardDouble title="EDITING AN ORDER LINE">
+        <CardDouble title={lineEdit.origin.kind === 'order' ? 'EDITING AN ORDER LINE' : 'EDITING A QUOTE LINE'}>
           <Text>
-            Line {(lineEdit.order.lineDrafts.findIndex((line) => line.localId === lineEdit.localId) + 1) || 1} of {lineEdit.order.orderForm.poNumber || 'a new order'}. Changing the window below changes that line.
+            {lineEdit.lineLabel} of {lineEdit.origin.label}. Changing the window below changes that line.
           </Text>
           <br />
-          <ActionButton onClick={saveLineToOrder}>Save To Order</ActionButton> <ActionButton onClick={cancelLineEdit}>Cancel</ActionButton>
+          <ActionButton onClick={saveLineToDocument}>{lineEdit.origin.kind === 'order' ? 'Save To Order' : 'Save To Quote'}</ActionButton> <ActionButton onClick={cancelLineEdit}>Cancel</ActionButton>
         </CardDouble>
       ) : null}
 
@@ -917,16 +881,7 @@ export default function WindowCostingPage() {
           </>
         ) : null}
 
-        {cfg.fields.includes('hinges') ? (
-          <Input
-            label={cfg.id === 'AFB035' ? 'STAINLESS STEEL HINGES' : 'NYLON PIVOT HINGES'}
-            type="number"
-            name="window_hinges"
-            value={String(input.hinges)}
-            onChange={(event) => updateNumber('hinges', event.target.value)}
-            min="0"
-          />
-        ) : null}
+        {cfg.fields.includes('hinges') ? <Input label={cfg.id === 'AFB035' ? 'STAINLESS STEEL HINGES' : 'NYLON PIVOT HINGES'} type="number" name="window_hinges" value={String(input.hinges)} onChange={(event) => updateNumber('hinges', event.target.value)} min="0" /> : null}
 
         {cfg.fields.includes('strutKind') ? (
           <>
@@ -942,13 +897,9 @@ export default function WindowCostingPage() {
           </>
         ) : null}
 
-        {cfg.fields.includes('struts') && input.strutKind !== 'none' ? (
-          <Input label="NUMBER OF STRUTS" type="number" name="window_struts" value={String(input.struts)} onChange={(event) => updateNumber('struts', event.target.value)} min="0" />
-        ) : null}
+        {cfg.fields.includes('struts') && input.strutKind !== 'none' ? <Input label="NUMBER OF STRUTS" type="number" name="window_struts" value={String(input.struts)} onChange={(event) => updateNumber('struts', event.target.value)} min="0" /> : null}
 
-        {cfg.fields.includes('handles') ? (
-          <Input label="VITUS HANDLES" type="number" name="window_handles" value={String(input.handles)} onChange={(event) => updateNumber('handles', event.target.value)} min="0" />
-        ) : null}
+        {cfg.fields.includes('handles') ? <Input label="VITUS HANDLES" type="number" name="window_handles" value={String(input.handles)} onChange={(event) => updateNumber('handles', event.target.value)} min="0" /> : null}
 
         {cfg.fields.includes('stays') ? (
           <>

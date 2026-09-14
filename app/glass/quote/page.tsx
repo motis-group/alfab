@@ -182,11 +182,11 @@ export default function AdhocQuotePage() {
 
         setRole(user.effectiveRole as UserRole);
 
-        // Opened from an order to price one of its lines: load that line into the form.
+        // An order or a quote sent one line to be priced. Load that line into the form.
         const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
         if (params?.get('editLine') === '1') {
           const request = peekLineEditRequest();
-          const line = request?.order.lineDrafts.find((entry) => entry.localId === request.localId);
+          const line = request?.line;
           if (request && line) {
             setLineEdit(request);
             setSpec({ ...line.adhocSpec });
@@ -195,8 +195,7 @@ export default function AdhocQuotePage() {
             setItemName(line.lineNote);
             setUseRecommendedPrice(false);
             setManualUnitPrice(line.unitPriceAtOrder);
-            setCustomerName(request.order.orderForm.customerId ? '' : '');
-            setCustomerId(request.order.orderForm.customerId);
+            setCustomerId(request.customerId);
           }
         }
 
@@ -211,8 +210,8 @@ export default function AdhocQuotePage() {
     })();
   }, [router]);
 
-  /** Hands the priced line back to the order it came from. */
-  function saveLineToOrder() {
+  /** Returns the priced line to the order or the quote that sent it. */
+  function saveLineToDocument() {
     if (!lineEdit) {
       return;
     }
@@ -222,7 +221,7 @@ export default function AdhocQuotePage() {
     }
 
     persistLineEditResult({
-      order: lineEdit.order,
+      origin: lineEdit.origin,
       localId: lineEdit.localId,
       line: {
         quantityOrdered: Math.max(1, quantity),
@@ -235,11 +234,13 @@ export default function AdhocQuotePage() {
         awningSpec: null,
         awningRatesUpdatedAt: null,
       },
+      spec: describeGlassSpecification(spec),
+      extras: [],
     });
     router.push(lineEdit.returnTo);
   }
 
-  /** Leaves the line as the order had it. */
+  /** Leaves the line as the order or the quote holds it. */
   function cancelLineEdit() {
     if (!lineEdit) {
       return;
@@ -406,7 +407,7 @@ export default function AdhocQuotePage() {
       previewPixelSRC="/pixel.gif"
       logo="⬡"
       navRight={<ActionButton onClick={() => router.push('/glass')}>ORDER DASHBOARD</ActionButton>}
-      heading={lineEdit ? `PRICING A LINE OF ${(lineEdit.order.orderForm.poNumber || 'A NEW ORDER').toUpperCase()}` : 'AD HOC PRICING CALCULATOR'}
+      heading={lineEdit ? `PRICING A LINE OF ${lineEdit.origin.label.toUpperCase()}` : 'AD HOC PRICING CALCULATOR'}
       badge={isLoading ? 'LOADING' : `${role.toUpperCase()} SESSION`}
       sidebarWidthCh={44}
       sidebarMobileOrder="top"
@@ -649,15 +650,15 @@ export default function AdhocQuotePage() {
         </Card>
       ) : null}
 
-      {/* Opened from an order. The quote below is not what is being edited, so the way back is the
-          first thing on the page. */}
+      {/* An order or a quote sent this line. The form below is that line. It is not the quote of
+          this calculator. The way back is therefore at the top of the page. */}
       {lineEdit ? (
-        <CardDouble title="EDITING AN ORDER LINE">
+        <CardDouble title={lineEdit.origin.kind === 'order' ? 'EDITING AN ORDER LINE' : 'EDITING A QUOTE LINE'}>
           <Text>
-            Line {(lineEdit.order.lineDrafts.findIndex((line) => line.localId === lineEdit.localId) + 1) || 1} of {lineEdit.order.orderForm.poNumber || 'a new order'}. Changing the piece below changes that line.
+            {lineEdit.lineLabel} of {lineEdit.origin.label}. Changing the piece below changes that line.
           </Text>
           <br />
-          <ActionButton onClick={saveLineToOrder}>Save To Order</ActionButton> <ActionButton onClick={cancelLineEdit}>Cancel</ActionButton>
+          <ActionButton onClick={saveLineToDocument}>{lineEdit.origin.kind === 'order' ? 'Save To Order' : 'Save To Quote'}</ActionButton> <ActionButton onClick={cancelLineEdit}>Cancel</ActionButton>
         </CardDouble>
       ) : null}
 
@@ -764,16 +765,8 @@ export default function AdhocQuotePage() {
       )}
 
       <CardDouble title="READ A CUSTOMER'S ORDER OR DRAWING">
-        <ImportPanel
-          spec={spec}
-          cadPanelKey={cadPanelKey}
-          disabled={role === 'readonly'}
-          onApplyCad={(result) => setSpec(result.spec)}
-          onClearCad={() => setSpec((prev) => ({ ...prev, cadOutline: null }))}
-          onAddPieces={addImportedPieces}
-        />
+        <ImportPanel spec={spec} cadPanelKey={cadPanelKey} disabled={role === 'readonly'} onApplyCad={(result) => setSpec(result.spec)} onClearCad={() => setSpec((prev) => ({ ...prev, cadOutline: null }))} onAddPieces={addImportedPieces} />
       </CardDouble>
-
     </AppFrame>
   );
 }
