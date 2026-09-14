@@ -46,6 +46,8 @@ const AppFrame: React.FC<AppFrameProps> = ({
   previewPixelSRC,
   logo = '⬡',
   navRight,
+  heading,
+  badge,
   actionItems = [],
   showThemeControls = false,
   showSectionNavigation = true,
@@ -75,6 +77,13 @@ const AppFrame: React.FC<AppFrameProps> = ({
         {showSectionNavigation ? <AppSectionNav items={sectionNavigationItems} /> : null}
 
         {showThemeControls && <DefaultActionBar floating />}
+
+        {heading ? (
+          <div className={styles.heading}>
+            <h1 className={styles.title}>{heading}</h1>
+            {badge ? <span className={`status-pill ${styles.badge}`}>{badge}</span> : null}
+          </div>
+        ) : null}
 
         {actionItems.length ? <ActionBar items={actionItems} /> : null}
 
