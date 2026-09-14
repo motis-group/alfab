@@ -28,7 +28,7 @@ import { WindowQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 import { CostExtra, CostLine, FINISH_LABELS, Finish, GLASS_GROUP_LABELS, GLAZING_ORDER, LOCK_LABELS, LabourPart, LockType, MullionKind, Reinforcement, STRUT_LABELS, StayType, StrutKind, TRIM_LABELS, TrimMode, WINDOW_TYPES, WindowCostingInput, WindowTypeId, applyWindowOptions, costWindow, glazingFits, costWindowBatches, createWindowInput, describeWindow, switchWindowType, windowOptions } from '@utils/window-costing';
 import { WINDOW_SERIES, WindowProduct, findProduct, productFullName, productLabel, productForInput, seriesOfProduct, visibleSeries } from '@utils/window-catalogue';
-import { DEFAULT_WINDOW_RATES, GlazingId, WindowRates, mergeWindowRates } from '@utils/window-costing-rates';
+import { DEFAULT_WINDOW_RATES, GlazingId, WindowRates, mergeWindowRates, withoutMargins } from '@utils/window-costing-rates';
 import { loadWindowRates, loadWindowRatesVersion } from '@utils/window-costing-store';
 import { saveWindowCosting } from '@utils/window-quote-store';
 
@@ -127,8 +127,11 @@ export default function WindowCostingPage() {
   const seriesOptions = visibleSeries(series.id);
   const product = productForInput(input);
   const describe = useCallback((forInput: WindowCostingInput) => describeWindow(forInput, rates, productFullName(forInput.productId)), [rates]);
-  const result = useMemo(() => costWindow(input, rates), [input, rates]);
-  const batches = useMemo(() => (result.errors.length ? [] : costWindowBatches(input, rates, BATCH_SIZES)), [input, rates, result.errors.length]);
+  // A quote line is priced at cost, because the quote sets the margin.
+  const quoteLine = lineEdit?.origin.kind === 'quote';
+  const pricingRates = useMemo(() => (quoteLine ? withoutMargins(rates) : rates), [quoteLine, rates]);
+  const result = useMemo(() => costWindow(input, pricingRates), [input, pricingRates]);
+  const batches = useMemo(() => (result.errors.length ? [] : costWindowBatches(input, pricingRates, BATCH_SIZES)), [input, pricingRates, result.errors.length]);
   const glazingOption = input.glazingId ? rates.glass.options[input.glazingId] : null;
   const derivedGlazingQty = Boolean(cfg.glazingQty);
   // How many windows the batch makes. The costing already divides setup minutes across it, so the
@@ -510,8 +513,8 @@ export default function WindowCostingPage() {
                   <Text>{formatCurrency(result.subtotal)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
-                  <Text>MARGIN ({formatPercent(result.marginRate)} OF COST)</Text>
-                  <Text>{formatCurrency(result.margin)}</Text>
+                  <Text>{quoteLine ? 'MARGIN' : `MARGIN (${formatPercent(result.marginRate)} OF COST)`}</Text>
+                  <Text>{quoteLine ? 'SET ON THE QUOTE' : formatCurrency(result.margin)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
                   <Text>{result.reinforcement ? `${result.reinforcement.label} x ${result.reinforcement.count}` : 'PACKING'}</Text>
@@ -526,7 +529,9 @@ export default function WindowCostingPage() {
                   <Text>{formatCurrency(result.uplift)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
-                  <Text>PRICE {result.unitLabel.toUpperCase()}</Text>
+                  <Text>
+                    {quoteLine ? 'COST' : 'PRICE'} {result.unitLabel.toUpperCase()}
+                  </Text>
                   <Text>
                     <span className="status-pill status-pill-success">{formatCurrency(result.price)}</span>
                   </Text>
@@ -635,7 +640,7 @@ export default function WindowCostingPage() {
                             </TableRow>
                           ))}
                           <TableRow>
-                            <TableColumn>Per bar incl. margin</TableColumn>
+                            <TableColumn>{quoteLine ? 'Per bar' : 'Per bar incl. margin'}</TableColumn>
                             <TableColumn>x {result.reinforcement.count}</TableColumn>
                             <TableColumn>{formatCurrency(result.reinforcement.perBar)}</TableColumn>
                           </TableRow>
@@ -704,7 +709,9 @@ export default function WindowCostingPage() {
           />
         </>
       }
-      actionItems={[
+      // A quote line is priced at cost. The calculator's own quote, order, prints and copies would carry
+      // that cost to a customer, so a quote line offers only the way back.
+      actionItems={quoteLine ? [{ body: 'Save To Quote', onClick: saveLineToDocument }, { body: 'Cancel', onClick: cancelLineEdit }] : [
         {
           body: 'Add',
           items: [
@@ -1073,7 +1080,8 @@ export default function WindowCostingPage() {
         <WindowCostingGlossary />
       </CardDouble>
 
-      <WindowCostingSheet audience={sheetAudience} reference={reference} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} windows={sheetWindows} />
+      {/* A quote line is at cost, so Cmd+P prints the internal sheet, never a customer quote at cost. */}
+      <WindowCostingSheet audience={quoteLine ? 'internal' : sheetAudience} reference={reference} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} windows={sheetWindows} />
     </AppFrame>
   );
 }

@@ -65,7 +65,7 @@ export interface CustomerQuote extends CustomerQuoteContent {
  * The paper prints each amount to the cent. The totals must therefore be built from amounts of the
  * same size. A customer who adds the column must reach the printed total.
  */
-function toCents(value: number): number {
+export function toCents(value: number): number {
   return Math.round(value * 100) / 100;
 }
 

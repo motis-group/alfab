@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { SavedQuoteLine, quotePaperLines, quoteTotal, toSavedQuote } from './quote-store';
+import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuoteLine, applyQuoteMargin, quoteMarginSummary, quotePaperLines, quoteTotal, toSavedQuote } from './quote-store';
 import { createLineDraft } from './order-draft';
 
 function line(over: Partial<SavedQuoteLine['draft']>, spec = 'A specification'): SavedQuoteLine {
@@ -35,6 +35,11 @@ test('the reader discards a line that has no draft', () => {
   assert.equal(quote?.lines.length, 1);
 });
 
+test('the reader keeps the margin a quote was saved at', () => {
+  assert.equal(toSavedQuote(row({ kind: 'quote', marginPercent: 35, lines: [line({ localId: 'a' })] }))?.marginPercent, 35);
+  assert.equal(toSavedQuote(row({ kind: 'quote', lines: [line({ localId: 'a' })] }))?.marginPercent, DEFAULT_QUOTE_MARGIN_PERCENT, 'a quote saved before quotes had a margin');
+});
+
 test('the paper shows the line note and the specification as stored', () => {
   const lines = [line({ localId: 'a', lineNote: 'Sliding window 1200x900', quantityOrdered: 4, unitPriceAtOrder: 1200 }, '500 series, clear 6.38')];
   const [paper] = quotePaperLines(lines);
@@ -48,6 +53,36 @@ test('the paper shows the line note and the specification as stored', () => {
 test('a line with no note still prints a description', () => {
   const [paper] = quotePaperLines([line({ localId: 'a', lineNote: '' })]);
   assert.equal(paper.description, 'Item');
+});
+
+test('the paper never carries the cost of an extra', () => {
+  const [paper] = quotePaperLines([{ ...line({ localId: 'a' }), unitCost: 80, extras: [{ label: 'Trims', total: 12, cost: 10 }] }]);
+  assert.deepEqual(paper.extras, [{ label: 'Trims', total: 12 }]);
+});
+
+test('a line at cost is priced at the margin of the quote, to the cent', () => {
+  const priced = applyQuoteMargin({ ...line({ localId: 'a', quantityOrdered: 3 }), unitCost: 83.337, extras: [{ label: 'Trims', total: 10, cost: 10 }, { label: 'Second glazing', total: null, cost: null }] }, 20);
+
+  assert.equal(priced.draft.unitPriceAtOrder, 100, '83.337 plus 20 percent is 100.0044, printed as $100.00');
+  assert.equal(priced.draft.markupPercent, 20);
+  assert.equal(priced.extras[0].total, 12);
+  assert.equal(priced.extras[1].total, null, 'an extra with no price stays unpriced');
+});
+
+test('a line with no cost keeps the price it was given', () => {
+  const carried = line({ localId: 'a', unitPriceAtOrder: 140 });
+  assert.equal(applyQuoteMargin(carried, 50), carried);
+});
+
+test('cost, margin and the lines at their own margin add up to the printed subtotal', () => {
+  const lines: SavedQuoteLine[] = [{ ...line({ localId: 'a', quantityOrdered: 3, unitPriceAtOrder: 33.34 }), unitCost: 27.78 }, line({ localId: 'b', quantityOrdered: 1, unitPriceAtOrder: 140 })];
+
+  const summary = quoteMarginSummary(lines);
+
+  assert.equal(summary.cost, 83.34);
+  assert.equal(summary.margin, 16.68, 'the printed amount 100.02 less the cost');
+  assert.equal(summary.fixed, 140, 'the line carried over counts apart');
+  assert.equal(summary.subtotal, 240.02);
 });
 
 test('the total includes GST, because the customer pays GST', () => {

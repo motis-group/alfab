@@ -50,7 +50,12 @@ export interface LineEditRequest {
   returnTo: string;
 }
 
-/** The line after the edit. The result holds only the fields that the calculator sets. */
+/**
+ * The line after the edit. The result holds only the fields that the calculator sets.
+ *
+ * A line for a quote comes back at cost, extras included, because the quote sets the margin. A line
+ * for an order comes back at its price.
+ */
 export interface LineEditResult {
   origin: LineEditOrigin;
   localId: string;

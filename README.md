@@ -66,3 +66,7 @@ For quote outcomes and whether the labour estimates hold up, see:
 For converting one or more quotes to a purchase order, see:
 
 - `projects/costing/development/specs/jobs.md`
+
+For a quote for a job, its margin and its customer, see:
+
+- `projects/costing/development/specs/quotes.md`

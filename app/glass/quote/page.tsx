@@ -97,10 +97,14 @@ export default function AdhocQuotePage() {
   // Set when the calculator was opened to price one line of a purchase order.
   const [lineEdit, setLineEdit] = useState<LineEditRequest | null>(null);
 
+  // A quote line is priced at cost, because the quote sets the margin. An order line has no quote
+  // around it, so it carries its own markup.
+  const quoteLine = lineEdit?.origin.kind === 'quote';
+
   const calculation = useMemo(() => {
     try {
       const breakdown = calculateCost(spec, pricingData);
-      const recommendedUnitPrice = breakdown.total * (1 + markupPercent / 100);
+      const recommendedUnitPrice = breakdown.total * (1 + (quoteLine ? 0 : markupPercent) / 100);
       const unitPrice = useRecommendedPrice ? recommendedUnitPrice : Math.max(0, manualUnitPrice);
       const totalPrice = unitPrice * Math.max(1, quantity);
 
@@ -120,7 +124,7 @@ export default function AdhocQuotePage() {
         error: costError?.message || 'Unable to calculate quote.',
       };
     }
-  }, [manualUnitPrice, markupPercent, pricingData, quantity, spec, useRecommendedPrice]);
+  }, [manualUnitPrice, markupPercent, pricingData, quantity, quoteLine, spec, useRecommendedPrice]);
 
   const selectedCustomer = customers.find((entry) => entry.id === customerId) || null;
 
@@ -204,7 +208,9 @@ export default function AdhocQuotePage() {
             setQuantity(Math.max(1, line.quantityOrdered));
             setMarkupPercent(line.markupPercent);
             setItemName(line.lineNote);
-            setUseRecommendedPrice(false);
+            // An order line keeps its price until the operator asks for the recommended one. A quote
+            // line with no cost yet is priced from its specification.
+            setUseRecommendedPrice(request.origin.kind === 'quote' && !line.unitPriceAtOrder);
             setManualUnitPrice(line.unitPriceAtOrder);
             setCustomerId(request.customerId);
           }
@@ -379,12 +385,14 @@ export default function AdhocQuotePage() {
         lineNote: line.item.name || `Piece ${index + 1}`,
         markupPercent,
       }),
+      // A piece on the recommended price follows the margin of the quote there. A manual price stays as typed.
+      unitCost: line.item.useRecommendedPrice && line.breakdown ? line.breakdown.total : null,
       spec: describeGlassSpecification(line.item.spec),
       extras: [],
     }));
 
     try {
-      const id = await createQuote({ name: quoteName, customer: paperCustomer, customerId: customerId || null, date: quoteDate, notes: quoteNotes, lines, issuedBy: username, ratesUpdatedAt: updatedAt });
+      const id = await createQuote({ name: quoteName, customer: paperCustomer, customerId: customerId || null, date: quoteDate, notes: quoteNotes, marginPercent: markupPercent, lines, issuedBy: username, ratesUpdatedAt: updatedAt });
       setIssued({ id, fingerprint: paperFingerprint });
       setStatus({ tone: 'success', message: `Quote ${quoteReference(id)} saved. It is in the quote list.` });
       return true;
@@ -544,11 +552,11 @@ export default function AdhocQuotePage() {
                   </Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
-                  <Text>RECOMMENDED UNIT</Text>
+                  <Text>{quoteLine ? 'UNIT COST FROM RATES' : 'RECOMMENDED UNIT'}</Text>
                   <Text>{formatCurrency(calculation.recommendedUnitPrice)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
-                  <Text>QUOTED UNIT</Text>
+                  <Text>{quoteLine ? 'UNIT COST' : 'QUOTED UNIT'}</Text>
                   <Text>{formatCurrency(calculation.unitPrice)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
@@ -556,7 +564,7 @@ export default function AdhocQuotePage() {
                   <Text>{Math.max(1, quantity)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
-                  <Text>TOTAL QUOTE</Text>
+                  <Text>{quoteLine ? 'LINE COST' : 'TOTAL QUOTE'}</Text>
                   <Text>
                     <span className="status-pill status-pill-success">{formatCurrency(calculation.totalPrice)}</span>
                   </Text>
@@ -673,15 +681,17 @@ export default function AdhocQuotePage() {
                     <TableColumn>{formatCurrency(calculation.breakdown?.total)}</TableColumn>
                   </TableRow>
                   <TableRow>
-                    <TableColumn>Markup ({markupPercent}%)</TableColumn>
-                    <TableColumn>{formatCurrency((calculation.breakdown?.total || 0) * (markupPercent / 100))}</TableColumn>
+                    <TableColumn>{quoteLine ? 'Margin' : `Markup (${markupPercent}%)`}</TableColumn>
+                    <TableColumn>{quoteLine ? 'Set on the quote' : formatCurrency((calculation.breakdown?.total || 0) * (markupPercent / 100))}</TableColumn>
                   </TableRow>
                   <TableRow>
-                    <TableColumn>Unit Price Used</TableColumn>
+                    <TableColumn>{quoteLine ? 'Unit Cost Used' : 'Unit Price Used'}</TableColumn>
                     <TableColumn>{formatCurrency(calculation.unitPrice)}</TableColumn>
                   </TableRow>
                   <TableRow>
-                    <TableColumn>Quote Total ({Math.max(1, quantity)} units)</TableColumn>
+                    <TableColumn>
+                      {quoteLine ? 'Line Cost' : 'Quote Total'} ({Math.max(1, quantity)} units)
+                    </TableColumn>
                     <TableColumn>{formatCurrency(calculation.totalPrice)}</TableColumn>
                   </TableRow>
                 </Table>
@@ -694,7 +704,9 @@ export default function AdhocQuotePage() {
           </Card>
         </>
       }
-      actionItems={[
+      // A quote line is priced at cost. The calculator's own quote, order, print and copy would carry
+      // that cost to a customer, so a quote line offers only the way back.
+      actionItems={quoteLine ? [{ body: 'Save To Quote', onClick: saveLineToDocument }, { body: 'Cancel', onClick: cancelLineEdit }] : [
         {
           body: 'Add',
           items: [
@@ -746,14 +758,15 @@ export default function AdhocQuotePage() {
         <GlassSpecificationFields spec={spec} onChange={setSpec} basePrices={pricingData.basePrices} />
         <br />
         <Input label="QUANTITY" type="number" name="quote_quantity" value={String(quantity)} onChange={(event) => setQuantity(Math.max(1, numberOrFallback(event.target.value, 1)))} min="1" />
-        {/* An order line has no quote around it, so its markup is set here. A quote sets one for every piece. */}
-        {lineEdit ? <Input label="MARKUP (%)" type="number" name="line_markup" value={String(markupPercent)} onChange={(event) => setMarkupPercent(Math.max(0, numberOrFallback(event.target.value, 0)))} min="0" /> : null}
+        {/* An order line has no quote around it, so its markup is set here. A quote sets one margin for every line. */}
+        {lineEdit && !quoteLine ? <Input label="MARKUP (%)" type="number" name="line_markup" value={String(markupPercent)} onChange={(event) => setMarkupPercent(Math.max(0, numberOrFallback(event.target.value, 0)))} min="0" /> : null}
+        {quoteLine ? <Text style={{ opacity: 0.7 }}>Priced at cost. The quote sets the margin.</Text> : null}
 
         <label>
-          <input type="checkbox" checked={useRecommendedPrice} onChange={(event) => setUseRecommendedPrice(event.target.checked)} /> Use recommended unit price
+          <input type="checkbox" checked={useRecommendedPrice} onChange={(event) => setUseRecommendedPrice(event.target.checked)} /> {quoteLine ? 'Use the unit cost from the rates' : 'Use recommended unit price'}
         </label>
 
-        {!useRecommendedPrice && <Input label="MANUAL UNIT PRICE ($)" type="number" name="manual_unit_price" value={String(manualUnitPrice)} onChange={(event) => setManualUnitPrice(Math.max(0, numberOrFallback(event.target.value, 0)))} min="0" />}
+        {!useRecommendedPrice && <Input label={quoteLine ? 'MANUAL UNIT COST ($)' : 'MANUAL UNIT PRICE ($)'} type="number" name="manual_unit_price" value={String(manualUnitPrice)} onChange={(event) => setManualUnitPrice(Math.max(0, numberOrFallback(event.target.value, 0)))} min="0" />}
 
         <Input label="PIECE NAME (OPTIONAL)" name="item_name" value={itemName} onChange={(event) => setItemName(event.target.value)} placeholder="Front window, side panel..." />
         <br />

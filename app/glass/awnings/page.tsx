@@ -98,8 +98,11 @@ export default function AwningCostingPage() {
   const [comparison, setComparison] = useState<{ id: string; quoted: number | null; today: number | null; onOriginal: number | null } | null>(null);
 
   const describe = useCallback((forInput: AwningCostingInput) => describeAwning(forInput, rates), [rates]);
-  const result = useMemo(() => costAwning(input, rates), [input, rates]);
-  const batches = useMemo(() => (result.errors.length ? [] : costAwningBatches(input, rates, BATCH_SIZES)), [input, rates, result.errors.length]);
+  // A quote line is priced at cost, because the quote sets the margin.
+  const quoteLine = lineEdit?.origin.kind === 'quote';
+  const pricingRates = useMemo(() => (quoteLine ? { ...rates, marginRate: 0 } : rates), [quoteLine, rates]);
+  const result = useMemo(() => costAwning(input, pricingRates), [input, pricingRates]);
+  const batches = useMemo(() => (result.errors.length ? [] : costAwningBatches(input, pricingRates, BATCH_SIZES)), [input, pricingRates, result.errors.length]);
   const ratesLabel = ratesSource === 'saved' ? formatStamp(ratesUpdatedAt) : 'code defaults';
 
   const quoteLines = useMemo(
@@ -436,11 +439,11 @@ export default function AwningCostingPage() {
                   <Text>{formatCurrency(result.subtotal)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
-                  <Text>MARGIN ({formatPercent(result.marginRate)} OF COST)</Text>
-                  <Text>{formatCurrency(result.margin)}</Text>
+                  <Text>{quoteLine ? 'MARGIN' : `MARGIN (${formatPercent(result.marginRate)} OF COST)`}</Text>
+                  <Text>{quoteLine ? 'SET ON THE QUOTE' : formatCurrency(result.margin)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
-                  <Text>PRICE EACH</Text>
+                  <Text>{quoteLine ? 'COST EACH' : 'PRICE EACH'}</Text>
                   <Text>
                     <span className="status-pill status-pill-success">{formatCurrency(result.price)}</span>
                   </Text>
@@ -605,7 +608,9 @@ export default function AwningCostingPage() {
           />
         </>
       }
-      actionItems={[
+      // A quote line is priced at cost. The calculator's own quote, order, prints and copies would carry
+      // that cost to a customer, so a quote line offers only the way back.
+      actionItems={quoteLine ? [{ body: 'Save To Quote', onClick: saveLineToDocument }, { body: 'Cancel', onClick: cancelLineEdit }] : [
         {
           body: 'Add',
           items: [
@@ -756,7 +761,8 @@ export default function AwningCostingPage() {
         </CardDouble>
       )}
 
-      <AwningCostingSheet audience={sheetAudience} reference={reference} quoteName={quoteName} customerName={selectedCustomer?.name || customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} awnings={sheetAwnings} />
+      {/* A quote line is at cost, so Cmd+P prints the internal sheet, never a customer quote at cost. */}
+      <AwningCostingSheet audience={quoteLine ? 'internal' : sheetAudience} reference={reference} quoteName={quoteName} customerName={selectedCustomer?.name || customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} awnings={sheetAwnings} />
     </AppFrame>
   );
 }
