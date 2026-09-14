@@ -4,13 +4,15 @@ The glass calculator at `/glass/quote` prices cut glass: a size, a thickness and
 edgework, holes, shaping, ceramic banding and scanning. It is the counterpart of the window costing
 at `/glass/windows`, which prices made-up aluminium windows. Both feed the same purchase orders.
 
-## A quote is a job, not a piece
+## The calculator's quote
 
-A quote holds as many pieces as the job has. Price a piece, name it, add it to the quote, price the
+The calculator keeps its own quote of cut-glass pieces. It is separate from a quote for a job, which
+[quotes.md](quotes.md) describes.
+
+The quote holds as many pieces as the job has. Price a piece, name it, add it to the quote, price the
 next. Each piece keeps its own size, glass and quantity, and becomes one purchase order line. The
 markup is set once for the quote, under the quote notes, and prices every piece. A change to it
-reprices the whole quote. A piece with a manual unit price keeps that price. The quote total is
-what the customer is told.
+reprices the whole quote. A piece with a manual unit price keeps that price.
 
 When the calculator opens from an order to price one line, there is no quote around the line, so
 the line's own markup field is on the piece. A line of a quote for a job is priced at cost, with no
@@ -18,12 +20,18 @@ markup field, because that quote sets the margin. See [quotes.md](quotes.md).
 
 Pieces are priced one at a time, or read off a customer's order in one go; see [order-import.md](order-import.md).
 
-A quote can be saved and reopened. A saved quote holds the prices it was given, not today's, so a
-customer who rings back a fortnight later gets the same number. It records which glass rates priced
-it; reopening a quote priced on rates that have since changed says so.
+Two actions keep the quote:
 
-Saved quotes are rows in `quotes` marked `kind: glass`, alongside window costings marked
-`kind: window`. Neither list shows the other's rows.
+- **Save Quote** writes a row in `quotes` marked `kind: glass`. The row holds the prices the quote
+  was given, not today's prices, so a customer who calls back later gets the same number. The row
+  also holds the stamp of the glass rates that priced it. No page compares that stamp with the
+  current rates.
+- **Print Quote** saves the quote as a quote for a job, marked `kind: quote`, and prints it with a
+  reference.
+
+The quote list at `/glass` shows both rows with the quotes of every other kind. Open on a
+`kind: glass` row shows it on the quote page. When the quote has a priced piece, saving it there
+rewrites the row as a quote for a job.
 
 ## Customer
 
@@ -41,8 +49,8 @@ A small piece costs the same to handle, cut and invoice as a large one, but area
 | Minimum charge per piece | The least a piece is charged, whatever the breakdown comes to |
 | Minimum area charged | The smallest area the glass itself is priced at |
 
-Both are zero until the shop sets them, which prices exact area, as the calculator always did. When
-a minimum applies, the breakdown shows what it added rather than burying it in the glass line.
+Both are zero until the shop sets them. At zero, the calculator prices the exact area. When a
+minimum applies, the breakdown shows what it added rather than burying it in the glass line.
 
 ## Rates
 
@@ -50,13 +58,10 @@ Glass rates live in `glass_costing_rates`, one JSON document, edited under Setti
 the document it replaced as an archive row, so an old price can be reproduced. A blank never
 overwrites a price: it would read as zero and quote the job short.
 
-The rates are company-wide. Before, they lived in each estimator's browser, so two people quoting
-the same job could give different numbers and nobody could tell whose were right.
+The rates are company-wide, so two estimators who quote the same job give the same price.
 
-## Three glass price lists
+## Prices the other lists share
 
-The window and awning rates hold their own glass prices, and they are not the same numbers as these.
-**Settings → Price Drift** reports where they disagree and by how much; see
-[pricing-health.md](pricing-health.md). Whether a gap is an error is still open: these prices are a
-base the quote's markup is applied to, while the window costing's feed a window that carries margin
-and uplift afterwards.
+The glass price list also sets the glass, ceramic banding and flat polish prices that the window and
+awning rates share. [pricing-health.md](pricing-health.md) lists each shared rate and shows how
+**Settings → Price Drift** checks that the lists agree.

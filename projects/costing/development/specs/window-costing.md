@@ -15,22 +15,23 @@ only; the Queensland branch of the sheet is not implemented (`state` is fixed to
 | Printed sheet | `components/WindowCostingSheet.tsx`, print styles in `global.scss` |
 | Rate severity | `utils/window-rate-health.ts` |
 | Glossary | `utils/window-costing-glossary.ts`, shown by `components/WindowCostingGlossary.tsx` |
-| Saved costings | `utils/window-quote-store.ts`, table `quotes` |
+| Saved costings | `utils/window-quote-store.ts`, table `quotes`, rows marked `kind: window` |
 | Printed quotes | `utils/customer-quote-store.ts`, table `quotes`, rows marked `kind: window-quote` |
 | Golden checks | `utils/window-costing.test.ts` (`npm test`) |
 
-Every window type has a golden check: a window worked by hand from the sheet's own formulas.
-A change that moves any price fails those checks.
+Every recipe taken from the sheet has a golden check: a window worked by hand from the sheet's own
+formulas, priced on the transcribed sheet rates. A change that moves any of those prices fails the
+checks. The AFB035 has no golden check, because the sheet never priced one.
 
 ## The menu
 
 `utils/window-catalogue.ts` holds the menu the workshop picks from: a series, then the window in it.
-The costing engine names its nine recipes by extrusion code, because the legacy sheet did. Nobody
+The costing engine names its ten recipes by extrusion code, because the legacy sheet did. Nobody
 orders a T4633; they order a 650 series slider.
 
 | Series | Windows |
 | --- | --- |
-| 1000 | 015/008 slider, 6567 fixed, 035 hopper (no recipe) |
+| 1000 | 015/008 slider, 6567 fixed, 035 hopper (provisional recipe) |
 | 750 | 5573 fixed, 003 slider |
 | 650 | 037 slider |
 | 500 | 5573 fixed, 5836 slider, 4633 slider for horse floats, 023 fixed horse float front (no recipe) |
@@ -69,11 +70,12 @@ Type-specific inputs (`WINDOW_TYPES[type].fields`):
 | T2482 caravan | pairs, welds |
 | U6567 (1000 series) | pairs, welds (default 1), reinforcing bar or mullion + count; warns below 6 mm glass |
 | AFB008 / AFB003 slider | pairs, section, sill flat, locks, welds, transoms or mullions + count, Riviera mullion |
+| AFB035 hopper | hinges, strut type, struts, handles |
 | T-section sash & frame | hinges, pairs of stays + stay type, bolt sets, hopper series, welds |
 | Sash & frame | pairs of caravan stays |
 
 T5836, T4633 and AFB008 derive holes, shape cuts and flat-smooth metres from the locks and
-mullions, so those extras are not entered by hand.
+mullions. The AFB035 derives its holes from the handles. None of these extras is entered by hand.
 
 ## Formula chain
 
@@ -113,68 +115,74 @@ sets one margin for all its lines. See [quotes.md](quotes.md).
 
 - **Batch price.** The sidebar prices the same window at batches of 1, 2, 5 and 10. Setup and
   development minutes divide across the batch, so the price per window falls as the run grows.
-- **Quote with several windows.** Add each costed window to the quote. The quote creates one
-  purchase order line per window.
-- **Printing.** Two documents print the quote's windows, or the window on screen when the quote
-  is empty. "Print Costing Sheet (internal)" shows every cost line, the rates used, the labour
-  minutes, margin, packing and uplift. It starts a new page for each window, because a fabricator
-  carries a sheet to the bench. Both documents render at the end of `<body>`, outside the app, so
-  printing takes the app out of the layout. A sheet hidden in place keeps the height of the app and
-  prints as blank pages.
-- **Customer quote.** "Print Quote For Customer" prints `components/PrintedQuote.tsx`, which the
-  awning calculator also uses. The layout follows an invoice: issuer, customer, one line for each
-  window, and a totals block with GST. The type is Berkeley Mono, served from `public/fonts`. The
-  dashboard quote view shows the same paper on screen, so the office reads what the customer read.
-- **Quote reference.** "Print Quote For Customer" saves the quote, then prints it with a reference
-  such as `Q-3F2A9C1E`. The order list and the dashboard quote view show the same reference, so a
-  customer can quote it back. An order made from the quote carries the reference in each line
-  description. A reprint of unchanged content uses the saved quote again. Changed content is a new
-  offer and gets a new reference. If the save fails, nothing prints.
+- **The calculator's list.** "Add Window To Quote" adds the costed window to a list on the page. The
+  list is separate from a quote for a job, which [quotes.md](quotes.md) describes. "Create Purchase
+  Order" makes one order line for each window in the list. See [jobs.md](jobs.md).
+- **Printing.** The Print menu holds two documents. They print the windows in the list, or the window
+  on screen when the list is empty. "Costing Sheet (internal)" shows every cost line, the rates used,
+  the labour minutes, margin, packing and uplift. It starts a new page for each window, because a
+  fabricator carries a sheet to the bench. Both documents render at the end of `<body>`, outside the
+  app, so printing takes the app out of the layout.
+- **Customer quote.** "Quote For Customer" on the Print menu prints `components/PrintedQuote.tsx`,
+  which the awning calculator also uses. The layout follows an invoice: issuer, customer, one line for
+  each window, and a totals block with GST. The type is Berkeley Mono, served from `public/fonts`. The
+  quote page at `/glass/quotes/<id>` shows the quote as the customer reads it.
+- **Quote reference.** "Quote For Customer" saves the quote, then prints it with a reference such as
+  `Q-3F2A9C1E`. The quote list at `/glass` and the quote page show the same reference, so a customer
+  can quote it back. An order converted from the quote carries the reference in each line
+  description. If the save fails, nothing prints.
+- **Reprints.** A reprint of unchanged content uses the saved quote again. Changed content is a new
+  offer and gets a new reference. The quote page saves its changes under the same reference.
 - **Drafts.** A browser Cmd+P prints the reference only when the screen matches the saved quote.
-  Otherwise the print shows "Draft, not issued" in place of the reference.
+  Otherwise the print shows "Draft, not issued" in place of the reference. While the page prices a
+  line of a quote for a job, Cmd+P prints the internal costing sheet, as [quotes.md](quotes.md)
+  describes.
 - **Limits.** The reference is the first eight hex digits of the row id, so two quotes can share
   one. The chance stays under 1% until about 9,000 quotes. The footer promises a 30-day price hold
   from the quote date. After it, an unanswered quote reads as expired, as
   [feedback-loops.md](feedback-loops.md) describes.
-- **Copying.** "Copy Prices For Customer" is the same split in text. "Copy Cost Build-up
-  (internal)" carries the build-up and is marked as not for a customer.
+- **Copying.** The Copy menu holds the same split in text. "Prices For Customer" copies the prices.
+  "Cost Build-up (internal)" carries the build-up and is marked as not for a customer.
 - **Customer.** Picked from the customer list, so the purchase order does not have to match one by
   name. A walk-in is still typed by hand and matched on the way through.
-- **Saved costings.** A saved costing keeps the window, the customer and the price. Load it to
-  price the same window again, which makes it the template for a repeat customer. Saved costings
-  are rows in `quotes` marked `kind: window`.
+- **Saved costings.** "Save Costing" writes the window, the customer and the price as a row in
+  `quotes` marked `kind: window`. The quote list at `/glass` shows the row as a quote with one line.
+  Open on the row shows it on the quote page, and saving it there rewrites the row as a quote for a
+  job.
 - **Not priced.** Each line with no rate links to its own field in the rates editor.
 
 ## Rates
 
-`DEFAULT_WINDOW_RATES` holds the sheet's numbers. The editor writes the whole document to the
-DB row; `mergeWindowRates` overlays it on the defaults, so keys added later keep their default
-and unknown keys are dropped. A blank value means not priced: the line costs $0 and the page
-warns. Items the source sheet could not price: 015-03 flat and 015-07 medium stays, keeper
-saddles (sash & frame), laminate c/view holes.
+`WINDOW_RATES_AS_TRANSCRIBED` holds the sheet's numbers, and the golden checks price on it.
+`DEFAULT_WINDOW_RATES` is that transcription with the shared glass prices applied. See
+[pricing-health.md](pricing-health.md).
+
+The editor writes the whole document to the DB row. `mergeWindowRates` overlays it on the defaults,
+so keys added later keep their default and unknown keys are dropped. A blank value means not priced:
+the line costs $0 and the page warns.
 
 Recipes reference rates by key, and those keys are unions derived from the defaults
-(`ExtrusionCode`, `PerMetreKey`, `EachKey`, `AnodCode`, `TrimCode`). Renaming a rate now fails the
-typecheck at every call site instead of silently leaving a line unpriced.
+(`ExtrusionCode`, `PerMetreKey`, `EachKey`, `AnodCode`, `TrimCode`). A renamed rate fails the
+typecheck at every call site, so a rename cannot leave a line unpriced without a warning.
 
 ### Which rates are wrong
 
 A rate can be blank for two very different reasons, and the editor colours them apart.
 
-**Yellow, not priced.** The legacy sheet never held this price: flat and medium stays, keeper
-saddles, and laminate c/view holes. The costing charges the line as nil and says so.
-The quote is short by whatever the item really costs.
+**Yellow, not priced.** The rate is blank by default. The legacy sheet never held flat and medium
+stays, keeper saddles, or laminate c/view holes, and the AFB035 hinge, struts and handle have no
+price. The costing charges the line as nil and says so. The quote is short by whatever the item
+really costs.
 
 **Red, fix before saving.** A value that makes every quote wrong without saying so:
 
 - A rate that had a price, left blank. JavaScript reads the blank as zero once the value reaches
-  arithmetic, so the quote still prints a confident price. Blanking the hourly labour rate takes 38
-  to 56 percent off, silently.
+  arithmetic, so the quote still prints a confident price.
 - Zero on a rate the whole costing leans on: the labour rate, a supplier price per kilogram, a glass
   price per square metre, the etch anodising rate. Zero is never reported as not priced.
 - A value below zero, which turns a cost line into a credit.
-- A fraction above 1, which is a percentage typed as a whole number: 40 instead of 0.4 multiplies
-  the price by 41.
+- A fraction above 1, which is a percentage typed as a whole number: 40 instead of 0.4 makes the
+  margin 40 times the cost.
 
 Saving is blocked while any red field is present. `mergeWindowRates` is the second guard: a blank on
 a rate that has a default price falls back to that default, so an older saved document cannot make a
@@ -200,28 +208,25 @@ Costings and purchase order lines record the stamp of the rates that priced them
 defaults leaves the archive rows in place.
 
 The archive id is built from `updated_at`, so it depends on the `set_updated_at` trigger on
-`window_costing_rates` and `glass_costing_rates`. Apply a table without its trigger and the stamp
-never advances: the second save writes an archive id that already exists, the store treats a
-duplicate as nothing to do, and every save after the first archives nothing. There is no error,
-and the loss only shows up later as a costing that cannot be repriced on the rates that made it.
-Both triggers ship in `docs/order-management-schema.sql`; keep them with their tables.
+`window_costing_rates`, `glass_costing_rates` and `awning_costing_rates`. Apply a table without its
+trigger and the stamp never advances: the second save writes an archive id that already exists, the
+store treats a duplicate as nothing to do, and every save after the first archives nothing. There is
+no error, and the loss only shows up later as a costing that cannot be repriced on the rates that
+made it. The three triggers ship in `docs/order-management-schema.sql`. Keep each trigger with its
+table.
 
-A saved costing stores its priced lines, so reopening one shows what was quoted rather than
-repricing it. **Compare** on the saved costings list shows three numbers: what was quoted, what the
-same window costs on today's rates, and what it recomputes to on the rates that priced it. The third
-comes from the archive row, or from the code defaults when the costing carries no stamp. When the
-recomputed figure does not match the quote, the costing itself changed rather than the rates.
+A saved costing stores its price and the stamp of the rates that priced it, so reopening it shows
+what was quoted. No page reprices a costing on its archive row. `loadWindowRatesVersion` in
+`utils/window-costing-store.ts` loads an archive row, and nothing calls it.
 
 ## Seeing a rate change before it is saved
 
-The rates editor prices the last twenty saved costings on the current rates and on the edit, and
-lists every one that moves, largest first. A move of 10 percent or more is marked. Saved costings are
-used rather than the golden windows because the goldens are fixed reference sizes that a glass price
-barely moves.
+The rates editor prices the last twenty saved window costings on the current rates and on the edit,
+and lists every one that moves, largest first. A move of 10 percent or more is marked.
 
-The rates table is keyed by a text id the client sets, which is why `window_costing_rates` is in
-`NATURAL_KEY_TABLES` in `utils/db-tables.ts`, the registry the `/api/db` gateway reads. Every other
-table keeps a server-generated id.
+The three rates tables are keyed by a text id the client sets. That is why `NATURAL_KEY_TABLES` in
+`utils/db-tables.ts`, the registry the `/api/db` gateway reads, lists `window_costing_rates`,
+`glass_costing_rates` and `awning_costing_rates`. Every other table keeps a server-generated id.
 
 ## Source behaviour kept on purpose
 

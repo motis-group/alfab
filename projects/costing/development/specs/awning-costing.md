@@ -6,7 +6,7 @@ fabricator's Excel awning sheet did. The sheet is kept at
 
 An awning is one product, not a range: the sheet has a single parts list and no window type to
 choose. That is the whole difference in shape from the window costing at `/glass/windows`, which
-carries nine recipes. Both feed the same purchase orders.
+carries ten recipes. Both feed the same purchase orders.
 
 | Part | Location |
 | --- | --- |
@@ -20,9 +20,10 @@ carries nine recipes. Both feed the same purchase orders.
 | Printed quotes | `utils/customer-quote-store.ts`, table `quotes`, rows marked `kind: awning-quote` |
 | Golden checks | `utils/awning-costing.test.ts` (`npm test`) |
 
-The golden check is the sheet's own worked example: 1220 x 1100 glass, six off, Super Grey
-toughened, banded, flat polished, with a flyscreen, at $1,566.77 each. Every cost line in that
-check names the cell it came from. A change that moves any price fails it.
+The golden check is the sheet's own worked example, priced on the transcribed sheet rates: 1220 x
+1100 glass, six off, Super Grey toughened, banded, flat polished, with a flyscreen, at $1,566.77 each.
+Every cost line in that check names the cell it came from. A change to the engine or to the
+transcribed rates that moves any price fails it.
 
 ## Inputs
 
@@ -56,26 +57,31 @@ one margin for all its lines. See [quotes.md](quotes.md).
 
 - **Batch price.** The sidebar prices the same awning at runs of 1, 2, 5 and 10. Setup minutes
   divide across the run, so the price for each falls as the run grows.
-- **Quote with several awnings.** Add each costed awning to the quote. The quote creates one
-  purchase order line per awning.
-- **Printing.** "Print Costing Sheet (internal)" shows every cost line, the rates used, the
-  labour minutes and the margin. It starts a new page for each awning. "Print Quote For Customer"
+- **The calculator's list.** "Add Awning To Quote" adds the costed awning to a list on the page, as on
+  the window costing. "Create Purchase Order" makes one order line for each awning in the list. See
+  [jobs.md](jobs.md).
+- **Printing.** "Costing Sheet (internal)" on the Print menu shows every cost line, the rates used,
+  the labour minutes and the margin. It starts a new page for each awning. "Quote For Customer"
   prints the shared customer quote, with one line for each awning. Both documents follow
   [window-costing.md](window-costing.md), which also describes the quote reference and drafts.
-- **Copying.** "Copy Prices For Customer" is the same split in text. "Copy Cost Build-up
-  (internal)" carries the build-up and is marked as not for a customer.
-- **Saved costings.** A saved costing keeps the awning, the customer and the price. Load it to
-  price the same awning again. **Compare** shows what was quoted, what it costs on today's rates,
-  and what it recomputes to on the rates that priced it.
+- **Copying.** The Copy menu holds the same split in text. "Prices For Customer" copies the prices.
+  "Cost Build-up (internal)" carries the build-up and is marked as not for a customer.
+- **Saved costings.** "Save Costing" writes the awning, the customer and the price as a row in
+  `quotes` marked `kind: awning`. The row shows in the quote list and opens on the quote page, as a
+  saved window costing does.
 - **Not priced.** Each line with no rate links to its own field in the rates editor.
 
 ## Rates
 
-`DEFAULT_AWNING_RATES` holds the sheet's numbers. The editor writes the whole document to the DB
-row; `mergeAwningRates` overlays it on the defaults, so keys added later keep their default and
-unknown keys are dropped. A blank on a rate that has a default price falls back to that default: a
-blank reaches arithmetic as zero and would quote the job short without saying so. Only rates that
-are blank by default stay blank.
+`AWNING_RATES_AS_TRANSCRIBED` holds the sheet's numbers, and the golden check prices on it.
+`DEFAULT_AWNING_RATES` is that transcription with the shared rates applied: the Super Grey glass
+price, ceramic banding and flat polish from the glass price list, and the labour rate from the window
+rates. See [pricing-health.md](pricing-health.md).
+
+The editor writes the whole document to the DB row. `mergeAwningRates` overlays it on the defaults,
+so keys added later keep their default and unknown keys are dropped. A blank on a rate that has a
+default price falls back to that default: a blank reaches arithmetic as zero and would quote the job
+short without saying so. Only rates that are blank by default stay blank.
 
 Saving keeps the document it replaced as an archive row, `v-<the stamp it replaced>`, so an old
 price can be reproduced. That behaviour is one implementation, `utils/rates-store.ts`, shared with
@@ -84,14 +90,13 @@ the window and glass rates. It depends on the `set_updated_at` trigger; see
 
 ### Which rates are wrong
 
-**Yellow, not priced.** The sheet never held this price. Today that is clear and grey toughened
-glass. The costing charges the line as nil and says so, rather than quoting them off the Super Grey
-price.
+**Yellow, not priced.** The sheet never held this price. That is clear and grey toughened glass. The
+costing charges the line as nil and says so, rather than quoting them off the Super Grey price.
 
-**Red, fix before saving.** A value that makes every quote wrong without saying so: a blank or zero
-on the labour rate, the per-awning minutes, the margin, or either fixed quantity; any value below
-zero; or a margin above 1, which is a percentage typed as a whole number. Saving is blocked while a
-red field is present.
+**Red, fix before saving.** A value that makes every quote wrong without saying so. That is a blank
+or zero on the per-awning minutes, the margin or either fixed quantity. It is also any value below
+zero, or a margin above 1, which is a percentage typed as a whole number. Saving is blocked while a
+red field is present. A shared rate shows as read-only, with a link to the list that sets it.
 
 The editor prices the sheet's own example awning on the current rates and on the edit, so the
 effect of a rate change is visible before it is saved.
@@ -107,14 +112,14 @@ These reproduce the sheet and will surprise anyone expecting the obvious formula
 - The winder costs $52 in the costing and $38.50 in the sheet's own parts list. $52 is what the
   sheet charged and is what the rates hold.
 - Glass area is not rounded. The window sheet rounds it to two decimal places; this one does not.
-- Labour is $75 an hour. The window costing uses $85.
 - There is no minimum glass area. The window costing floors it at 0.1 or 0.2 sqm by type.
 
-The first three are in [awning-costing-decisions.md](../../discovery/awning-costing-decisions.md).
-The labour rate, the missing minimum and the rounding are in
-[pricing-currency-decisions.md](../../discovery/pricing-currency-decisions.md), because they are
-disagreements with the window costing rather than facts about awnings. Until they are answered, the
-sheet's own numbers stand.
+These are questions 1.1 to 1.3, 3.2 and 3.3 in
+[awning-costing-decisions.md](../../discovery/awning-costing-decisions.md). Until the shop answers
+them, the sheet's own numbers stand.
 
-Whether the awning labour estimate of 330 minutes is true is now measurable; see
-[feedback-loops.md](feedback-loops.md).
+The labour rate does not follow the sheet. An awning charges the window labour rate. Question 3.1 in
+the same document asks whether awning labour costs less.
+
+[feedback-loops.md](feedback-loops.md) measures whether the awning labour estimate of 330 minutes is
+true.
