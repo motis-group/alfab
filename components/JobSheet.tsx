@@ -1,5 +1,6 @@
 'use client';
 
+import PrintSheet from '@components/PrintSheet';
 import { Customer, PurchaseOrder, statusLabel } from '@utils/order-management';
 
 export interface JobSheetLine {
@@ -28,7 +29,7 @@ function dateOnly(value?: string | null): string {
  */
 export default function JobSheet({ order, customer, lines }: JobSheetProps) {
   return (
-    <section className="window-costing-sheet" aria-hidden="true">
+    <PrintSheet audience="internal">
       <article className="window-costing-sheet__window">
         <header className="window-costing-sheet__heading">
           <h1 className="window-costing-sheet__title">Job sheet</h1>
@@ -79,6 +80,6 @@ export default function JobSheet({ order, customer, lines }: JobSheetProps) {
 
         <footer className="window-costing-sheet__footer">Finished by: ______________________ Date: ____________ Checked by: ______________________</footer>
       </article>
-    </section>
+    </PrintSheet>
   );
 }

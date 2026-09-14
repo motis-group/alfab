@@ -688,8 +688,9 @@ select option {
 
 @media print {
   /* The sheet is a child of <body>. Removing body's other children from the layout leaves only the
-     sheet; visibility: hidden would keep the app's height. */
-  body > *:not(.window-costing-sheet) {
+     sheet; visibility: hidden would keep the app's height. Only when there is a sheet to leave:
+     a page that renders none would otherwise hide the app and print a blank page. */
+  body:has(> .window-costing-sheet) > *:not(.window-costing-sheet) {
     display: none !important;
   }
 
