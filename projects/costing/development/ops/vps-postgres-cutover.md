@@ -115,6 +115,7 @@ sudo chown -R "$USER":"$USER" /opt/alfab
 git clone <your-repo-url> /opt/alfab/current
 cd /opt/alfab/current
 npm ci
+NODE_OPTIONS=--max-old-space-size=1536 npm run build
 ```
 
 Create runtime env file:

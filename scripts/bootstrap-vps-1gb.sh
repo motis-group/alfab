@@ -17,6 +17,9 @@ SUPERADMIN_USERNAME="${SUPERADMIN_USERNAME:-}"
 SWAP_SIZE_GB="${SWAP_SIZE_GB:-2}"
 NODE_MAJOR="${NODE_MAJOR:-20}"
 NODE_OPTIONS_VALUE="${NODE_OPTIONS_VALUE:---max-old-space-size=384}"
+# The build needs more heap than the service. This limit is larger than the RAM of a 1 GB host.
+# The swap file supplies the rest.
+BUILD_NODE_OPTIONS="${BUILD_NODE_OPTIONS:---max-old-space-size=1536}"
 
 REQUEST_TLS="${REQUEST_TLS:-0}"
 TLS_EMAIL="${TLS_EMAIL:-}"
@@ -159,8 +162,14 @@ EOF
 }
 
 run_deploy() {
-  log "Running app deploy script."
   cd "${APP_DIR}"
+
+  # scripts/ec2-deploy.sh does not build. A fresh clone has no build. This function builds it first.
+  log "Building the app with NODE_OPTIONS=${BUILD_NODE_OPTIONS}."
+  npm ci
+  NODE_OPTIONS="${BUILD_NODE_OPTIONS}" npm run build
+
+  log "Running app deploy script."
   DEPLOY_DOMAIN="${DEPLOY_DOMAIN}" ALT_DEPLOY_DOMAIN="${ALT_DEPLOY_DOMAIN}" APP_DIR="${APP_DIR}" \
     bash scripts/ec2-deploy.sh
 }
