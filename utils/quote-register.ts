@@ -7,7 +7,9 @@ import { SavedGlassQuote, listGlassQuotes } from '@utils/glass-quote-store';
 import { WindowCostingInput } from '@utils/window-costing';
 import { SavedWindowCosting, listWindowCostings } from '@utils/window-quote-store';
 import { AwningQuoteLine, GlassQuoteLine, QuoteToOrderDraftInput, WindowQuoteLine } from '@utils/quote-to-order';
-import { SavedQuote, listQuotes, quotePaperLines } from '@utils/quote-store';
+import { SavedQuote, SavedQuoteLine, listQuotes, quotePaperLines } from '@utils/quote-store';
+import { createLineDraft } from '@utils/order-draft';
+import { describeGlassSpecification } from '@utils/calculations';
 
 /**
  * The kind 'quote' is a quote for a job. It holds lines of any kind.
@@ -43,6 +45,17 @@ export interface QuoteRecord {
   reference: string | null;
   /** The lines as they were printed, unpriced ones included. Only a printed quote has them. */
   printedLines?: QuoteLine[];
+  /**
+   * The lines in the shape the quote page edits.
+   *
+   * A quote that one of the calculators wrote holds the calculator input for every line, so the
+   * quote page can edit it. Saving rewrites the row as a quote for a job. The row keeps its id, so
+   * the number the customer holds still finds it.
+   *
+   * A line with no price is not here. It carries no offer, and it would otherwise print as $0.00.
+   * mergeQuotesForOrder drops such a line for the same reason.
+   */
+  editableLines: SavedQuoteLine[];
   /** Purchase order lines this quote would create. */
   lineCount: number;
   total: number;
@@ -53,12 +66,19 @@ export interface QuoteRecord {
   draft: QuoteToOrderDraftInput | null;
 }
 
-function fromGlass(quote: SavedGlassQuote): QuoteRecord {
+export function fromGlass(quote: SavedGlassQuote): QuoteRecord {
   return {
     id: quote.id,
     kind: 'glass',
     kindLabel: QUOTE_KIND_LABELS['glass'],
     editable: false,
+    editableLines: quote.items
+      .filter((item) => item.unitPrice > 0)
+      .map((item) => ({
+        draft: createLineDraft({ pricingSource: 'adhoc_calculator', adhocSpec: item.spec, quantityOrdered: Math.max(1, item.quantity), unitPriceAtOrder: item.unitPrice, lineNote: item.name, markupPercent: item.markupPercent }),
+        spec: describeGlassSpecification(item.spec),
+        extras: [],
+      })),
     reference: null,
     name: quote.name,
     customer: quote.customer,
@@ -87,12 +107,13 @@ function fromGlass(quote: SavedGlassQuote): QuoteRecord {
   };
 }
 
-function fromWindow(costing: SavedWindowCosting): QuoteRecord {
+export function fromWindow(costing: SavedWindowCosting): QuoteRecord {
   return {
     id: costing.id,
     kind: 'window',
     kindLabel: QUOTE_KIND_LABELS['window'],
     editable: false,
+    editableLines: costing.price == null ? [] : [{ draft: createLineDraft({ pricingSource: 'window_calculator', windowSpec: costing.input, quantityOrdered: 1, unitPriceAtOrder: costing.price, lineNote: costing.name, windowRatesUpdatedAt: costing.ratesUpdatedAt ?? null }), spec: '', extras: [] }],
     reference: null,
     name: costing.name,
     customer: costing.customer,
@@ -116,12 +137,13 @@ function fromWindow(costing: SavedWindowCosting): QuoteRecord {
   };
 }
 
-function fromAwning(costing: SavedAwningCosting): QuoteRecord {
+export function fromAwning(costing: SavedAwningCosting): QuoteRecord {
   return {
     id: costing.id,
     kind: 'awning',
     kindLabel: QUOTE_KIND_LABELS['awning'],
     editable: false,
+    editableLines: costing.price == null ? [] : [{ draft: createLineDraft({ pricingSource: 'awning_calculator', awningSpec: costing.input, quantityOrdered: Math.max(1, costing.input.qty), unitPriceAtOrder: costing.price, lineNote: costing.name, awningRatesUpdatedAt: costing.ratesUpdatedAt ?? null }), spec: '', extras: [] }],
     reference: null,
     name: costing.name,
     customer: costing.customer,
@@ -155,6 +177,11 @@ export function fromCustomerQuote(quote: CustomerQuote): QuoteRecord {
     kind: quote.kind === 'window-quote' ? 'window' : 'awning',
     kindLabel: QUOTE_KIND_LABELS[quote.kind === 'window-quote' ? 'window' : 'awning'],
     editable: false,
+    editableLines: priced.map((line) => ({
+      draft: createLineDraft(quote.kind === 'window-quote' ? { pricingSource: 'window_calculator', windowSpec: line.input as WindowCostingInput, quantityOrdered: Math.max(1, line.quantity), unitPriceAtOrder: line.unitPrice as number, lineNote: line.description, windowRatesUpdatedAt: quote.ratesUpdatedAt } : { pricingSource: 'awning_calculator', awningSpec: line.input as AwningCostingInput, quantityOrdered: Math.max(1, line.quantity), unitPriceAtOrder: line.unitPrice as number, lineNote: line.description, awningRatesUpdatedAt: quote.ratesUpdatedAt }),
+      spec: line.spec,
+      extras: line.extras || [],
+    })),
     reference: quote.reference,
     printedLines: quote.lines,
     name: quote.name,
@@ -219,6 +246,7 @@ export function fromSavedQuote(quote: SavedQuote): QuoteRecord {
     kind: 'quote',
     kindLabel: linesLabel(quote),
     editable: true,
+    editableLines: quote.lines,
     reference: quote.reference,
     printedLines: quotePaperLines(quote.lines),
     name: quote.name,
