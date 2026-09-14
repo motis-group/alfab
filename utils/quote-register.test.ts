@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { GlassSpecification } from './calculations';
-import { MergedQuoteDraft, QuoteRecord, fromSavedQuote, isMergeRefusal, mergeQuotesForOrder } from './quote-register';
+import { MergedQuoteDraft, QuoteRecord, fromCustomerQuote, fromGlass, fromSavedQuote, fromWindow, isMergeRefusal, mergeQuotesForOrder } from './quote-register';
 import { WindowCostingInput } from './window-costing';
 import { createLineDraft } from './order-draft';
 
@@ -37,6 +37,7 @@ function glassQuote(over: Partial<QuoteRecord> = {}): QuoteRecord {
     kind: 'glass',
     kindLabel: 'Glass',
     editable: false,
+    editableLines: [],
     reference: null,
     name: 'Cut glass',
     customer: 'Status Houseboats',
@@ -57,6 +58,7 @@ function windowQuote(over: Partial<QuoteRecord> = {}): QuoteRecord {
     kind: 'window',
     kindLabel: 'Window',
     editable: false,
+    editableLines: [],
     reference: null,
     name: 'Kitchen hopper',
     customer: 'Status Houseboats',
@@ -202,4 +204,70 @@ test('a job quote converts to an order with the older quotes', () => {
   const merged = mergeQuotesForOrder([job, glassQuote()]);
   assert.ok(merged && !isMergeRefusal(merged));
   assert.equal((merged as MergedQuoteDraft).draft.glassLines?.length, 2, 'the order holds the glass lines of both quotes');
+});
+
+test('a glass quote opens with its pieces ready to edit', () => {
+  const record = fromGlass({
+    id: 'g9',
+    name: 'Cut glass',
+    customer: 'Status Houseboats',
+    customerId: 'c1',
+    date: '2026-09-10',
+    notes: 'deliver to Eildon',
+    items: [
+      { name: 'Side panel', spec, quantity: 2, markupPercent: 20, unitPrice: 100, breakdown: null },
+      { name: 'Unpriced piece', spec, quantity: 1, markupPercent: 20, unitPrice: 0, breakdown: null },
+    ],
+    total: 200,
+    status: 'open',
+    purchaseOrderId: null,
+    ratesUpdatedAt: null,
+  });
+
+  assert.equal(record.editableLines.length, 1, 'a piece with no price carries no offer');
+  const [line] = record.editableLines;
+  assert.equal(line.draft.pricingSource, 'adhoc_calculator', 'the piece goes back to the calculator that priced it');
+  assert.equal(line.draft.lineNote, 'Side panel');
+  assert.equal(line.draft.quantityOrdered, 2);
+  assert.equal(line.draft.unitPriceAtOrder, 100, 'the price is the price it was quoted at');
+  assert.equal(line.draft.adhocSpec.glassType, spec.glassType, 'the specification travels, so the piece can be repriced');
+  assert.ok(line.spec.length > 0, 'the stored specification describes itself without a rate table');
+});
+
+test('a printed quote keeps the words it printed', () => {
+  const record = fromCustomerQuote({
+    id: 'p1',
+    reference: 'Q-P1',
+    kind: 'window-quote',
+    name: 'Marina balustrade',
+    customer: 'Harbour Marine',
+    customerId: 'c1',
+    date: '2026-09-10',
+    notes: 'Deposit 50%',
+    lines: [
+      { description: 'Sliding window', spec: '500 series, clear 6.38', quantity: 4, unitPrice: 1200, extras: [{ label: 'Trims', total: 40 }], input: windowInput },
+      { description: 'Not costed', spec: 'awaiting sizes', quantity: 1, unitPrice: null, input: windowInput },
+    ],
+    subtotal: 4800,
+    gst: 480,
+    issuedBy: null,
+    issuedAt: null,
+    ratesUpdatedAt: '2026-09-01T00:00:00Z',
+    status: 'open',
+    purchaseOrderId: null,
+  });
+
+  assert.equal(record.editableLines.length, 1, 'a line with no price is not carried over');
+  const [line] = record.editableLines;
+  assert.equal(line.spec, '500 series, clear 6.38', 'the offer keeps the words of the day, not today’s catalogue');
+  assert.equal(line.draft.pricingSource, 'window_calculator');
+  assert.equal(line.draft.windowRatesUpdatedAt, '2026-09-01T00:00:00Z', 'the rate stamp travels with the line');
+  assert.equal(line.extras[0].label, 'Trims');
+  assert.equal(record.printedLines?.length, 2, 'the paper still shows both lines');
+});
+
+test('a costing that was never priced has nothing to edit', () => {
+  const record = fromWindow({ id: 'w9', name: 'Hopper', customer: 'Status Houseboats', date: '2026-09-09', input: windowInput, price: null, status: 'open', purchaseOrderId: null, ratesUpdatedAt: null } as any);
+  assert.deepEqual(record.editableLines, []);
+  assert.equal(record.draft, null, 'and nothing to put on an order either');
 });

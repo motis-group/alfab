@@ -59,8 +59,10 @@ export default function QuotePage() {
   const isNew = id === 'new';
 
   const [draft, setDraft] = useState<QuoteDraft>(emptyQuoteDraft);
-  /** A quote that a calculator wrote. This page shows the quote but cannot change it. */
+  /** A quote that a calculator wrote and that has no line this page can edit. */
   const [readOnly, setReadOnly] = useState<QuoteRecord | null>(null);
+  /** Set while editing a quote that a calculator wrote. Saving rewrites the row. */
+  const [carriedOver, setCarriedOver] = useState<{ from: string; dropped: number } | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [canWrite, setCanWrite] = useState(false);
   const [username, setUsername] = useState<string | null>(null);
@@ -110,8 +112,18 @@ export default function QuotePage() {
         return;
       }
 
-      // Not a quote for a job. A calculator wrote it. This page shows it and does not change it.
+      // Not a quote for a job. One of the calculators wrote it.
       const { record, errors } = await findQuoteRecord(id);
+
+      // Its lines carry the calculator input, so this page can edit them. The row keeps its id, so
+      // the number the customer holds still finds the quote after it is saved.
+      if (record && record.editableLines.length) {
+        setDraft({ id: record.id, name: record.name, customer: record.customer, customerId: record.customerId || '', date: record.date ? record.date.slice(0, 10) : todayISODate(), notes: record.draft?.quoteNotes || '', lines: record.editableLines, pendingLineId: null });
+        setCarriedOver({ from: record.kindLabel, dropped: Math.max(0, record.lineCount - record.editableLines.length) });
+        setError(errors.length ? errors.join(' ') : null);
+        return;
+      }
+
       setReadOnly(record);
       setError(errors.length ? errors.join(' ') : record ? null : 'No quote has that reference. It may have been deleted.');
     } catch (loadError: any) {
@@ -199,6 +211,7 @@ export default function QuotePage() {
       if (draft.id) {
         await updateQuote(draft.id, { ...content, issuedBy: username, ratesUpdatedAt });
         setStatus(`Quote ${quoteReference(draft.id)} saved.`);
+        setCarriedOver(null);
         clearQuoteDraft();
       } else {
         const newId = await createQuote({ ...content, issuedBy: username, ratesUpdatedAt });
@@ -263,6 +276,19 @@ export default function QuotePage() {
 
       {!isLoading && !readOnly ? (
         <>
+          {carriedOver ? (
+            <Card title="WRITTEN IN THE CALCULATOR">
+              <Text>The {carriedOver.from.toLowerCase()} calculator wrote this quote. Its lines are here and can be changed. Saving rewrites the quote in the shape this page uses. It keeps its number, so the copy the customer holds still refers to it.</Text>
+              {carriedOver.dropped ? (
+                <Text>
+                  <span className="status-warning">
+                    {carriedOver.dropped} line{carriedOver.dropped === 1 ? '' : 's'} had no price and {carriedOver.dropped === 1 ? 'is' : 'are'} not carried over. Add {carriedOver.dropped === 1 ? 'it' : 'them'} again to put {carriedOver.dropped === 1 ? 'a price on it' : 'prices on them'}.
+                  </span>
+                </Text>
+              ) : null}
+            </Card>
+          ) : null}
+
           <CardDouble title="QUOTE">
             <Input label="JOB" name="quote_name" value={draft.name} onChange={(event) => update({ name: event.target.value })} placeholder="What the job is called" />
             <Text>CUSTOMER</Text>
