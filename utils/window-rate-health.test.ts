@@ -84,7 +84,7 @@ test('a saved document cannot blank a rate that has a price', () => {
   assert.equal(mergeWindowRates({ labourPerHour: 95 }).labourPerHour, 95);
 });
 
-test('a blanked labour rate can no longer quietly halve a quote', () => {
+test('the default labour rate prices a window when the saved rate is blank', () => {
   const input = createWindowInput('T5573', { glazingId: 'ap6_clear' });
   const priced = costWindow(input, DEFAULT_WINDOW_RATES).price ?? 0;
   const afterBlanking = costWindow(input, mergeWindowRates({ labourPerHour: null })).price ?? 0;

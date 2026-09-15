@@ -84,8 +84,10 @@ const DERIVED_FIELDS: Record<string, { label: string; href: string }> = {
 };
 
 /**
- * Rates the whole costing leans on. A blank or zero here is not reported as "not priced": it reaches
- * arithmetic as zero and the quote still prints a confident price that is too low.
+ * Rates the whole costing leans on, so an issue on any of them blocks a save. The costing reports
+ * labour as not priced when the labour rate is blank, and gives no price when it is zero. It does
+ * not report a blank or zero on the other rates. That value reaches arithmetic as zero, and the
+ * quote prints a confident price that is too low.
  */
 const SPINE = new Set(['labour.perHour', 'labour.eachMinutes', 'marginRate', 'quantities.anchorPlateM', 'quantities.fixingSets']);
 
@@ -116,6 +118,9 @@ function issueFor(path: string, value: number | null): string | null {
   const fallback = valueAt(DEFAULT_AWNING_RATES, path);
 
   if (value == null) {
+    if (path === 'labour.perHour') {
+      return 'Blank. The costing reports labour as not priced. Set the labour rate in the window rates.';
+    }
     if (SPINE.has(path)) {
       return 'Blank; read as zero.';
     }
@@ -124,6 +129,9 @@ function issueFor(path: string, value: number | null): string | null {
   }
   if (value < 0) {
     return 'Below zero.';
+  }
+  if (value === 0 && path === 'labour.perHour') {
+    return 'Zero. The costing gives no price. Set the labour rate in the window rates.';
   }
   if (value === 0 && SPINE.has(path)) {
     return 'Zero; not reported as unpriced.';
@@ -149,7 +157,7 @@ export default function AwningRatesSettings() {
   const allFields = useMemo(() => [...PARTS, ...QUANTITIES, ...LABOUR, ...GLASS_EXTRAS, ...GLAZING_ORDER.map((id) => ({ path: `glass.options.${id}.list`, label: DEFAULT_AWNING_RATES.glass.options[id].label, unit: '$ per m²' })), { path: 'marginRate', label: 'Margin on cost', unit: 'fraction, 0.4 is 40 percent' }], []);
 
   const issues = useMemo(() => allFields.map((field) => ({ field, message: issueFor(field.path, valueAt(rates, field.path)) })).filter((entry) => entry.message), [allFields, rates]);
-  const blocking = issues.filter((entry) => SPINE.has(entry.field.path) || (entry.message || '').startsWith('Below zero') || (entry.message || '').startsWith('A margin'));
+  const blocking = issues.filter((entry) => SPINE.has(entry.field.path) || (entry.message || '').startsWith('Below zero'));
   const hasChanges = useMemo(() => JSON.stringify(rates) !== JSON.stringify(savedRates), [rates, savedRates]);
 
   // What the edit does to a real price, before it is saved. The sheet's own example is the reference.
@@ -246,7 +254,7 @@ export default function AwningRatesSettings() {
     const value = valueAt(rates, field.path);
     const derivedFrom = DERIVED_FIELDS[field.path];
     const message = derivedFrom ? null : issueFor(field.path, value);
-    const tone = message ? (SPINE.has(field.path) || message.startsWith('Below zero') || message.startsWith('A margin') ? 'status-error' : 'status-warning') : null;
+    const tone = message ? (SPINE.has(field.path) || message.startsWith('Below zero') ? 'status-error' : 'status-warning') : null;
 
     // A derived rate is chosen in one place and shown here. Typing over it would be discarded on
     // the next load, so the field does not invite it.
@@ -325,7 +333,7 @@ export default function AwningRatesSettings() {
               {blocking.length ? <Text>Fix the red rates to save.</Text> : <Text>Charged as nil; reported on the costing.</Text>}
               {issues.map((entry) => (
                 <Text key={entry.field.path}>
-                  <span className={SPINE.has(entry.field.path) || (entry.message || '').startsWith('Below zero') || (entry.message || '').startsWith('A margin') ? 'status-error' : 'status-warning'}>
+                  <span className={SPINE.has(entry.field.path) || (entry.message || '').startsWith('Below zero') ? 'status-error' : 'status-warning'}>
                     {entry.field.label}: {entry.message}
                   </span>
                 </Text>
