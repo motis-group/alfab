@@ -30,8 +30,10 @@ export interface SavedQuoteLine {
   /**
    * One unit at cost, as the calculator priced it. The margin of the quote makes the price.
    *
-   * A line priced before quotes had a margin has no cost, because its price already holds a margin.
-   * That line keeps its price until the operator prices it again.
+   * A line with no cost keeps its price, which already holds a margin. Examples: a line of a quote
+   * that a calculator wrote, a line of a quote whose row stores no costs, and a piece with a manual
+   * price on a quote printed from the glass calculator. Pricing the line again in its calculator
+   * gives it a cost.
    */
   unitCost?: number | null;
   /**
@@ -225,8 +227,8 @@ export function toSavedQuote(row: QuoteRow): SavedQuote | null {
     customerId: text(specification.customerId),
     date: row.date || '',
     notes: text(specification.notes) || '',
-    // A quote saved before quotes had a margin reads at the default. Its lines have no cost, so the
-    // default prices none of them.
+    // A row with no margin reads at the default. Its lines have no cost, so the default prices none
+    // of them.
     marginPercent: typeof specification.marginPercent === 'number' ? specification.marginPercent : DEFAULT_QUOTE_MARGIN_PERCENT,
     lines,
     // The stored total is the offer. Calculate the total again only if the row has no total.
