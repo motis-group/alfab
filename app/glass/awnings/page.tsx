@@ -638,14 +638,19 @@ export default function AwningCostingPage() {
       )}
 
       {/* An order or a quote sent this line. The form below is that line. It is not the quote of
-          this calculator. The way back is therefore at the top of the page. */}
+          this calculator. The way back is therefore at the top of the page: in the bar for a quote
+          line, and here for an order line, whose bar keeps the actions of the calculator. */}
       {lineEdit ? (
         <CardDouble title={lineEdit.origin.kind === 'order' ? 'EDITING AN ORDER LINE' : 'EDITING A QUOTE LINE'}>
           <Text>
             {lineEdit.lineLabel} of {lineEdit.origin.label}. Changing the awning below changes that line.
           </Text>
-          <br />
-          <ActionButton onClick={saveLineToDocument}>{lineEdit.origin.kind === 'order' ? 'Save To Order' : 'Save To Quote'}</ActionButton> <ActionButton onClick={cancelLineEdit}>Cancel</ActionButton>
+          {quoteLine ? null : (
+            <>
+              <br />
+              <ActionButton onClick={saveLineToDocument}>Save To Order</ActionButton> <ActionButton onClick={cancelLineEdit}>Cancel</ActionButton>
+            </>
+          )}
         </CardDouble>
       ) : null}
 

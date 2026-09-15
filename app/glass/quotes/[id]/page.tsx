@@ -38,6 +38,9 @@ const LINE_KINDS: { label: string; source: PricingSource }[] = [
   { label: 'Cut Glass', source: 'adhoc_calculator' },
 ];
 
+/** The page lists this many lines until the operator asks for all of them, so a long quote keeps its totals in view. */
+const LINES_SHOWN = 10;
+
 function sourceLabel(source: PricingSource): string {
   return LINE_KINDS.find((kind) => kind.source === source)?.label || 'Line';
 }
@@ -76,6 +79,7 @@ export default function QuotePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [showAllLines, setShowAllLines] = useState(false);
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -104,6 +108,11 @@ export default function QuotePage() {
         // development mode, then finds the returned line and does not remove it.
         persistQuoteDraft(restored);
         setDraft(restored);
+        // A line after the first ten that came back opens the full list, so the operator sees its price.
+        // Only a result opens the list. A second load has no result, and leaves the list as it is.
+        if (restored.lines.findIndex((line) => line.draft.localId === result?.localId) >= LINES_SHOWN) {
+          setShowAllLines(true);
+        }
         clearURLFlag();
         return;
       }
@@ -312,7 +321,8 @@ export default function QuotePage() {
   const printAction = { body: 'Print', onClick: () => window.print() };
   // A read-only quote has no priced line to put on an order, so it offers no Convert.
   const readOnlyActions = readOnly && documentLines(readOnly).length ? [printAction] : [];
-  const draftActions = [{ body: isSaving ? 'Saving...' : 'Save Quote', onClick: isSaving ? undefined : save }, ...(draft.lines.length ? [printAction, { body: 'Send', onClick: sendQuote }] : [])];
+  const addLineAction = { body: 'Add Line', items: LINE_KINDS.map((kind) => ({ icon: '⊹', children: kind.label, onClick: () => addLine(kind.source) })) };
+  const draftActions = [addLineAction, { body: isSaving ? 'Saving...' : 'Save Quote', onClick: isSaving ? undefined : save }, ...(draft.lines.length ? [printAction, { body: 'Send', onClick: sendQuote }] : [])];
 
   return (
     <AppFrame
@@ -398,7 +408,7 @@ export default function QuotePage() {
                   <TableColumn style={{ width: '14ch' }}>AMOUNT</TableColumn>
                   <TableColumn style={{ width: '16ch' }}>ACTIONS</TableColumn>
                 </TableRow>
-                {draft.lines.map((line, index) => (
+                {(showAllLines ? draft.lines : draft.lines.slice(0, LINES_SHOWN)).map((line, index) => (
                   <TableRow key={line.draft.localId}>
                     <TableColumn>
                       {line.draft.lineNote || `${sourceLabel(line.draft.pricingSource)} ${index + 1}`}
@@ -420,8 +430,14 @@ export default function QuotePage() {
                 ))}
               </Table>
             ) : (
-              <Text>No lines yet. Add one and the calculator for its kind prices it.</Text>
+              <Text>No lines yet. Pick a kind under Add Line at the top. Its calculator prices the line at cost, and the line comes back here.</Text>
             )}
+            {draft.lines.length > LINES_SHOWN ? (
+              <>
+                <br />
+                <ActionButton onClick={() => setShowAllLines(!showAllLines)}>{showAllLines ? `Show First ${LINES_SHOWN} Lines` : `Show All ${draft.lines.length} Lines`}</ActionButton>
+              </>
+            ) : null}
             <br />
             {anyAtCost ? (
               <>
@@ -449,21 +465,13 @@ export default function QuotePage() {
             </RowSpaceBetween>
           </CardDouble>
 
-          <CardDouble title="ADD A LINE">
-            <Text>Each line is priced at cost in the calculator that knows its kind, and comes back here.</Text>
-            <br />
-            <span>
-              {LINE_KINDS.map((kind) => (
-                <span key={kind.source}>
-                  <ActionButton onClick={() => addLine(kind.source)}>{kind.label}</ActionButton>{' '}
-                </span>
-              ))}
-            </span>
-          </CardDouble>
-
           {draft.lines.length ? (
             <CardDouble title="AS THE CUSTOMER READS IT">
-              <QuotePaper reference={reference} quoteName={draft.name} customerName={customerName} quoteDate={draft.date} notes={draft.notes} lines={paperLines} />
+              {/* The paper repeats every line, so it starts closed. Print uses the sheet below, so a closed paper still prints. */}
+              <details>
+                <summary style={{ cursor: 'pointer' }}>The quote on paper</summary>
+                <QuotePaper reference={reference} quoteName={draft.name} customerName={customerName} quoteDate={draft.date} notes={draft.notes} lines={paperLines} />
+              </details>
               <PrintedQuote reference={reference} quoteName={draft.name} customerName={customerName} quoteDate={draft.date} notes={draft.notes} lines={paperLines} />
             </CardDouble>
           ) : null}
