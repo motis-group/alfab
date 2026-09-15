@@ -1,13 +1,13 @@
 # Billing Setup (Stripe + Cost Model)
 
-This app now includes a Stripe-based monthly billing flow under `/settings/billing`.
+The app has a Stripe-based monthly billing flow under `/settings/billing`.
 
 ## Default monthly cost model (AUD)
 
 Defaults used by `utils/billing.ts`:
 
-- EC2 `t3.micro` compute: `0.0132` AUD/hour
-- RDS `db.t3.micro` compute: `0.028` AUD/hour
+- EC2 compute: `0.0132` AUD/hour
+- RDS compute: `0.028` AUD/hour
 - EC2 EBS storage: `8 GB * 0.096` AUD/GB-month
 - RDS storage: `20 GB * 0.138` AUD/GB-month
 - Ops/misc buffer: `6` AUD/month
@@ -20,9 +20,13 @@ With defaults, the app computes approximately:
 - Margin: `13.86` AUD/month
 - Target Stripe subscription: `53.47` AUD/month
 
+The defaults price AWS EC2 and RDS. Production runs on a DigitalOcean droplet with its own
+PostgreSQL, so the defaults are not the cost of the host. The cost overrides below change them. See
+[vps-postgres-cutover.md](../ops/vps-postgres-cutover.md).
+
 ## PostgreSQL schema
 
-Run this SQL on your AWS PostgreSQL database:
+Run this SQL on the app's PostgreSQL database:
 
 - `docs/billing-schema.sql`
 

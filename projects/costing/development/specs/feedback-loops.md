@@ -1,11 +1,8 @@
 # Feedback loops
 
-The costing app could price a job and never learn anything from what happened next. A quote was
-written, printed and forgotten; a job was made and nobody compared the hours it took against the
-hours it was costed at. Both estimates could only age.
-
-Two records close that. A quote's outcome comes from what the shop does anyway, converting it to
-an order. The minutes a job took are typed on the order line when the job is done.
+Two records show whether quotes win and whether the labour estimates are true. A quote's outcome
+comes from what the shop does anyway: it converts the quote to an order. The minutes a job took are
+typed on the order line when the job is done.
 
 | Part | Location |
 | --- | --- |
@@ -30,20 +27,19 @@ Deleting an order sets the link to null, so its quotes go back to open. `effecti
 `utils/quote-status.ts` applies the rule when `listQuoteRecords` reads the quotes, so every list and
 card shows the same status.
 
-The status is computed and never written. `quotes.status` holds only what was set by hand before
-the rule existed. There, `lost` and `expired` both read as expired, and `won` with no order reads as
-open.
-SQL that reads `quotes.status` directly has to apply the same rule. Nothing runs on a schedule, so
-there is no job that can stop running.
+The status is computed and never written to `quotes.status`. A stored `lost` or `expired` reads as
+expired, and a stored `won` with no order reads as open. SQL that reads `quotes.status` directly has
+to apply the same rule. Nothing runs on a schedule, so there is no job that can stop running.
 
 The win rate is won over quotes that have run their course: won / (won + expired). An open quote is
-still in play, so it is counted but kept out of the rate. Value won is totalled beside it, over the
-quotes that carry a price. Nothing records why a quote was not won.
+still in play, so it is counted but kept out of the rate. The QUOTES card on the dashboard shows the
+open, won and expired counts, the value of the open quotes, and the win rate. Nothing records why a
+quote was not won.
 
-A quote can be deleted from the order list unless it is won. A won quote is refused, in the page and
-in `/api/db`, because it is the record of what its order was sold at. Deleting the order first
-returns it to open. Deleting a printed quote leaves the customer holding a number that points at
-nothing, and the confirmation says so.
+A quote can be deleted from the quote list at `/glass` unless it is won. A won quote is refused, in
+the page and in `/api/db`, because it is the record of what its order was sold at. Deleting the order
+first returns it to open. For a quote with a reference, the confirmation warns that the number the
+customer holds will point at nothing.
 
 ## Was the estimate true
 
@@ -67,9 +63,9 @@ A line with no recorded minutes, or no costing spec, is skipped. An unmeasured s
 unmeasured, never as on time. The ratio is weighted by minutes, so a ten-off job counts for more
 than a one-off. A gap under 10 percent reads as the estimate holding up.
 
-The result is shown on the rates editors, beside the labour minutes that would change it, together
-with what the per-unit minutes would have to be for the estimate to have matched. Measuring it
-anywhere else would leave somebody to carry the number across.
+The result shows on the window and awning rates editors, beside the labour minutes that would change
+it. When the gap is 10 percent or more, the card also shows the per-unit minutes that would have
+matched. Measuring it anywhere else would leave somebody to carry the number across.
 
-Why this matters most for awnings: labour is $425 of an awning's $1,119 cost, and the 330 minutes it
-is costed at came off a 2020 sheet that nothing has ever checked.
+Labour matters most for awnings. It is the largest cost line of an awning, and its 330 minutes per
+awning come from the 2020 sheet.

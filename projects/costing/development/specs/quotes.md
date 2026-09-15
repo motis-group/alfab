@@ -22,9 +22,9 @@ storage during the trip.
 The quote has one margin, in percent on cost. The margin is a markup: 20 percent prices a $100 cost
 at $120. The margin prices every line that has a cost, and a change to it prices those lines again.
 
-A new quote starts at 20 percent, the markup that the glass calculator starts at. The window and
-awning rates carry 40 percent. A window or awning line at 20 percent is therefore cheaper than the
-rates alone make it.
+A new quote starts at 20 percent, the markup that the glass calculator starts at. The awning rates
+carry a 40 percent margin, and the window rates carry 35 or 40 percent by type. A window or awning
+line at 20 percent is therefore cheaper than the rates alone make it.
 
 A calculator prices a quote line at cost:
 
@@ -47,10 +47,10 @@ prices. A glass line on the order carries the margin as its markup.
 
 ## Lines at their own margin
 
-A line priced before quotes had a margin has no cost. Its price already holds the margin of its
-calculator. Two examples are a line of a quote that a calculator wrote, and a line of a quote saved
-before quotes had a margin. The margin of the quote does not change that price. The page marks the
-line and totals it apart. Edit the line to price it at cost.
+A line with no cost keeps its price, which already holds the margin of its calculator. Two examples
+are a line of a quote that a calculator wrote, and a line of a quote whose row stores no costs. The
+margin of the quote does not change that price. The page marks the line and totals it apart. Edit the
+line to price it at cost.
 
 A quote printed from the glass calculator stores the cost of each piece on the recommended price.
 On the quote page, those pieces follow the margin. A piece with a manual price keeps that price.
