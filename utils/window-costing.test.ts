@@ -152,10 +152,10 @@ test('marine window service lowers selected margins and the glass loading', () =
   near(costWindow(createWindowInput('T5573', { mws: true, glazingId: 'ap8_clear' }), rates).glazing[0].rate, 145.02 * 1.15, 'glass loading');
 });
 
-test('without margins a window is priced at cost: packing and uplift stay, the margin goes', () => {
+test('without margins a window is priced at cost: packing stays, the margin and the uplift go', () => {
   const atCost = costWindow(createWindowInput('T5573', { heightMm: 1000, lengthMm: 1200, qtyToSize: 1, qtyShaped: 0, develop: false, glazingId: 'ap5_clear', finish: 'etch', trims: 'none' }), withoutMargins(rates));
   near(atCost.margin, 0, 'margin');
-  near(atCost.price, (atCost.subtotal + atCost.packing) * (1 + atCost.upliftRate), 'price at cost');
+  near(atCost.price, atCost.subtotal + atCost.packing, 'price at cost');
   near(costWindow(createWindowInput('T8610', { mws: true }), withoutMargins(rates)).marginRate, 0, 'the Marine Window Service margin goes too');
 });
 
