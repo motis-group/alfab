@@ -32,8 +32,8 @@ npm run build
 
 ## Deployment
 
-Use the `Makefile` targets (`init`, `deploy`, `down`) for server-side deploy scripts,
-or the GitHub Actions workflows in `.github/workflows`.
+The workflow `.github/workflows/deploy-ec2.yml` deploys the app to production on
+each push to `main`.
 
 For AWS RDS -> VPS migration and VPS cutover steps, see:
 
