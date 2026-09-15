@@ -196,9 +196,11 @@ maybe_request_tls() {
   log "Requesting TLS certificate via certbot."
   export DEBIAN_FRONTEND=noninteractive
   apt-get install -y certbot python3-certbot-nginx
+  # Certbot writes to /etc/letsencrypt/live/<cert-name>, and scripts/ec2-deploy.sh reads from there.
+  # ALT_DEPLOY_DOMAIN does not resolve to this host. If you add it, certbot issues no certificate.
   certbot --nginx --non-interactive --agree-tos \
     --email "${TLS_EMAIL}" \
-    -d "${ALT_DEPLOY_DOMAIN}" \
+    --cert-name "${DEPLOY_DOMAIN}" \
     -d "${DEPLOY_DOMAIN}" \
     --redirect
   systemctl restart nginx
@@ -208,12 +210,12 @@ print_summary() {
   cat <<EOF
 
 Bootstrap complete.
-- App URL: http://${ALT_DEPLOY_DOMAIN} (HTTPS when certbot succeeds)
+- App URL: http://${DEPLOY_DOMAIN} (HTTPS when certbot succeeds)
 - App path: ${APP_DIR}
 - Env file: /etc/alfab.env
 
 Next:
-1) Point DNS A records for ${ALT_DEPLOY_DOMAIN} and ${DEPLOY_DOMAIN} to this VPS IP.
+1) Point the DNS A record for ${DEPLOY_DOMAIN} to this VPS IP.
 2) If REQUEST_TLS=0, run certbot after DNS propagates.
 EOF
 }
