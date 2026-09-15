@@ -240,7 +240,6 @@ export default function DashboardPage() {
           <Table>
             <TableRow>
               <TableColumn>QUOTE</TableColumn>
-              <TableColumn style={{ width: '10ch' }}>PRODUCT</TableColumn>
               <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
               <TableColumn style={{ width: '13ch' }}>DATE</TableColumn>
               <TableColumn style={{ width: '13ch' }}>TOTAL</TableColumn>
@@ -252,7 +251,6 @@ export default function DashboardPage() {
               .map((quote) => (
                 <TableRow key={quote.id}>
                   <TableColumn>{quote.name || 'Untitled'}</TableColumn>
-                  <TableColumn>{quote.kindLabel}</TableColumn>
                   <TableColumn>{quote.customer || 'Walk-in'}</TableColumn>
                   <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
                   <TableColumn>{formatCurrency(quote.total)}</TableColumn>
