@@ -1,17 +1,17 @@
 # CAD File Import (Calculator)
 
-The ad hoc pricing calculator (`/glass/quote`) and the ad hoc line editor on the purchase order page (`/glass/new`) accept a customer's 2D CAD drawing and fill in the glass geometry automatically: width, height, shape class, radius corners, hole count, and the measured area and edge length used for pricing. Glass type, thickness, ceramic banding and scanning are never changed by an import.
+The glass calculator at `/glass/quote` accepts a customer's 2D CAD drawing and fills in the glass geometry: width, height, shape class, radius corners, hole count, and the measured area and edge length used for pricing. An import never changes the glass type, thickness, ceramic banding or scanning. An ad hoc line on the purchase order page (`/glass/new`) opens this calculator to be edited, so an order line gets its geometry there.
 
 ## Supported files
 
 | Format | How it is read | Notes |
 | --- | --- | --- |
-| DXF (ASCII, any release from R12 up) | In the browser | Preferred exchange format. AutoCAD: `SAVEAS` → DXF. |
+| DXF (ASCII, any release from R12 up) | In the browser | Preferred exchange format. |
 | DXF (binary) | In the browser | Detected by the `AutoCAD Binary DXF` header. |
 | DWG | Converted to DXF on the server, then read in the browser | Needs LibreDWG on the server, see below. |
 | SVG | In the browser | Physical units come from `width`/`height` + `viewBox`. |
 
-Files that cannot be measured (PDF, images, STEP/IGES/STL, AI/EPS, zip) are rejected with a message telling the user what to ask the customer for. A customer's order sent as a PDF or a Word document is read by a different panel; see [order-import.md](order-import.md).
+One drop zone takes drawings and customer orders, and routes each file by its extension. A DXF, DWG or SVG goes to the CAD import. A PDF or a Word document goes to the order import in [order-import.md](order-import.md). The zone rejects any other extension and lists the accepted types. When the content of a file does not match its extension, such as a PDF saved as `.dxf`, the message says what to ask the customer for.
 
 Entities read from DXF: `LINE`, `ARC`, `CIRCLE`, `ELLIPSE`, `LWPOLYLINE` (with bulges), `POLYLINE`/`VERTEX`, `SPLINE` (NURBS or fit points), `INSERT` (blocks, including scale/rotation/arrays) and `HATCH` boundaries as a fallback. Text, dimensions, leaders, solids, 3D entities, frozen/off layers, invisible entities and paper space are ignored.
 
@@ -19,7 +19,7 @@ Elements read from SVG: `rect` (including `rx`/`ry`), `circle`, `ellipse`, `line
 
 ## How the outline is chosen
 
-1. All geometry is scaled to millimetres. DXF uses `$INSUNITS`; if a file has no units (common for R12 exports) millimetres are assumed unless `$MEASUREMENT` says the drawing is imperial, and the panel shows a warning with a units override.
+1. All geometry is scaled to millimetres. DXF uses `$INSUNITS`. If a file has no units, millimetres are assumed unless `$MEASUREMENT` says the drawing is imperial, and the panel shows a warning with a units override.
 2. Open lines and arcs whose ends meet (within 0.05 mm, or 0.02% of the drawing size) are chained into closed loops. Open chains such as dimension lines and centre lines are ignored.
 3. Closed loops are ranked by area. Loops on layers named like `BORDER`, `TITLE`, `FRAME`, `DIM…` or `TEXT` and rectangles that enclose another sizeable loop are treated as drawing borders and skipped; loops on layers named like `GLASS`, `GLAZING`, `PANEL` or `OUTLINE` are preferred. The user can pick another loop from the **Glass outline** list.
 4. Closed loops inside the outline are holes. Circles are counted (concentric circles such as a hole with a countersink count once); non-round cutouts are reported but not priced.
@@ -55,8 +55,8 @@ not a CAD file was uploaded:
 Glass type tints the fill via `glassTypeToRGB`, ceramic banding is drawn as an inner band, and the
 width and height carry dimension lines. The drawing is laid out in a fixed SVG viewBox with
 millimetres mapped into it, so line weights and labels stay the same size for a 200 mm pane or a 4 m
-one. That viewBox is kept small on purpose: the sidebar is around 400 px wide, and a larger box would
-shrink the dimension labels below a readable size.
+one. That viewBox is kept small on purpose, because in the narrow sidebar a larger box would shrink
+the dimension labels below a readable size.
 
 ## Pricing with a CAD outline
 
@@ -66,22 +66,20 @@ If width or height are edited by hand after an import, pricing keeps using the m
 
 ## DWG conversion on the server
 
-DWG is a closed binary format, so `/api/cad/convert` shells out to LibreDWG's `dwg2dxf`.
+`/api/cad/convert` converts a DWG with LibreDWG's `dwg2dxf`.
 
-Ubuntu does not ship LibreDWG in its archive (the `libredwg-tools` package is Debian-only), so it is
-built from the pinned upstream release by `scripts/install-libredwg.sh`. The script is idempotent: it
-exits early when a working `dwg2dxf` is already present, and takes `--force` to rebuild.
+`scripts/install-libredwg.sh` builds `dwg2dxf` from the pinned upstream release. The script is
+idempotent: it exits early when a working `dwg2dxf` is already present, and takes `--force` to
+rebuild.
 
 Run it on production with the **Install LibreDWG on Production** GitHub Action
 (`.github/workflows/install-libredwg.yml`, run manually from the Actions tab). It uses the same
 deploy secrets as the release workflow. Run it once, and again when the pinned version changes.
 
-The workflow builds on the CI runner, not on the droplet, and copies the finished binary across. The
-first attempt built on the droplet and the SSH session dropped after four minutes on that 1 vCPU /
-1 GB box. Because `--disable-shared` links libredwg into `dwg2dxf`, the binary needs only libc and
-libm, so it moves between hosts of the same distribution: about 18 MB stripped. The workflow compares
-the runner's and the droplet's glibc first and stops with a clear message if the droplet's is older,
-in which case build on the droplet by hand instead.
+The workflow builds on the CI runner, not on the 1 vCPU, 1 GB droplet, and copies the finished binary
+across. `--disable-shared` links libredwg into `dwg2dxf`, so one binary can move to the droplet. The
+workflow first compares the glibc of the runner and the droplet. If the droplet's glibc is older, the
+workflow stops with a clear message. In that case, build on the droplet by hand.
 
 It is deliberately kept out of the deploy path: it only needs running once, and a failure must never
 be able to break a release.
@@ -93,8 +91,7 @@ sudo bash scripts/install-libredwg.sh
 ```
 
 `scripts/bootstrap-vps-1gb.sh` calls the same script, so a freshly provisioned server has it already.
-Bootstrap runs on the console rather than over SSH, and configures swap before it gets there, so the
-on-host build is fine in that context.
+Bootstrap configures swap before it builds.
 
 `BUILD_ONLY=1 PREFIX=<dir>` builds and stages the binary without touching the system, which is how
 the workflow produces the artifact it ships.
@@ -105,7 +102,7 @@ If the binary lives somewhere other than `PATH`, point the app at it:
 CAD_DWG2DXF_PATH=/usr/local/bin/dwg2dxf
 ```
 
-The route only accepts real DWG files (header `AC10xx`) up to 40 MB from a signed-in session, converts them in a temporary directory with a 90 s timeout, and returns the DXF text. When the converter is missing the panel tells the user to export a DXF instead. `GET /api/cad/convert` reports whether the converter is available.
+The route only accepts real DWG files (header `AC1` and three digits, or `AC1.` and a digit) up to 40 MB from a signed-in session, converts them in a temporary directory with a 90 s timeout, and returns the DXF text. When the converter is missing the panel tells the user to export a DXF instead. `GET /api/cad/convert` reports whether the converter is available.
 
 `dwg2dxf` exits 0 even when it only partly understood a drawing, writing a DXF with an empty
 `ENTITIES` section. `convertDwgBufferToDxf` checks for that and reports it as a conversion failure,
@@ -119,11 +116,9 @@ npm test
 
 runs the CAD parser and analysis tests in `utils/cad/cad.test.ts` against the fixtures in
 `utils/cad/__fixtures__` (DXF files generated with ezdxf for R12/R2000/R2010, a binary DXF, and
-hand-written SVGs), plus `utils/cad/dwg-server.test.ts`, which drives the DWG conversion helper
-through stub converters covering the missing-binary, non-zero-exit, empty-output and
-converted-but-empty cases.
+hand-written SVGs), plus `utils/cad/dwg-server.test.ts`. That file checks how a DWG header is
+recognized. It also runs the conversion helper for a missing converter, a good conversion, a
+conversion with no geometry and a converter that fails.
 
-There is no DWG fixture in the repository: LibreDWG's DWG *writer* is experimental and produces files
-its own reader rejects, so a synthetic DWG would test nothing. The conversion helper is covered with
-stubs instead, and the real `dwg2dxf` path is exercised by uploading a DWG produced by an actual CAD
-package.
+There is no DWG fixture in the repository, so only an upload of a DWG from a CAD package exercises
+the real `dwg2dxf` path.
