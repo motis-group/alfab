@@ -511,22 +511,29 @@ export default function WindowCostingPage() {
                   <Text>SUBTOTAL</Text>
                   <Text>{formatCurrency(result.subtotal)}</Text>
                 </RowSpaceBetween>
-                <RowSpaceBetween>
-                  <Text>{quoteLine ? 'MARGIN' : `MARGIN (${formatPercent(result.marginRate)} OF COST)`}</Text>
-                  <Text>{quoteLine ? 'SET ON THE QUOTE' : formatCurrency(result.margin)}</Text>
-                </RowSpaceBetween>
+                {/* The card shows a margin or an uplift only when its rate is not zero. A quote line has no margin and no uplift. */}
+                {result.marginRate ? (
+                  <RowSpaceBetween>
+                    <Text>{`MARGIN (${formatPercent(result.marginRate)} OF COST)`}</Text>
+                    <Text>{formatCurrency(result.margin)}</Text>
+                  </RowSpaceBetween>
+                ) : null}
                 <RowSpaceBetween>
                   <Text>{result.reinforcement ? `${result.reinforcement.label} x ${result.reinforcement.count}` : 'PACKING'}</Text>
                   <Text>{formatCurrency(result.packing)}</Text>
                 </RowSpaceBetween>
-                <RowSpaceBetween>
-                  <Text>{result.unitLabel === 'Per Pair' ? 'PER PAIR (BEFORE UPLIFT)' : 'PER EACH (BEFORE UPLIFT)'}</Text>
-                  <Text>{formatCurrency(result.beforeUplift)}</Text>
-                </RowSpaceBetween>
-                <RowSpaceBetween>
-                  <Text>UPLIFT ({formatPercent(result.upliftRate)} OF THE ABOVE)</Text>
-                  <Text>{formatCurrency(result.uplift)}</Text>
-                </RowSpaceBetween>
+                {result.upliftRate ? (
+                  <>
+                    <RowSpaceBetween>
+                      <Text>{result.unitLabel === 'Per Pair' ? 'PER PAIR (BEFORE UPLIFT)' : 'PER EACH (BEFORE UPLIFT)'}</Text>
+                      <Text>{formatCurrency(result.beforeUplift)}</Text>
+                    </RowSpaceBetween>
+                    <RowSpaceBetween>
+                      <Text>UPLIFT ({formatPercent(result.upliftRate)} OF THE ABOVE)</Text>
+                      <Text>{formatCurrency(result.uplift)}</Text>
+                    </RowSpaceBetween>
+                  </>
+                ) : null}
                 <RowSpaceBetween>
                   <Text>
                     {quoteLine ? 'COST' : 'PRICE'} {result.unitLabel.toUpperCase()}

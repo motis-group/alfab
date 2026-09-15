@@ -108,8 +108,9 @@ mullions. The AFB035 derives its holes from the handles. None of these extras is
 Marine Window Service lowers the margin to 22.5% for T5836, T8610 and sash & frame only, and
 the glass loading to 15% for every type.
 
-The calculator prices a line of a quote for a job with every margin at zero, because that quote
-sets one margin for all its lines. See [quotes.md](quotes.md).
+The calculator prices a line of a quote for a job with every margin and uplift at zero. That quote
+sets one margin for all its lines. The price card and the printed costing sheet show a margin or an
+uplift only when its rate is not zero. See [quotes.md](quotes.md).
 
 ## Working with a costing
 

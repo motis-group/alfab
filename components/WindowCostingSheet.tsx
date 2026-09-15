@@ -115,18 +115,22 @@ export default function WindowCostingSheet({ audience, reference, quoteName, cus
                   <td colSpan={3}>Subtotal</td>
                   <td className="window-costing-sheet__amount">{formatCurrency(result.subtotal)}</td>
                 </tr>
-                <tr>
-                  <td colSpan={3}>Margin ({Math.round(result.marginRate * 1000) / 10}%)</td>
-                  <td className="window-costing-sheet__amount">{formatCurrency(result.margin)}</td>
-                </tr>
+                {result.marginRate ? (
+                  <tr>
+                    <td colSpan={3}>Margin ({Math.round(result.marginRate * 1000) / 10}%)</td>
+                    <td className="window-costing-sheet__amount">{formatCurrency(result.margin)}</td>
+                  </tr>
+                ) : null}
                 <tr>
                   <td colSpan={3}>{result.reinforcement ? `${result.reinforcement.label} x ${result.reinforcement.count}` : 'Packing'}</td>
                   <td className="window-costing-sheet__amount">{formatCurrency(result.packing)}</td>
                 </tr>
-                <tr>
-                  <td colSpan={3}>Uplift ({Math.round(result.upliftRate * 1000) / 10}%)</td>
-                  <td className="window-costing-sheet__amount">{formatCurrency(result.uplift)}</td>
-                </tr>
+                {result.upliftRate ? (
+                  <tr>
+                    <td colSpan={3}>Uplift ({Math.round(result.upliftRate * 1000) / 10}%)</td>
+                    <td className="window-costing-sheet__amount">{formatCurrency(result.uplift)}</td>
+                  </tr>
+                ) : null}
                 <tr className="window-costing-sheet__grand">
                   <td colSpan={3}>Price {result.unitLabel.toLowerCase()}</td>
                   <td className="window-costing-sheet__amount">{result.price == null ? 'not priced' : formatCurrency(result.price)}</td>
