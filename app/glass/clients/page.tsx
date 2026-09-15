@@ -2,7 +2,7 @@
 
 import '@root/global.scss';
 
-import { useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GlassSpecification } from '@utils/calculations';
 
@@ -20,6 +20,7 @@ import Text from '@components/Text';
 import { Customer, CustomerProduct, UserRole, formatCurrency, parseCustomerProductNotes, serializeCustomerProductNotes } from '@utils/order-management';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser } from '@utils/session-client';
+import { CustomerImportPlan, XeroContactsReading, planCustomerImport, readXeroContacts } from '@utils/xero-contacts';
 
 const TABLE_CUSTOMERS = 'customers';
 const TABLE_CUSTOMER_PRODUCTS = 'customer_products';
@@ -96,6 +97,13 @@ export default function CustomersPage() {
   const [customerForm, setCustomerForm] = useState<CustomerFormState>(createDefaultCustomerForm());
   const [productForm, setProductForm] = useState<CustomerProductFormState>(createDefaultProductForm());
 
+  // The Xero export is read and shown before anything is written, because it touches every customer.
+  const [importFileName, setImportFileName] = useState('');
+  const [importReading, setImportReading] = useState<XeroContactsReading | null>(null);
+  const [importPlan, setImportPlan] = useState<CustomerImportPlan | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+
   const canEdit = role === 'admin' || role === 'superadmin';
 
   const selectedCustomerProducts = useMemo(() => {
@@ -142,6 +150,92 @@ export default function CustomersPage() {
       await loadData();
     })();
   }, []);
+
+  function clearImport() {
+    setImportFileName('');
+    setImportReading(null);
+    setImportPlan(null);
+  }
+
+  async function readImportFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    // Choosing the same file twice must read it twice, so the input is emptied after the read.
+    event.target.value = '';
+
+    if (!file) {
+      return;
+    }
+
+    setError(null);
+    setImportResult(null);
+
+    try {
+      const reading = readXeroContacts(await file.text());
+
+      if (!reading.contacts.length) {
+        clearImport();
+        setError('That file holds no contacts. In Xero open Contacts, then Export.');
+        return;
+      }
+
+      setImportFileName(file.name);
+      setImportReading(reading);
+      setImportPlan(planCustomerImport(reading.contacts, customers));
+    } catch (readError: any) {
+      clearImport();
+      setError(readError?.message || 'Unable to read that file.');
+    }
+  }
+
+  async function runImport() {
+    if (!canEdit || !importPlan) {
+      return;
+    }
+
+    setError(null);
+    setIsImporting(true);
+
+    const { create, update } = importPlan;
+
+    try {
+      const db = createClient();
+      const now = new Date().toISOString();
+
+      // One statement for 663 customers would carry thousands of parameters. A hundred rows at a
+      // time keeps each statement small. Every row carries the same columns, because the route
+      // takes the column list from the first row of the batch.
+      const BATCH_ROWS = 100;
+      for (let at = 0; at < create.length; at += BATCH_ROWS) {
+        const rows = create.slice(at, at + BATCH_ROWS).map((contact) => ({
+          name: contact.name,
+          contact_name: contact.contact_name,
+          contact_email: contact.contact_email,
+          phone: contact.phone,
+          delivery_address: contact.delivery_address,
+          is_active: true,
+          created_at: now,
+        }));
+
+        const { error: insertError } = await db.from(TABLE_CUSTOMERS).insert(rows);
+        if (insertError) throw insertError;
+      }
+
+      // An update names one row, so these go one at a time. A first import has none of them, and a
+      // later one has only the customers Xero has something new to say about.
+      for (const change of update) {
+        const { error: updateError } = await db.from(TABLE_CUSTOMERS).update(change.changes).eq('id', change.id);
+        if (updateError) throw updateError;
+      }
+
+      setImportResult(`${create.length} customers added and ${update.length} updated from ${importFileName || 'the export'}.`);
+      clearImport();
+      await loadData();
+    } catch (importError: any) {
+      setError(importError?.message || 'The import stopped part way. Read the file again to see what is left to do.');
+    } finally {
+      setIsImporting(false);
+    }
+  }
 
   function resetCustomerForm() {
     setCustomerForm(createDefaultCustomerForm());
@@ -336,6 +430,65 @@ export default function CustomersPage() {
               <ActionButton onClick={saveCustomer}>{isSavingCustomer ? 'Saving...' : customerForm.id ? 'Update Customer' : 'Create Customer'}</ActionButton>
               <ActionButton onClick={resetCustomerForm}>Reset</ActionButton>
             </RowSpaceBetween>
+          </CardDouble>
+
+          <CardDouble title="IMPORT FROM XERO">
+            <Text>Xero holds the customer list. In Xero open Contacts, press Export, then choose the file here.</Text>
+            <br />
+            <input type="file" accept=".csv,text/csv" onChange={readImportFile} disabled={!canEdit || isImporting} aria-label="Xero contacts export" />
+
+            {importResult ? (
+              <>
+                <br />
+                <Text>
+                  <span className="status-pill status-pill-success">{importResult}</span>
+                </Text>
+              </>
+            ) : null}
+
+            {importPlan && importReading ? (
+              <>
+                <br />
+                <Text>
+                  {importFileName} holds {importReading.contacts.length} contacts.
+                </Text>
+                <br />
+                <Text>
+                  ADD {importPlan.create.length} &middot; UPDATE {importPlan.update.length} &middot; UNCHANGED {importPlan.unchanged}
+                </Text>
+
+                {/* Xero wins where both hold a value. The operator sees how much of that there is before pressing the button, not after. */}
+                {importPlan.update.some((change) => change.replaced.length) ? (
+                  <Text>
+                    <span className="status-pill status-pill-warning">{importPlan.update.filter((change) => change.replaced.length).length} customers have a value Xero disagrees with. Xero&apos;s value wins.</span>
+                  </Text>
+                ) : null}
+
+                {importPlan.ambiguous.length ? (
+                  <Text>
+                    <span className="status-pill status-pill-warning">{importPlan.ambiguous.length} contacts match two customers of the same name, and are left alone.</span>
+                  </Text>
+                ) : null}
+
+                {importReading.skipped.length ? (
+                  <Text>
+                    <span className="status-pill status-pill-warning">{importReading.skipped.length} rows have no contact name and are skipped.</span>
+                  </Text>
+                ) : null}
+
+                {importReading.postalFallbackLooksLikeBox ? (
+                  <Text>
+                    <span className="status-pill status-pill-warning">{importReading.postalFallbackLooksLikeBox} delivery addresses read as a post office box. No truck goes to one, so check them before dispatch.</span>
+                  </Text>
+                ) : null}
+
+                <br />
+                <RowSpaceBetween>
+                  <ActionButton onClick={runImport}>{isImporting ? 'Importing...' : `Import ${importPlan.create.length + importPlan.update.length} Customers`}</ActionButton>
+                  <ActionButton onClick={clearImport}>Cancel</ActionButton>
+                </RowSpaceBetween>
+              </>
+            ) : null}
           </CardDouble>
 
           <CardDouble title="CUSTOMER PRODUCTS">
