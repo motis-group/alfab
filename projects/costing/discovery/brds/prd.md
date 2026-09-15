@@ -14,7 +14,7 @@ and costs each panel.
 - `/glass/quote` — ad hoc pricing calculator, including CAD file import and the glass visualizer.
 - `/glass/clients` — customers and their saved products.
 
-Costing rates live under `/settings`; see `../../development/specs/costing.md` for the pricing model and
+Costing rates live under `/settings`. See `../../development/specs/glass-quoting.md` for the glass pricing model and
 `../../development/specs/cad-import.md` for the CAD import feature.
 
 ## History

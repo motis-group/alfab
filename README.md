@@ -55,7 +55,7 @@ For the awning costing model (legacy Excel sheet port) and its rates, see:
 
 - `projects/costing/development/specs/awning-costing.md`
 
-For how old a price is and where the three price lists disagree, see:
+For how old a price is and how the price lists share one price, see:
 
 - `projects/costing/development/specs/pricing-health.md`
 
