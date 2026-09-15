@@ -456,7 +456,11 @@ export default function OrderDashboardPage() {
                 <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuotes(selectedRecords)}>Convert {selectedCount} To One Order</ActionButton>{' '}
               </>
             ) : null}
-            {selectedCount ? <ActionButton onClick={() => setSelectedQuotes(new Set())}>Clear</ActionButton> : null}{' '}
+            {selectedCount ? (
+              <>
+                <ActionButton onClick={() => setSelectedQuotes(new Set())}>Clear</ActionButton>{' '}
+              </>
+            ) : null}
             <ActionButton onClick={role === 'readonly' ? undefined : () => router.push('/glass/quotes/new')}>New Quote</ActionButton>
           </Text>
         </RowSpaceBetween>
