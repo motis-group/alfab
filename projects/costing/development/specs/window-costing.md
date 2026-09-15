@@ -15,8 +15,8 @@ only; the Queensland branch of the sheet is not implemented (`state` is fixed to
 | Printed sheet | `components/WindowCostingSheet.tsx`, print styles in `global.scss` |
 | Rate severity | `utils/window-rate-health.ts` |
 | Glossary | `utils/window-costing-glossary.ts`, shown by `components/WindowCostingGlossary.tsx` |
-| Saved costings | `utils/window-quote-store.ts`, table `quotes`, rows marked `kind: window` |
-| Printed quotes | `utils/customer-quote-store.ts`, table `quotes`, rows marked `kind: window-quote` |
+| Saved costings, read only | `utils/window-quote-store.ts`, table `quotes`, rows marked `kind: window` |
+| Printed quotes, read only | `utils/customer-quote-store.ts`, table `quotes`, rows marked `kind: window-quote` |
 | Golden checks | `utils/window-costing.test.ts` (`npm test`) |
 
 Every recipe taken from the sheet has a golden check: a window worked by hand from the sheet's own
@@ -113,43 +113,18 @@ sets one margin for all its lines. See [quotes.md](quotes.md).
 
 ## Working with a costing
 
+The page prices one window line that a quote or an order sends, as [quotes.md](quotes.md) describes.
+It keeps no quote of its own.
+
 - **Batch price.** The sidebar prices the same window at batches of 1, 2, 5 and 10. Setup and
   development minutes divide across the batch, so the price per window falls as the run grows.
-- **The calculator's list.** "Add Window To Quote", under the quote lines, adds the costed window
-  to a list on the page. It is the only add control on the page. The list is separate from a quote
-  for a job, which [quotes.md](quotes.md) describes. "Create Purchase Order" makes one order line for
-  each window in the list. See [jobs.md](jobs.md).
-- **Printing.** The Print menu holds two documents. They print the windows in the list, or the window
-  on screen when the list is empty. "Costing Sheet (internal)" shows every cost line, the rates used,
-  the labour minutes, margin, packing and uplift. It starts a new page for each window, because a
-  fabricator carries a sheet to the bench. Both documents render at the end of `<body>`, outside the
-  app, so printing takes the app out of the layout.
-- **Customer quote.** "Quote For Customer" on the Print menu prints `components/PrintedQuote.tsx`,
-  which the awning calculator also uses. The layout follows an invoice: issuer, customer, one line for
-  each window, and a totals block with GST. The type is Berkeley Mono, served from `public/fonts`. The
-  quote page at `/glass/quotes/<id>` shows the quote as the customer reads it.
-- **Quote reference.** "Quote For Customer" saves the quote, then prints it with a reference such as
-  `Q-3F2A9C1E`. The quote list at `/glass` and the quote page show the same reference, so a customer
-  can quote it back. An order converted from the quote carries the reference in each line
-  description. If the save fails, nothing prints.
-- **Reprints.** A reprint of unchanged content uses the saved quote again. Changed content is a new
-  offer and gets a new reference. The quote page saves its changes under the same reference.
-- **Drafts.** A browser Cmd+P prints the reference only when the screen matches the saved quote.
-  Otherwise the print shows "Draft, not issued" in place of the reference. While the page prices a
-  line of a quote for a job, Cmd+P prints the internal costing sheet, as [quotes.md](quotes.md)
-  describes.
-- **Limits.** The reference is the first eight hex digits of the row id, so two quotes can share
-  one. The chance stays under 1% until about 9,000 quotes. The footer promises a 30-day price hold
-  from the quote date. After it, an unanswered quote reads as expired, as
-  [feedback-loops.md](feedback-loops.md) describes.
-- **Copying.** The Copy menu holds the same split in text. "Prices For Customer" copies the prices.
-  "Cost Build-up (internal)" carries the build-up and is marked as not for a customer.
-- **Customer.** Picked from the customer list, so the purchase order does not have to match one by
-  name. A walk-in is still typed by hand and matched on the way through.
-- **Saved costings.** "Save Costing" writes the window, the customer and the price as a row in
-  `quotes` marked `kind: window`. The quote list at `/glass` shows the row as a quote with one line.
-  Open on the row shows it on the quote page, and saving it there rewrites the row as a quote for a
-  job.
+- **Printing.** Cmd+P prints the internal costing sheet of the line. The sheet shows every cost line,
+  the rates used, the labour minutes, margin, packing and uplift. It renders at the end of `<body>`,
+  outside the app, so printing takes the app out of the layout. The quote page prints the customer's
+  copy.
+- **Saved costings.** The quotes table can hold rows marked `kind: window` and `kind: window-quote`,
+  and no page writes them. The quote list at `/glass` shows such a row as a quote. Open on the row
+  shows it on the quote page, and saving it there rewrites the row as a quote for a job.
 - **Not priced.** Each line with no rate links to its own field in the rates editor.
 
 ## Rates

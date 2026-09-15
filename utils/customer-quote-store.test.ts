@@ -1,15 +1,13 @@
-// Checks a printed quote is recorded as it printed. Run with `npm test`.
+// Checks a printed quote reads back as it printed. Run with `npm test`.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { CustomerQuoteContent, CustomerQuoteLine, QuoteLine, quoteFingerprint, quoteReference, quoteTotals, saveCustomerQuote, toCustomerQuote } from './customer-quote-store';
+import { CustomerQuoteLine, QuoteLine, quoteReference, quoteTotals, toCustomerQuote } from './customer-quote-store';
 import { fromCustomerQuote, isMergeRefusal, mergeQuotesForOrder } from './quote-register';
 import { WindowCostingInput } from './window-costing';
 
 const input = { productId: '500-5573' } as unknown as WindowCostingInput;
 const line = (unitPrice: number | null, quantity = 1, description = 'Window 1'): CustomerQuoteLine => ({ description, spec: 'Sliding 1800 x 1200', quantity, unitPrice, input });
-
-const content = (lines: CustomerQuoteLine[]): CustomerQuoteContent => ({ kind: 'window-quote', name: 'Smith residence', customer: 'Smith Constructions', customerId: 'c-1', date: '2026-09-10', notes: '', lines });
 
 test('an unpriced line carries no amount and stays out of the total, which adds GST once', () => {
   const totals = quoteTotals([line(1240, 4), line(null), line(1010, 2)]);
@@ -23,18 +21,6 @@ test('an unpriced line carries no amount and stays out of the total, which adds 
 
 test('the reference is the record id, shortened to something a customer can read out', () => {
   assert.equal(quoteReference('3f2a9c1e-7b4d-4c1a-9e2f-0a1b2c3d4e5f'), 'Q-3F2A9C1E');
-});
-
-test('a reprint of the same content is the same offer; a changed price is a different one', () => {
-  const printed = quoteFingerprint(content([line(1240, 4)]));
-
-  assert.equal(quoteFingerprint(content([line(1240, 4)])), printed);
-  assert.notEqual(quoteFingerprint(content([line(1250, 4)])), printed);
-  assert.notEqual(quoteFingerprint({ ...content([line(1240, 4)]), date: '2026-09-11' }), printed, 'the price hold runs from the date');
-});
-
-test('a quote with no date is refused before anything is written, because the price hold runs from it', async () => {
-  await assert.rejects(saveCustomerQuote({ ...content([line(1240)]), date: '', issuedBy: 'nick', ratesUpdatedAt: null }), /quote date/);
 });
 
 test('only printed quotes read back as customer quotes, with the totals that were printed', () => {

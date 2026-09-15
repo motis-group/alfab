@@ -1,6 +1,6 @@
 import { createClient } from '@utils/db-client';
 import { StoredQuoteStatus, readQuoteStatus } from '@utils/quote-status';
-import { CostLine, WindowCostingInput, WindowCostResult, readFinish } from '@utils/window-costing';
+import { CostLine, WindowCostingInput, readFinish } from '@utils/window-costing';
 
 const TABLE = 'quotes';
 
@@ -83,31 +83,4 @@ export async function listWindowCostings(): Promise<SavedWindowCosting[]> {
     throw new Error(error.message);
   }
   return ((data as QuoteRow[]) || []).map(toSavedCosting).filter(Boolean) as SavedWindowCosting[];
-}
-
-export async function saveWindowCosting(costing: { name: string; customer: string; input: WindowCostingInput; result: WindowCostResult; ratesUpdatedAt: string | null }): Promise<void> {
-  const db = createClient();
-  const { error } = await db.from(TABLE).insert({
-    name: costing.name.trim() || 'Window costing',
-    client: costing.customer.trim(),
-    specification: {
-      kind: 'window',
-      input: costing.input,
-      ratesUpdatedAt: costing.ratesUpdatedAt,
-    },
-    cost: {
-      price: costing.result.price,
-      unitLabel: costing.result.unitLabel,
-      subtotal: costing.result.subtotal,
-      margin: costing.result.margin,
-      packing: costing.result.packing,
-      uplift: costing.result.uplift,
-      lines: costing.result.lines,
-      glazing: costing.result.glazing,
-    },
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
 }

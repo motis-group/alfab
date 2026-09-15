@@ -8,20 +8,12 @@ export interface AppSectionItem {
 
 /**
  * The work sections. Quotes and purchase orders are the same record at different statuses, so both
- * live under Orders. The three calculators price different products onto that one quote, so they
- * are a group rather than three peers of Orders.
+ * live under Orders. A calculator prices one line of a quote or an order, and it opens from that
+ * line. The calculators therefore have no section.
  */
 export const APP_WORK_SECTION_ITEMS: AppSectionItem[] = [
   { href: '/glass/dashboard', label: 'Dashboard' },
   { href: '/glass', label: 'Orders' },
-  {
-    label: 'Calculators',
-    items: [
-      { href: '/glass/quote', label: 'Glass' },
-      { href: '/glass/windows', label: 'Windows' },
-      { href: '/glass/awnings', label: 'Awnings' },
-    ],
-  },
   { href: '/glass/clients', label: 'Customers' },
 ];
 

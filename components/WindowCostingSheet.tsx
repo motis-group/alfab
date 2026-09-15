@@ -1,9 +1,7 @@
 'use client';
 
 import PrintSheet from '@components/PrintSheet';
-import PrintedQuote from '@components/PrintedQuote';
-import { CustomerQuoteLine } from '@utils/customer-quote-store';
-import { formatCurrency } from '@utils/order-management';
+import { formatCurrency, todayISODate } from '@utils/order-management';
 import { productFullName } from '@utils/window-catalogue';
 import { CostLine, WindowCostResult, WindowCostingInput, describeWindow } from '@utils/window-costing';
 import { WindowRates } from '@utils/window-costing-rates';
@@ -17,29 +15,11 @@ export interface WindowCostingSheetWindow {
 }
 
 interface WindowCostingSheetProps {
-  /** Internal shows the cost build-up. Customer shows prices only and is safe to hand over. */
-  audience: 'internal' | 'customer';
-  /** The saved quote's reference, or null while what is on screen has not been saved. */
-  reference: string | null;
-  quoteName: string;
-  customerName: string;
-  quoteDate: string;
-  notes: string;
+  /** The heading of each page. Example: "Line 3 of Q-3F2A9C1E". */
+  title: string;
   ratesLabel: string;
   rates: WindowRates;
   windows: WindowCostingSheetWindow[];
-}
-
-/** The customer's lines. The page saves these and the sheet prints them, so the record matches the paper. */
-export function windowQuoteLines(windows: WindowCostingSheetWindow[], rates: WindowRates): CustomerQuoteLine[] {
-  return windows.map((window, index) => ({
-    description: window.name || `Window ${index + 1}`,
-    spec: describeWindow(window.input, rates, productFullName(window.input.productId)),
-    quantity: window.quantity,
-    unitPrice: window.result.price,
-    extras: Object.values(window.result.extras).map((extra) => ({ label: extra.label, total: extra.total })),
-    input: window.input,
-  }));
 }
 
 function formatQty(line: CostLine): string {
@@ -48,18 +28,14 @@ function formatQty(line: CostLine): string {
 }
 
 /**
- * Costing sheet for the printer. Hidden on screen; printing hides the app around it.
+ * The costing sheet for the printer. It is hidden on screen, and printing hides the app around it.
  *
- * The internal sheet repeats the heading on every window, because it prints one window per page for
- * the bench. The customer copy is the shared quote document, with each window as one of its lines.
+ * The sheet shows the cost build-up, so it is for Alfab only. It repeats the heading on every window,
+ * because it prints one window per page for the bench.
  */
-export default function WindowCostingSheet({ audience, reference, quoteName, customerName, quoteDate, notes, ratesLabel, rates, windows }: WindowCostingSheetProps) {
-  if (audience === 'customer') {
-    return <PrintedQuote reference={reference} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={notes} lines={windowQuoteLines(windows, rates)} />;
-  }
-
+export default function WindowCostingSheet({ title, ratesLabel, rates, windows }: WindowCostingSheetProps) {
   return (
-    <PrintSheet audience={audience}>
+    <PrintSheet audience="internal">
       {windows.map((window, index) => {
         const { result } = window;
         const lineTotal = result.price == null ? null : result.price * window.quantity;
@@ -67,15 +43,14 @@ export default function WindowCostingSheet({ audience, reference, quoteName, cus
         return (
           <article key={window.id} className="window-costing-sheet__window">
             <header className="window-costing-sheet__heading">
-              <h1 className="window-costing-sheet__title">{quoteName.trim() || 'Window costing'}</h1>
+              <h1 className="window-costing-sheet__title">{title}</h1>
               <span>
-                {quoteDate}
+                {todayISODate()}
                 {windows.length > 1 ? ` · window ${index + 1} of ${windows.length}` : ''}
               </span>
             </header>
 
             <div className="window-costing-sheet__meta">
-              <span>Customer: {customerName.trim() || 'Walk-in / phone'}</span>
               <span>Window: {window.name || `Window ${index + 1}`}</span>
               <span>Quantity: {window.quantity}</span>
               <span>Rates: {ratesLabel}</span>
@@ -163,7 +138,6 @@ export default function WindowCostingSheet({ audience, reference, quoteName, cus
               Labour: {result.minutes.total.toFixed(1)} minutes at {formatCurrency(rates.labourPerHour)} per hour.
             </p>
             {result.unpriced.length ? <p className="window-costing-sheet__note">Not priced, charged as nil: {result.unpriced.map((entry) => entry.label).join(', ')}.</p> : null}
-            {notes.trim() ? <p className="window-costing-sheet__note">Notes: {notes.trim()}</p> : null}
 
             <footer className="window-costing-sheet__footer">Comments:</footer>
           </article>

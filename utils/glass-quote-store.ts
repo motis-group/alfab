@@ -92,25 +92,3 @@ export async function listGlassQuotes(): Promise<SavedGlassQuote[]> {
   }
   return ((data as QuoteRow[]) || []).map(toSavedQuote).filter(Boolean) as SavedGlassQuote[];
 }
-
-export async function saveGlassQuote(quote: { name: string; customer: string; customerId: string | null; notes: string; items: SavedGlassItem[]; total: number; ratesUpdatedAt: string | null }): Promise<void> {
-  const db = createClient();
-  const { error } = await db.from(TABLE).insert({
-    name: quote.name.trim() || 'Glass quote',
-    client: quote.customer.trim(),
-    specification: {
-      kind: 'glass',
-      customerId: quote.customerId,
-      notes: quote.notes,
-      items: quote.items,
-      ratesUpdatedAt: quote.ratesUpdatedAt,
-    },
-    cost: {
-      total: quote.total,
-    },
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
-}

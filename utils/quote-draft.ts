@@ -9,6 +9,9 @@
  * row in the database, not this draft.
  */
 
+import type { PricingData } from '@components/PricingProvider';
+import { calculateCost, describeGlassSpecification } from '@utils/calculations';
+import type { ExtractedPiece } from '@utils/import/model';
 import { LineEditResult } from '@utils/line-editing';
 import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuoteLine, applyQuoteMargin } from '@utils/quote-store';
 import { createLineDraft } from '@utils/order-draft';
@@ -113,4 +116,26 @@ export function dropPendingLine(draft: QuoteDraft): QuoteDraft {
     return draft;
   }
   return { ...draft, lines: draft.lines.filter((line) => line.draft.localId !== draft.pendingLineId), pendingLineId: null };
+}
+
+/**
+ * Puts the pieces read off a customer's order on the draft, one cut-glass line for each piece.
+ *
+ * The glass rates price each piece at cost, as the glass calculator prices a quote line. The margin
+ * of the quote makes the price. calculateCost throws for a piece that it cannot price, and the draft
+ * then gets none of the lines.
+ */
+export function addGlassPieces(draft: QuoteDraft, pieces: ExtractedPiece[], pricingData: PricingData): QuoteDraft {
+  const lines = pieces.map((piece) =>
+    applyQuoteMargin(
+      {
+        draft: createLineDraft({ pricingSource: 'adhoc_calculator', adhocSpec: { ...piece.spec }, quantityOrdered: Math.max(1, piece.quantity), lineNote: (piece.name || '').trim() }),
+        unitCost: calculateCost(piece.spec, pricingData).total,
+        spec: describeGlassSpecification(piece.spec),
+        extras: [],
+      },
+      draft.marginPercent
+    )
+  );
+  return { ...draft, lines: [...draft.lines, ...lines] };
 }
