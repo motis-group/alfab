@@ -29,7 +29,7 @@ test('the three Super Grey prices are all found, and all agree', () => {
     superGrey.prices.map((price) => price.source),
     ['glass', 'window', 'awning']
   );
-  // One price, chosen in the glass list and derived by the other two. It was 198.12, 170 and 198.
+  // One price, chosen in the glass list and derived by the other two.
   for (const price of superGrey.prices) {
     assert.ok(Math.abs(price.effective - 198.12) < 0.01, `${price.source} is ${price.effective}`);
   }
@@ -52,7 +52,7 @@ test('glass with no loading is compared on the list price itself', () => {
   const clear6 = item('glass_clear_6');
   const windowPrice = clear6.prices.find((price) => price.source === 'window');
 
-  // Unloaded, so the list price is the shared price unchanged. It was 80 against the glass list's 92.47.
+  // Unloaded, so the list price is the shared price unchanged.
   assert.equal(windowPrice?.value, 92.47);
   assert.equal(windowPrice?.effective, 92.47);
   assert.equal(windowPrice?.note, undefined);
@@ -61,7 +61,6 @@ test('glass with no loading is compared on the list price itself', () => {
 test('one shop, one hourly rate', () => {
   const labour = item('labour_per_hour');
 
-  // The window costing charged $85 and the awning $75 for the same hour.
   assert.equal(labour.low, 85);
   assert.equal(labour.high, 85);
   assert.equal(labour.spread, 0);

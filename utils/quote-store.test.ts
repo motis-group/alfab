@@ -37,7 +37,7 @@ test('the reader discards a line that has no draft', () => {
 
 test('the reader keeps the margin a quote was saved at', () => {
   assert.equal(toSavedQuote(row({ kind: 'quote', marginPercent: 35, lines: [line({ localId: 'a' })] }))?.marginPercent, 35);
-  assert.equal(toSavedQuote(row({ kind: 'quote', lines: [line({ localId: 'a' })] }))?.marginPercent, DEFAULT_QUOTE_MARGIN_PERCENT, 'a quote saved before quotes had a margin');
+  assert.equal(toSavedQuote(row({ kind: 'quote', lines: [line({ localId: 'a' })] }))?.marginPercent, DEFAULT_QUOTE_MARGIN_PERCENT, 'a row with no margin reads at the default');
 });
 
 test('the paper shows the line note and the specification as stored', () => {

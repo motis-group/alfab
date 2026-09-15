@@ -51,13 +51,6 @@ export const AWNING_GLASS_FROM_LIST: Record<string, GlassListRef> = {
   supergrey_tgn: { type: 'Super Grey', mm: 6 },
 };
 
-/** Awning rates other than glass that another list chooses. */
-export const AWNING_DERIVED_LABELS: Record<string, string> = {
-  'glass.bandingSet': 'Ceramic banding',
-  'glass.flatPolishPerM': 'Flat polish',
-  'labour.perHour': 'Labour rate',
-};
-
 function priceFrom(basePrices: PricingData['basePrices'], ref: GlassListRef): number | null {
   const value = basePrices[ref.type]?.[ref.mm];
   return typeof value === 'number' && value > 0 ? value : null;
