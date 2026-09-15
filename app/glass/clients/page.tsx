@@ -10,6 +10,7 @@ import ActionButton from '@components/ActionButton';
 import Card from '@components/Card';
 import CardDouble from '@components/CardDouble';
 import AppFrame from '@components/page/AppFrame';
+import CustomerPicker from '@components/CustomerPicker';
 import Input from '@components/Input';
 import RowSpaceBetween from '@components/RowSpaceBetween';
 import Table from '@components/Table';
@@ -492,22 +493,16 @@ export default function CustomersPage() {
           </CardDouble>
 
           <CardDouble title="CUSTOMER PRODUCTS">
-            <Text>Selected customer:</Text>
-            <br />
-            <select
+            <CustomerPicker
+              label="SELECTED CUSTOMER"
+              customers={customers}
+              emptyLabel="Select customer..."
               value={selectedCustomerId}
-              onChange={(event) => {
-                setSelectedCustomerId(event.target.value);
+              onChange={(nextId) => {
+                setSelectedCustomerId(nextId);
                 resetProductForm();
               }}
-            >
-              <option value="">Select customer...</option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}
-                </option>
-              ))}
-            </select>
+            />
 
             <br />
             <Input label="PRODUCT NAME" name="product_name" value={productForm.name} onChange={(event) => setProductForm((prev) => ({ ...prev, name: event.target.value }))} disabled={!canEdit} />
