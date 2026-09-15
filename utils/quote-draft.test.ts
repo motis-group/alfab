@@ -115,10 +115,10 @@ test('the reader discards a damaged draft', () => {
   assert.equal(peekQuoteDraft(), null);
 });
 
-test('a draft written before quotes had a margin reads at the default margin', () => {
-  const old: Partial<QuoteDraft> = { ...emptyQuoteDraft(), lines: [line('a')] };
-  delete old.marginPercent;
-  (globalThis as { window: { sessionStorage: { setItem: (k: string, v: string) => void } } }).window.sessionStorage.setItem('alfabQuoteDraft', JSON.stringify(old));
+test('a draft with no margin reads at the default margin', () => {
+  const draft: Partial<QuoteDraft> = { ...emptyQuoteDraft(), lines: [line('a')] };
+  delete draft.marginPercent;
+  (globalThis as { window: { sessionStorage: { setItem: (k: string, v: string) => void } } }).window.sessionStorage.setItem('alfabQuoteDraft', JSON.stringify(draft));
 
   assert.equal(peekQuoteDraft()?.marginPercent, DEFAULT_QUOTE_MARGIN_PERCENT, 'a returning line is priced at a number, not NaN');
 });
