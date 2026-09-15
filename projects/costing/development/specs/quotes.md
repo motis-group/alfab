@@ -17,6 +17,9 @@ The operator adds a line and picks its kind. The calculator for that kind prices
 line comes back to the quote. Edit sends a line to its calculator again. The quote waits in session
 storage during the trip.
 
+The page lists the first 10 lines, and a button shows the rest. A line after the first 10 that comes
+back from its calculator opens the full list, so the operator sees its price.
+
 ## Margin
 
 The quote has one margin, in percent on cost. The margin is a markup: 20 percent prices a $100 cost
