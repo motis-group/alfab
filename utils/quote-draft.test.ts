@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 
 import { LineEditResult } from './line-editing';
-import { QuoteDraft, applyQuoteLineResult, clearQuoteDraft, dropPendingLine, emptyQuoteDraft, peekQuoteDraft, persistQuoteDraft, setQuoteMargin } from './quote-draft';
+import { QuoteDraft, applyQuoteLineResult, clearQuoteDraft, dropPendingLine, emptyQuoteDraft, peekQuoteDraft, persistQuoteDraft, reissueQuoteDraft, setQuoteMargin } from './quote-draft';
 import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuoteLine } from './quote-store';
 import { createLineDraft } from './order-draft';
+import { todayISODate } from './order-management';
 
 function installSessionStorage() {
   const store = new Map<string, string>();
@@ -121,4 +122,19 @@ test('a draft with no margin reads at the default margin', () => {
   (globalThis as { window: { sessionStorage: { setItem: (k: string, v: string) => void } } }).window.sessionStorage.setItem('alfabQuoteDraft', JSON.stringify(draft));
 
   assert.equal(peekQuoteDraft()?.marginPercent, DEFAULT_QUOTE_MARGIN_PERCENT, 'a returning line is priced at a number, not NaN');
+});
+
+test('a reissued quote copies the saved quote, with no number and a new date', () => {
+  const saved = { id: '3f2a9c1e-0000-4000-8000-000000000000', name: '670 Outlaw windows', customer: 'Bar Crusher', customerId: 'c1', date: '2025-03-02T00:00:00.000Z', notes: 'Deposit 50%', marginPercent: 35, lines: [{ ...line('a', { quantityOrdered: 2, unitPriceAtOrder: 135 }), unitCost: 100 }] };
+
+  const copy = reissueQuoteDraft(saved);
+
+  assert.equal(copy.id, null, 'Save Quote gives the copy its own number');
+  assert.equal(copy.date, todayISODate(), 'the 30-day price hold starts again');
+  assert.equal(copy.customerId, 'c1');
+  assert.equal(copy.notes, 'Deposit 50%');
+  assert.equal(copy.marginPercent, 35, 'a line at cost keeps its price only at the margin it was saved at');
+  assert.deepEqual(copy.lines, saved.lines, 'each line keeps its price');
+  assert.equal(copy.savedToCustomer, false, 'reissuing adds no copy to the saved quotes');
+  assert.deepEqual(copy.reissuedFrom, { reference: 'Q-3F2A9C1E', date: '2025-03-02' });
 });

@@ -7,7 +7,7 @@ A quote for a job holds lines of every kind: windows, awnings and cut glass. Its
 | --- | --- |
 | Quote page | `app/glass/quotes/[id]/page.tsx` |
 | Row shape, margin and totals | `utils/quote-store.ts` |
-| The draft during a trip to a calculator | `utils/quote-draft.ts` |
+| The draft during a trip to a calculator, and the copy of a reissued quote | `utils/quote-draft.ts` |
 | Handover between the quote and a calculator | `utils/line-editing.ts` |
 | Checks | `utils/quote-store.test.ts`, `utils/quote-draft.test.ts` |
 
@@ -66,3 +66,24 @@ on the quote. "Add To Customers" puts the typed name on the customer list and on
 list has a customer with that name, the button picks that customer. Adding a customer needs the
 `master_data:write` permission, which the standard role does not have. Contact details go on the
 customers page at `/glass/clients`.
+
+## Saved quotes
+
+A quote that a customer orders again can be saved to that customer. Pick the customer from the list,
+tick "Save to <customer> to reissue later", and click Save Quote. The box shows only for a customer
+on the list, because a walk-in has no saved quotes. The row keeps the flag in
+`specification.savedToCustomer`. The quote page saves a quote from a calculator as a quote for a job,
+so every saved quote is a quote for a job.
+
+A new quote lists the saved quotes of its customer until the quote has a line. Reissue on that list
+copies a saved quote into the new quote. Reissue in the toolbar of a quote opens a new quote that
+copies it, saved or not.
+
+The copy has the customer, lines, notes and margin of the saved quote, and the date of today. The
+30-day price hold starts again on that date. Each line keeps its price, and a change to the rates
+does not change it. Until Save Quote, the page names the quote that the copy came from. Edit a line
+to price it on today's rates. Save Quote gives the copy its own number. The saved quote does not
+change, and the copy is not saved to the customer.
+
+An unsaved copy stays in the browser tab, so New Quote opens it again. Discard Copy empties the new
+quote and keeps the customer, so the saved quotes show again.

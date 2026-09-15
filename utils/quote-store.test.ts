@@ -40,6 +40,11 @@ test('the reader keeps the margin a quote was saved at', () => {
   assert.equal(toSavedQuote(row({ kind: 'quote', lines: [line({ localId: 'a' })] }))?.marginPercent, DEFAULT_QUOTE_MARGIN_PERCENT, 'a row with no margin reads at the default');
 });
 
+test('the reader keeps whether a quote is saved to its customer', () => {
+  assert.equal(toSavedQuote(row({ kind: 'quote', customerId: 'c1', savedToCustomer: true, lines: [line({ localId: 'a' })] }))?.savedToCustomer, true);
+  assert.equal(toSavedQuote(row({ kind: 'quote', customerId: 'c1', lines: [line({ localId: 'a' })] }))?.savedToCustomer, false, 'a row with no flag is not saved');
+});
+
 test('the paper shows the line note and the specification as stored', () => {
   const lines = [line({ localId: 'a', lineNote: 'Sliding window 1200x900', quantityOrdered: 4, unitPriceAtOrder: 1200 }, '500 series, clear 6.38')];
   const [paper] = quotePaperLines(lines);

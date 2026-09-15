@@ -393,7 +393,7 @@ export default function AdhocQuotePage() {
     }));
 
     try {
-      const id = await createQuote({ name: quoteName, customer: paperCustomer, customerId: customerId || null, date: quoteDate, notes: quoteNotes, marginPercent: markupPercent, lines, issuedBy: username, ratesUpdatedAt: updatedAt });
+      const id = await createQuote({ name: quoteName, customer: paperCustomer, customerId: customerId || null, date: quoteDate, notes: quoteNotes, marginPercent: markupPercent, lines, savedToCustomer: false, issuedBy: username, ratesUpdatedAt: updatedAt });
       setIssued({ id, fingerprint: paperFingerprint });
       setStatus({ tone: 'success', message: `Quote ${quoteReference(id)} saved. It is in the quote list.` });
       return true;
