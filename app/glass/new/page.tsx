@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
+import CustomerPicker from '@components/CustomerPicker';
 import Card from '@components/Card';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
@@ -733,12 +734,13 @@ export default function NewPurchaseOrderPage() {
       )}
 
       <CardDouble title="PO HEADER">
-        <Text>CUSTOMER</Text>
-        <select
+        <CustomerPicker
+          label="CUSTOMER"
+          customers={activeCustomers}
+          emptyLabel="Select customer..."
           value={orderForm.customerId}
           disabled={!canEditOrders || isLoading}
-          onChange={(event) => {
-            const nextCustomerId = event.target.value;
+          onChange={(nextCustomerId) => {
             setOrderForm((prev) => ({ ...prev, customerId: nextCustomerId }));
 
             setLineDrafts((prev) =>
@@ -748,14 +750,7 @@ export default function NewPurchaseOrderPage() {
               }))
             );
           }}
-        >
-          <option value="">Select customer...</option>
-          {activeCustomers.map((customer) => (
-            <option key={customer.id} value={customer.id}>
-              {customer.name}
-            </option>
-          ))}
-        </select>
+        />
         {selectedCustomer ? <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone, selectedCustomer.delivery_address].filter(Boolean).join(' · ') || 'No phone or delivery address on file.'}</Text> : null}
         <br />
 

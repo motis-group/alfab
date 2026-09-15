@@ -1,0 +1,22 @@
+.root {
+  position: fixed;
+  right: 2ch;
+  bottom: calc(var(--font-size) * var(--theme-line-height-base));
+  left: 2ch;
+  z-index: var(--z-index-page-popover);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--font-size) * var(--theme-line-height-base) / 2) 2ch;
+}
+
+/* The notice is for the screen. A printed quote does not show it. */
+@media print {
+  .root {
+    display: none;
+  }
+}

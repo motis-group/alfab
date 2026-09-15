@@ -1,5 +1,7 @@
+import NewVersionNotice from '@components/NewVersionNotice';
 import Providers from '@components/Providers';
 import { PricingProvider } from '@components/PricingProvider';
+import { BUILD_ID } from '@utils/build-id';
 import { readThemePreferencesFromCookie } from '@utils/theme-preferences-server';
 import { themePreferencesToBodyClassName } from '@utils/theme-preferences';
 
@@ -13,6 +15,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className={themePreferencesToBodyClassName(initialThemePreferences)}>
         <Providers initialThemePreferences={initialThemePreferences}>
           <PricingProvider>{children}</PricingProvider>
+          <NewVersionNotice buildId={BUILD_ID} />
         </Providers>
       </body>
     </html>

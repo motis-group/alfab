@@ -108,8 +108,9 @@ mullions. The AFB035 derives its holes from the handles. None of these extras is
 Marine Window Service lowers the margin to 22.5% for T5836, T8610 and sash & frame only, and
 the glass loading to 15% for every type.
 
-The calculator prices a line of a quote for a job with every margin at zero, because that quote
-sets one margin for all its lines. See [quotes.md](quotes.md).
+The calculator prices a line of a quote for a job with every margin and uplift at zero. That quote
+sets one margin for all its lines. The price card and the printed costing sheet show a margin or an
+uplift only when its rate is not zero. See [quotes.md](quotes.md).
 
 ## Working with a costing
 
@@ -119,9 +120,9 @@ It keeps no quote of its own.
 - **Batch price.** The sidebar prices the same window at batches of 1, 2, 5 and 10. Setup and
   development minutes divide across the batch, so the price per window falls as the run grows.
 - **Printing.** Cmd+P prints the internal costing sheet of the line. The sheet shows every cost line,
-  the rates used, the labour minutes, margin, packing and uplift. It renders at the end of `<body>`,
-  outside the app, so printing takes the app out of the layout. The quote page prints the customer's
-  copy.
+  the rates used, the labour minutes and the packing, and a margin or an uplift whose rate is not
+  zero. It renders at the end of `<body>`, outside the app, so printing takes the app out of the
+  layout. The quote page prints the customer's copy.
 - **Saved costings.** The quotes table can hold rows marked `kind: window` and `kind: window-quote`,
   and no page writes them. The quote list at `/glass` shows such a row as a quote. Open on the row
   shows it on the quote page, and saving it there rewrites the row as a quote for a job.

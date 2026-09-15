@@ -212,10 +212,13 @@ export default function AwningCostingPage() {
                   <Text>TOTAL COST</Text>
                   <Text>{formatCurrency(result.subtotal)}</Text>
                 </RowSpaceBetween>
-                <RowSpaceBetween>
-                  <Text>{quoteLine ? 'MARGIN' : `MARGIN (${formatPercent(result.marginRate)} OF COST)`}</Text>
-                  <Text>{quoteLine ? 'SET ON THE QUOTE' : formatCurrency(result.margin)}</Text>
-                </RowSpaceBetween>
+                {/* The card shows the margin only when its rate is not zero. A quote line has no margin. */}
+                {result.marginRate ? (
+                  <RowSpaceBetween>
+                    <Text>{`MARGIN (${formatPercent(result.marginRate)} OF COST)`}</Text>
+                    <Text>{formatCurrency(result.margin)}</Text>
+                  </RowSpaceBetween>
+                ) : null}
                 <RowSpaceBetween>
                   <Text>{quoteLine ? 'COST EACH' : 'PRICE EACH'}</Text>
                   <Text>

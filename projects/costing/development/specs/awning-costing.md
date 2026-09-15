@@ -51,7 +51,8 @@ There is no uplift, no packing, no finish, no trims and no per-pair option: the 
 none of them.
 
 The calculator prices a line of a quote for a job with the margin at zero, because that quote sets
-one margin for all its lines. See [quotes.md](quotes.md).
+one margin for all its lines. The price card and the printed costing sheet show the margin only when
+its rate is not zero. See [quotes.md](quotes.md).
 
 ## Working with a costing
 
@@ -61,8 +62,8 @@ It keeps no quote of its own.
 - **Batch price.** The sidebar prices the same awning at runs of 1, 2, 5 and 10. Setup minutes
   divide across the run, so the price for each falls as the run grows.
 - **Printing.** Cmd+P prints the internal costing sheet of the line. The sheet shows every cost line,
-  the rates used, the labour minutes and the margin. It prints as the window sheet does, which
-  [window-costing.md](window-costing.md) describes.
+  the rates used and the labour minutes, and the margin when its rate is not zero. It prints as the
+  window sheet does, which [window-costing.md](window-costing.md) describes.
 - **Saved costings.** The quotes table can hold rows marked `kind: awning` and `kind: awning-quote`,
   and no page writes them. They show in the quote list and open on the quote page, as a saved window
   costing does.

@@ -88,10 +88,12 @@ export default function AwningCostingSheet({ title, ratesLabel, rates, awnings }
                   <td colSpan={3}>Total cost</td>
                   <td className="window-costing-sheet__amount">{formatCurrency(result.subtotal)}</td>
                 </tr>
-                <tr>
-                  <td colSpan={3}>Margin ({Math.round(result.marginRate * 1000) / 10}% of cost)</td>
-                  <td className="window-costing-sheet__amount">{formatCurrency(result.margin)}</td>
-                </tr>
+                {result.marginRate ? (
+                  <tr>
+                    <td colSpan={3}>Margin ({Math.round(result.marginRate * 1000) / 10}% of cost)</td>
+                    <td className="window-costing-sheet__amount">{formatCurrency(result.margin)}</td>
+                  </tr>
+                ) : null}
                 <tr className="window-costing-sheet__grand">
                   <td colSpan={3}>Price each</td>
                   <td className="window-costing-sheet__amount">{result.price == null ? 'not priced' : formatCurrency(result.price)}</td>
