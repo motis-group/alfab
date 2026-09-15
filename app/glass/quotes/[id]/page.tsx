@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
+import CustomerPicker from '@components/CustomerPicker';
 import Card from '@components/Card';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
@@ -374,15 +375,7 @@ export default function QuotePage() {
 
           <CardDouble title="QUOTE">
             <Input label="JOB" name="quote_name" value={draft.name} onChange={(event) => update({ name: event.target.value })} placeholder="What the job is called" />
-            <Text>CUSTOMER</Text>
-            <select value={draft.customerId} onChange={(event) => pickCustomer(event.target.value)}>
-              <option value="">Walk-in / not on file</option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}
-                </option>
-              ))}
-            </select>
+            <CustomerPicker label="CUSTOMER" customers={customers} value={draft.customerId} onChange={(customerId) => pickCustomer(customerId)} />
             {selectedCustomer ? (
               <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text>
             ) : (
