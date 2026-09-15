@@ -1,6 +1,6 @@
 import { createClient } from '@utils/db-client';
 import { StoredQuoteStatus, readQuoteStatus } from '@utils/quote-status';
-import { AwningCostingInput, AwningCostResult, CostLine } from '@utils/awning-costing';
+import { AwningCostingInput, CostLine } from '@utils/awning-costing';
 
 const TABLE = 'quotes';
 
@@ -79,28 +79,4 @@ export async function listAwningCostings(): Promise<SavedAwningCosting[]> {
     throw new Error(error.message);
   }
   return ((data as QuoteRow[]) || []).map(toSavedCosting).filter(Boolean) as SavedAwningCosting[];
-}
-
-export async function saveAwningCosting(costing: { name: string; customer: string; input: AwningCostingInput; result: AwningCostResult; ratesUpdatedAt: string | null }): Promise<void> {
-  const db = createClient();
-  const { error } = await db.from(TABLE).insert({
-    name: costing.name.trim() || 'Awning costing',
-    client: costing.customer.trim(),
-    specification: {
-      kind: 'awning',
-      input: costing.input,
-      ratesUpdatedAt: costing.ratesUpdatedAt,
-    },
-    cost: {
-      price: costing.result.price,
-      subtotal: costing.result.subtotal,
-      margin: costing.result.margin,
-      lines: costing.result.lines,
-      glazing: costing.result.glazing,
-    },
-  });
-
-  if (error) {
-    throw new Error(error.message);
-  }
 }

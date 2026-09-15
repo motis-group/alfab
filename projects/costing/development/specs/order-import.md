@@ -1,13 +1,13 @@
 # Reading a customer's order
 
 Customers send glass orders as a typed cut list or as a drawing, often handwritten. The panel
-**Read a customer's order or drawing** on `/glass/quote` takes an order as a PDF or a Word document.
-It reads every piece out of the order, prices each one with the glass calculator, and shows them for
-the estimator to check before any of them goes on the quote.
+**Read a customer's order** on the quote page (`/glass/quotes/<id>`) takes an order as a PDF or a
+Word document. It reads every piece out of the order, prices each one on the glass rates, and shows
+them for the estimator to check before any of them goes on the quote.
 
-The same panel takes a CAD drawing, and routes each file by its extension. The CAD import in
-[cad-import.md](cad-import.md) reads one exact outline out of a drawing file. This reads a whole order
-out of a document that was never meant for a machine, and is never trusted the way a DXF is.
+The CAD import in [cad-import.md](cad-import.md) reads one exact outline out of a drawing file, for
+one line in the glass calculator. This panel reads a whole order out of a document that was never
+meant for a machine, and is never trusted the way a DXF is.
 
 ## Code reads what is exact, the model reads what needs judgement
 
@@ -41,9 +41,9 @@ customer by 4.5% on that piece.
 
 One row per piece: the size, the shape, the measured area where one was taken, the quantity, and
 what the piece costs at the shop's own rates. Rows are ticked by default. The estimator can untick a
-row and correct a quantity in place. **Add N To Quote** puts the ticked rows on the calculator's quote
-as separate pieces, at the markup of that quote. Each piece opens back into the form to be changed,
-like any other piece.
+row and correct a quantity in place. **Add N To Quote** puts each ticked row on the quote as a
+cut-glass line at cost, and the margin of the quote makes the price. Edit sends a line to the glass
+calculator, like any other line. See [quotes.md](quotes.md).
 
 Warnings about the whole order sit above the table, under **CHECK BEFORE QUOTING**:
 
@@ -96,5 +96,6 @@ npm test
 
 `utils/import/import.test.ts` builds a ZIP byte by byte and reads it back, parses a cut list written
 with different dashes and separators, and measures the notched piece above to prove the outline beats
-the bounding box. The model calls are not covered: they need a key, and asserting on what a model
+the bounding box. `utils/quote-draft.test.ts` checks that a piece goes on the quote as a cut-glass
+line at cost. The model calls are not covered: they need a key, and asserting on what a model
 returns tests the model rather than this code.

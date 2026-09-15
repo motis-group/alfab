@@ -4,42 +4,28 @@ The glass calculator at `/glass/quote` prices cut glass: a size, a thickness and
 edgework, holes, shaping, ceramic banding and scanning. It is the counterpart of the window costing
 at `/glass/windows`, which prices made-up aluminium windows. Both feed the same purchase orders.
 
-## The calculator's quote
+## A line of a quote or an order
 
-The calculator keeps its own quote of cut-glass pieces. It is separate from a quote for a job, which
-[quotes.md](quotes.md) describes.
+The calculator prices one cut-glass line that a quote or an order sends, as [quotes.md](quotes.md)
+describes. It keeps no quote of its own.
 
-The quote holds as many pieces as the job has. Price a piece, name it, add it with "Add Piece To
-Quote" under the quote lines, and price the next. Each piece keeps its own size, glass and
-quantity, and becomes one purchase order line. The
-markup is set once for the quote, under the quote notes, and prices every piece. A change to it
-reprices the whole quote. A piece with a manual unit price keeps that price.
+A line of a quote is priced at cost, with no markup field, because the quote sets the margin. A line
+of an order has no quote around it, so the markup field is on the line.
 
-When the calculator opens from an order to price one line, there is no quote around the line, so
-the line's own markup field is on the piece. A line of a quote for a job is priced at cost, with no
-markup field, because that quote sets the margin. See [quotes.md](quotes.md).
+A drawing measures the line in the calculator. See [cad-import.md](cad-import.md). A customer's order
+goes on the quote page, one line for each piece. See [order-import.md](order-import.md).
 
-Pieces are priced one at a time, or read off a customer's order in one go; see [order-import.md](order-import.md).
+## Glass quotes in the quote list
 
-Two actions keep the quote:
+The quotes table can hold rows marked `kind: glass`, and no page writes them. A row holds the prices
+that the quote was given, not today's prices, so a customer who calls back later gets the same
+number. The row also holds the stamp of the glass rates that priced it. No page compares that stamp
+with the current rates.
 
-- **Save Quote** writes a row in `quotes` marked `kind: glass`. The row holds the prices the quote
-  was given, not today's prices, so a customer who calls back later gets the same number. The row
-  also holds the stamp of the glass rates that priced it. No page compares that stamp with the
-  current rates.
-- **Print Quote** saves the quote as a quote for a job, marked `kind: quote`, and prints it with a
-  reference.
-
-The quote list at `/glass` shows both rows with the quotes of every other kind. Open on a
+The quote list at `/glass` shows these rows with the quotes of every other kind. Open on a
 `kind: glass` row shows it on the quote page. When the quote has a piece priced above $0, saving it
 there rewrites the row as a quote for a job. A piece at $0 has no price, so it stays off the quote
 page and off any order made from the quote.
-
-## Customer
-
-Picked from the customer list, which carries the contact, the phone and the delivery address. A
-purchase order made from the quote arrives with that customer already selected. A walk-in is typed
-by hand instead, and the order matches it on name where it can.
 
 ## Minimum charge
 

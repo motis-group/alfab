@@ -287,7 +287,7 @@ export default function AwningRatesSettings() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⚙"
-      navRight={<ActionButton onClick={() => router.push('/glass/awnings')}>BACK TO AWNING COSTING</ActionButton>}
+      navRight={<ActionButton onClick={() => router.push('/glass/awnings?editLine=1')}>BACK TO AWNING COSTING</ActionButton>}
       heading="AWNING RATES"
       sectionNavigationItems={APP_ACCOUNT_SECTION_ITEMS}
       badge={isLoading ? 'LOADING' : hasChanges ? 'UNSAVED CHANGES' : source === 'saved' ? 'SAVED RATES' : 'DEFAULT RATES'}
@@ -352,7 +352,7 @@ export default function AwningRatesSettings() {
       }
       actionItems={[
         { hotkey: '⌘+S', body: 'Save', onClick: handleSave },
-        { hotkey: '⌘+B', body: 'Back', onClick: () => router.push('/glass/awnings') },
+        { hotkey: '⌘+B', body: 'Back', onClick: () => router.push('/glass/awnings?editLine=1') },
       ]}
     >
       <CardDouble title="PARTS">

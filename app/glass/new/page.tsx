@@ -948,7 +948,7 @@ export default function NewPurchaseOrderPage() {
                 <Text>AWNING COSTING</Text>
                 <Text>{activeLine.awningSpec ? 'Priced on the Awning Costing page.' : 'No awning costing attached.'}</Text>
                 {activeLine.awningRatesUpdatedAt ? <Text>Priced on the awning rates saved {new Date(activeLine.awningRatesUpdatedAt).toLocaleString()}.</Text> : null}
-                <ActionButton onClick={() => router.push('/glass/awnings')}>Open Awning Costing</ActionButton>
+                <ActionButton onClick={() => editLineInCalculator(activeLine)}>Price In The Calculator</ActionButton>
               </>
             )}
 
@@ -958,7 +958,7 @@ export default function NewPurchaseOrderPage() {
                 <Text>WINDOW COSTING</Text>
                 <Text>{activeLine.windowSpec ? 'Priced on the Window Costing page.' : 'No window costing attached.'}</Text>
                 {activeLine.windowRatesUpdatedAt ? <Text>Priced on the window rates saved {new Date(activeLine.windowRatesUpdatedAt).toLocaleString()}.</Text> : null}
-                <ActionButton onClick={() => router.push('/glass/windows')}>Open Window Costing</ActionButton>
+                <ActionButton onClick={() => editLineInCalculator(activeLine)}>Price In The Calculator</ActionButton>
               </>
             )}
 

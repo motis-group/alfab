@@ -1,15 +1,15 @@
 # Converting quotes to a purchase order
 
 A boat needs windows, awnings and cut glass. One quote for the job can hold all three kinds of line,
-as [quotes.md](quotes.md) describes. A calculator can also save a quote of its own kind. Converting
-puts the priced lines of one or more quotes on one purchase order, so the customer gets one order
-and one number.
+as [quotes.md](quotes.md) describes. The quotes table can also hold glass quotes, window and awning
+costings, and printed customer quotes. No page writes these rows, and the quote list converts them
+like any quote. Converting puts the priced lines of one or more quotes on one purchase order, so the
+customer gets one order and one number.
 
 | Part | Location |
 | --- | --- |
 | Merge, customer rule, warnings and name | `utils/quote-register.ts`, `mergeQuotesForOrder` |
 | Tick and convert | `app/glass/page.tsx` |
-| Order from a calculator | `handleCreatePurchaseOrder` in `app/glass/quote/page.tsx`, `app/glass/windows/page.tsx` and `app/glass/awnings/page.tsx` |
 | Draft handover | `utils/quote-to-order.ts` |
 | Order side | `app/glass/new/page.tsx`, `applyQuoteDraft` |
 | Checks | `utils/quote-register.test.ts`, `utils/customer-quote-store.test.ts`, `utils/quote-to-order.test.ts` |
@@ -29,10 +29,6 @@ Both buttons on the quote list call `mergeQuotesForOrder`, so one quote is a mer
 then opens a new order from the draft on `/glass/new`. The estimator checks the order and saves it.
 Saving the order links each quote with a priced line to the order, which makes the quote won. See
 [feedback-loops.md](feedback-loops.md).
-
-"Create Purchase Order" on the glass, window and awning calculators opens an order from the list on
-the calculator. When the list is empty, the order holds the item on screen. It does not call
-`mergeQuotesForOrder` and carries no quote id, so the order makes no saved quote won.
 
 A purchase order is an approved quote, so conversion is a deliberate act. A quote does not become an
 order by itself.

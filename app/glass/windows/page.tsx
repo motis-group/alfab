@@ -7,31 +7,27 @@ import { useRouter } from 'next/navigation';
 
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
-import CustomerPicker from '@components/CustomerPicker';
 import Card from '@components/Card';
 import SidebarTabs from '@components/SidebarTabs';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
+import NoLineToPrice from '@components/page/NoLineToPrice';
 import RowSpaceBetween from '@components/RowSpaceBetween';
 import Table from '@components/Table';
 import TableColumn from '@components/TableColumn';
 import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 import WindowCostingGlossary from '@components/WindowCostingGlossary';
-import WindowCostingSheet, { WindowCostingSheetWindow, windowQuoteLines } from '@components/WindowCostingSheet';
-import { CustomerQuoteContent, quoteFingerprint, quoteReference, saveCustomerQuote } from '@utils/customer-quote-store';
+import WindowCostingSheet from '@components/WindowCostingSheet';
 
-import { Customer, UserRole, formatCurrency, todayISODate } from '@utils/order-management';
+import { UserRole, formatCurrency } from '@utils/order-management';
 import { defaultAdhocSpec } from '@utils/order-draft';
 import { LineEditRequest, clearLineEditRequest, peekLineEditRequest, persistLineEditResult } from '@utils/line-editing';
-import { createClient } from '@utils/db-client';
-import { WindowQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order';
-import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
+import { fetchCurrentSessionUser } from '@utils/session-client';
 import { CostExtra, CostLine, FINISH_LABELS, Finish, GLASS_GROUP_LABELS, GLAZING_ORDER, LOCK_LABELS, LabourPart, LockType, MullionKind, Reinforcement, STRUT_LABELS, StayType, StrutKind, TRIM_LABELS, TrimMode, WINDOW_TYPES, WindowCostingInput, WindowTypeId, applyWindowOptions, costWindow, glazingFits, costWindowBatches, createWindowInput, describeWindow, switchWindowType, windowOptions } from '@utils/window-costing';
 import { WINDOW_SERIES, WindowProduct, findProduct, productFullName, productLabel, productForInput, seriesOfProduct, visibleSeries } from '@utils/window-catalogue';
 import { DEFAULT_WINDOW_RATES, GlazingId, WindowRates, mergeWindowRates, withoutMargins } from '@utils/window-costing-rates';
 import { loadWindowRates } from '@utils/window-costing-store';
-import { saveWindowCosting } from '@utils/window-quote-store';
 
 const FINISH_ORDER: Finish[] = ['mill', 'etch', 'powder'];
 const TRIM_ORDER: TrimMode[] = ['none', 'required', 'extra'];
@@ -49,13 +45,6 @@ const LABOUR_LABELS: Record<LabourPart, string> = {
   wipeBars: 'Wipe bars',
 };
 const LABOUR_ORDER: LabourPart[] = ['window', 'trim', 'welding', 'develop', 'sillFlat', 'fittings', 'wipeBars', 'mullion', 'sundry'];
-
-interface QuoteItem {
-  localId: string;
-  name: string;
-  quantity: number;
-  input: WindowCostingInput;
-}
 
 function numberOrFallback(value: string, fallback = 0): number {
   const parsed = Number(value);
@@ -87,14 +76,16 @@ function formatStamp(stamp: string | null): string {
   return Number.isNaN(parsed.getTime()) ? stamp : `saved ${parsed.toLocaleDateString()}`;
 }
 
+/**
+ * The window costing. It prices one window line that a quote or an order sends.
+ *
+ * The calculator keeps no quote of its own. Without a line, it prices nothing, and the page shows the
+ * way to a quote.
+ */
 export default function WindowCostingPage() {
   const router = useRouter();
 
   const [role, setRole] = useState<UserRole>('readonly');
-  const [canSaveCostings, setCanSaveCostings] = useState(false);
-  const [username, setUsername] = useState<string | null>(null);
-  // The quote last saved for the customer, and the content it was saved with.
-  const [issued, setIssued] = useState<{ id: string; fingerprint: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<{ tone: 'success' | 'warning'; message: string } | null>(null);
@@ -108,18 +99,8 @@ export default function WindowCostingPage() {
   const [seriesId, setSeriesId] = useState<string>('500');
   const [metreDrafts, setMetreDrafts] = useState<{ flatSmoothM?: string; flatGroundM?: string }>({});
   const [windowName, setWindowName] = useState('');
-  // Set when the calculator was opened to price one line of a purchase order.
+  // The line that a quote or an order sent to be priced.
   const [lineEdit, setLineEdit] = useState<LineEditRequest | null>(null);
-  const [quoteName, setQuoteName] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [customerId, setCustomerId] = useState('');
-  const [quoteDate, setQuoteDate] = useState(todayISODate());
-  const [quoteNotes, setQuoteNotes] = useState('');
-  const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
-  // Customer by default, so a browser Cmd+P prints the safe document. The internal button raises it
-  // for one print and `afterprint` puts it back.
-  const [sheetAudience, setSheetAudience] = useState<'internal' | 'customer'>('customer');
 
   const cfg = WINDOW_TYPES[input.type];
   const options = windowOptions(cfg);
@@ -141,46 +122,6 @@ export default function WindowCostingPage() {
   const extrasList = [result.extras.trims, result.extras.secondGlazing].filter(Boolean) as CostExtra[];
   const ratesLabel = ratesSource === 'saved' ? formatStamp(ratesUpdatedAt) : 'code defaults';
 
-  const quoteLines = useMemo(
-    () =>
-      quoteItems.map((item) => {
-        const itemResult = costWindow(item.input, rates);
-        return {
-          item,
-          result: itemResult,
-          total: itemResult.price == null ? null : itemResult.price * item.quantity,
-        };
-      }),
-    [quoteItems, rates]
-  );
-  const quoteTotal = quoteLines.reduce((sum, line) => sum + (line.total ?? 0), 0);
-
-  // The quote prints the windows it holds; a quote with none prints the window on screen.
-  const sheetWindows: WindowCostingSheetWindow[] = quoteLines.length ? quoteLines.map((line) => ({ id: line.item.localId, name: line.item.name, quantity: line.item.quantity, input: line.item.input, result: line.result })) : [{ id: 'current', name: windowName, quantity: orderQuantity, input, result }];
-
-  const summary = useMemo(() => {
-    if (result.price == null) {
-      return '';
-    }
-
-    const header = [`${quoteName.trim() || 'Window quote'}`, `Customer: ${customerName.trim() || 'Walk-in / Phone'}`, `Date: ${quoteDate}`];
-
-    if (quoteLines.length) {
-      return [...header, ...quoteLines.map((line, index) => `${index + 1}. ${line.item.name || describe(line.item.input)} | ${line.item.quantity} x ${formatCurrency(line.result.price)} = ${formatCurrency(line.total)}`), `Quote total: ${formatCurrency(quoteTotal)}`, quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : ''].filter(Boolean).join('\n');
-    }
-
-    return [...header, `Window: ${describe(input)}`, `Price (${result.unitLabel.toLowerCase()}): ${formatCurrency(result.price)}`, `Qty: ${orderQuantity} | Total: ${formatCurrency(currentTotal)}`, ...extrasList.map((extra) => `${extra.label}: ${formatExtra(extra)}`), quoteNotes.trim() ? `Notes: ${quoteNotes.trim()}` : ''].filter(Boolean).join('\n');
-  }, [currentTotal, customerName, extrasList, input, orderQuantity, quoteDate, quoteLines, quoteName, quoteNotes, quoteTotal, rates, ratesLabel, result]);
-
-  // Put the sheet back to the customer copy once a print finishes, so the next Cmd+P is safe.
-  useEffect(() => {
-    const restore = () => setSheetAudience('customer');
-    window.addEventListener('afterprint', restore);
-    return () => window.removeEventListener('afterprint', restore);
-  }, []);
-
-  const selectedCustomer = customers.find((entry) => entry.id === customerId) || null;
-
   useEffect(() => {
     (async () => {
       setIsLoading(true);
@@ -194,8 +135,6 @@ export default function WindowCostingPage() {
         }
 
         setRole(user.effectiveRole as UserRole);
-        setCanSaveCostings(userCan(user, 'quotes:write'));
-        setUsername(user.username);
 
         // An order or a quote sent one line to be priced. Load that line into the form.
         const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
@@ -206,14 +145,15 @@ export default function WindowCostingPage() {
             setLineEdit(request);
             if (line.windowSpec) {
               setInput({ ...line.windowSpec });
+              // The menu shows the series of the window on the line, not the first series.
+              const lineSeries = seriesOfProduct(line.windowSpec.productId ?? null);
+              if (lineSeries) {
+                setSeriesId(lineSeries.id);
+              }
             }
             setWindowName(line.lineNote);
-            setCustomerId(request.customerId);
           }
         }
-
-        const { data: customerData } = await createClient().from('customers').select('*').order('name', { ascending: true });
-        setCustomers((customerData as Customer[]) || []);
 
         const loaded = await loadWindowRates();
         setRates(loaded.rates);
@@ -303,180 +243,8 @@ export default function WindowCostingPage() {
     router.push(lineEdit.returnTo);
   }
 
-  function resetCalculator() {
-    setInput({ ...createWindowInput('T5573'), productId: '500-5573' });
-    setSeriesId('500');
-    setMetreDrafts({});
-    setWindowName('');
-    setQuoteName('');
-    setCustomerName('');
-    setQuoteDate(todayISODate());
-    setQuoteNotes('');
-    setQuoteItems([]);
-    setStatus(null);
-  }
-
-  function addToQuote() {
-    if (result.price == null) {
-      return;
-    }
-
-    const item: QuoteItem = {
-      localId: `window-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name: windowName.trim() || describe(input),
-      quantity: orderQuantity,
-      input: { ...input },
-    };
-
-    setQuoteItems((prev) => [...prev, item]);
-    setStatus({ tone: 'success', message: `Added to the quote. ${quoteItems.length + 1} window${quoteItems.length ? 's' : ''} on this quote.` });
-  }
-
-  function editQuoteItem(localId: string) {
-    const item = quoteItems.find((entry) => entry.localId === localId);
-    if (!item) {
-      return;
-    }
-
-    setInput({ ...item.input });
-    const itemSeries = seriesOfProduct(item.input.productId ?? null);
-    if (itemSeries) {
-      setSeriesId(itemSeries.id);
-    }
-    setMetreDrafts({});
-    setWindowName(item.name);
-    setQuoteItems((prev) => prev.filter((entry) => entry.localId !== localId));
-    setStatus({ tone: 'success', message: 'Loaded into the form.' });
-  }
-
-  function removeQuoteItem(localId: string) {
-    setQuoteItems((prev) => prev.filter((entry) => entry.localId !== localId));
-  }
-
-  async function copySummary() {
-    if (!summary) {
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(summary);
-      setStatus({ tone: 'success', message: 'Copied. Prices only, safe to send to a customer.' });
-    } catch {
-      setStatus({ tone: 'warning', message: 'Clipboard copy failed.' });
-    }
-  }
-
-  /** The cost build-up, for Alfab only. Never paste this to a customer. */
-  async function copyCostBreakdown() {
-    if (result.price == null) {
-      return;
-    }
-
-    const text = [`INTERNAL — ${quoteName.trim() || 'Window costing'} — do not send to a customer`, `Window: ${describe(input)}`, `Rates: ${ratesLabel}`, `Subtotal: ${formatCurrency(result.subtotal)} | Margin ${formatPercent(result.marginRate)}: ${formatCurrency(result.margin)} | Packing: ${formatCurrency(result.packing)} | Uplift ${formatPercent(result.upliftRate)}: ${formatCurrency(result.uplift)}`, `Price (${result.unitLabel.toLowerCase()}): ${formatCurrency(result.price)}`, result.unpriced.length ? `Not priced (charged as nil): ${result.unpriced.map((entry) => entry.label).join(', ')}` : ''].filter(Boolean).join('\n');
-
-    try {
-      await navigator.clipboard.writeText(text);
-      setStatus({ tone: 'warning', message: 'Copied the cost build-up (internal).' });
-    } catch {
-      setStatus({ tone: 'warning', message: 'Clipboard copy failed.' });
-    }
-  }
-
-  // The customer copy on screen, as a print would record it. A reprint of unchanged content reuses
-  // the quote already saved; any change is a different offer and prints as a draft until it is saved.
-  const printedQuote: CustomerQuoteContent = { kind: 'window-quote', name: quoteName, customer: customerName, customerId: customerId || null, date: quoteDate, notes: quoteNotes, lines: windowQuoteLines(sheetWindows, rates) };
-  const printedFingerprint = quoteFingerprint(printedQuote);
-  const reference = issued && issued.fingerprint === printedFingerprint ? quoteReference(issued.id) : null;
-
-  /** Saves the customer copy so the print carries a number. False, with the reason on screen, when it cannot. */
-  async function issueQuote(): Promise<boolean> {
-    if (!canSaveCostings) {
-      setStatus({ tone: 'warning', message: 'A numbered quote is saved as it prints, and saving quotes needs access. Cmd+P prints a draft.' });
-      return false;
-    }
-    if (!printedQuote.lines.some((line) => line.unitPrice != null)) {
-      setStatus({ tone: 'warning', message: 'Nothing on this quote has a price, so there is no offer to print.' });
-      return false;
-    }
-
-    try {
-      const id = await saveCustomerQuote({ ...printedQuote, issuedBy: username, ratesUpdatedAt });
-      setIssued({ id, fingerprint: printedFingerprint });
-      setStatus({ tone: 'success', message: `Quote ${quoteReference(id)} saved. It is in the order list.` });
-      return true;
-    } catch (saveError: any) {
-      setStatus({ tone: 'warning', message: `The quote was not saved, so it was not printed. ${saveError?.message || ''}`.trim() });
-      return false;
-    }
-  }
-
-  async function printSheet(audience: 'internal' | 'customer') {
-    if (audience === 'customer' && !reference && !(await issueQuote())) {
-      return;
-    }
-    setSheetAudience(audience);
-    if (typeof window !== 'undefined') {
-      // Let the sheet re-render for the chosen audience before the print dialog reads the page.
-      window.setTimeout(() => window.print(), 50);
-    }
-  }
-
-  async function handleSaveCosting() {
-    if (!canSaveCostings || result.price == null) {
-      return;
-    }
-
-    try {
-      await saveWindowCosting({
-        name: windowName.trim() || quoteName.trim() || describe(input),
-        customer: customerName,
-        input,
-        result,
-        ratesUpdatedAt,
-      });
-      setStatus({ tone: 'success', message: 'Costing saved. It is in the order list.' });
-    } catch (saveError: any) {
-      setStatus({ tone: 'warning', message: saveError?.message || 'Unable to save the costing.' });
-    }
-  }
-
-  function handleCreatePurchaseOrder() {
-    const lines: WindowQuoteLine[] = quoteLines.length
-      ? quoteLines
-          .filter((line) => line.result.price != null)
-          .map((line) => ({
-            description: line.item.name || describe(line.item.input),
-            quantity: line.item.quantity,
-            unitPrice: line.result.price as number,
-            windowSpec: line.item.input,
-            ratesUpdatedAt,
-          }))
-      : result.price == null
-        ? []
-        : [
-            {
-              description: windowName.trim() || describe(input),
-              quantity: orderQuantity,
-              unitPrice: result.price,
-              windowSpec: input,
-              ratesUpdatedAt,
-            },
-          ];
-
-    if (!lines.length) {
-      router.push('/glass/new');
-      return;
-    }
-
-    persistQuoteToOrderDraft({
-      quoteName,
-      customerName: selectedCustomer?.name || customerName,
-      customerId: customerId || null,
-      quoteDate,
-      quoteNotes,
-      windowLines: lines,
-    });
-    router.push('/glass/new?fromQuote=1');
+  if (!lineEdit) {
+    return <NoLineToPrice heading="WINDOW COSTING" isLoading={isLoading} error={error} />;
   }
 
   return (
@@ -484,7 +252,7 @@ export default function WindowCostingPage() {
       previewPixelSRC="/pixel.gif"
       logo="⬡"
       navRight={<ActionButton onClick={() => router.push('/glass')}>ORDER DASHBOARD</ActionButton>}
-      heading={lineEdit ? `PRICING A LINE OF ${lineEdit.origin.label.toUpperCase()}` : 'WINDOW COSTING'}
+      heading={`PRICING A LINE OF ${lineEdit.origin.label.toUpperCase()}`}
       badge={isLoading ? 'LOADING' : `${role.toUpperCase()} SESSION`}
       sidebarWidthCh={48}
       sidebarMobileOrder="top"
@@ -716,26 +484,10 @@ export default function WindowCostingPage() {
           />
         </>
       }
-      // A quote line is priced at cost. The calculator's own quote, order, prints and copies would carry
-      // that cost to a customer, so a quote line offers only the way back.
-      actionItems={quoteLine ? [{ body: 'Save To Quote', onClick: saveLineToDocument }, { body: 'Cancel', onClick: cancelLineEdit }] : [
-        { body: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
-        {
-          body: 'Print',
-          items: [
-            { icon: '⊹', children: 'Quote For Customer', onClick: () => printSheet('customer') },
-            { icon: '⊹', children: 'Costing Sheet (internal)', onClick: () => printSheet('internal') },
-          ],
-        },
-        {
-          body: 'Copy',
-          items: [
-            { icon: '⊹', children: 'Prices For Customer', onClick: copySummary },
-            { icon: '⊹', children: 'Cost Build-up (internal)', onClick: copyCostBreakdown },
-          ],
-        },
-        { body: canSaveCostings ? 'Save Costing' : 'Saving Needs Access', onClick: canSaveCostings ? handleSaveCosting : undefined },
-        { body: 'Reset', onClick: resetCalculator },
+      // The line belongs to the quote or the order that sent it, so the bar offers only the way back.
+      actionItems={[
+        { body: quoteLine ? 'Save To Quote' : 'Save To Order', onClick: saveLineToDocument },
+        { body: 'Cancel', onClick: cancelLineEdit },
       ]}
     >
       {error && (
@@ -746,22 +498,12 @@ export default function WindowCostingPage() {
         </Card>
       )}
 
-      {/* An order or a quote sent this line. The form below is that line. It is not the quote of
-          this calculator. The way back is therefore at the top of the page: in the bar for a quote
-          line, and here for an order line, whose bar keeps the actions of the calculator. */}
-      {lineEdit ? (
-        <CardDouble title={lineEdit.origin.kind === 'order' ? 'EDITING AN ORDER LINE' : 'EDITING A QUOTE LINE'}>
-          <Text>
-            {lineEdit.lineLabel} of {lineEdit.origin.label}. Changing the window below changes that line.
-          </Text>
-          {quoteLine ? null : (
-            <>
-              <br />
-              <ActionButton onClick={saveLineToDocument}>Save To Order</ActionButton> <ActionButton onClick={cancelLineEdit}>Cancel</ActionButton>
-            </>
-          )}
-        </CardDouble>
-      ) : null}
+      {/* The form below is the line that the quote or the order sent. The way back is in the bar at the top. */}
+      <CardDouble title={lineEdit.origin.kind === 'order' ? 'EDITING AN ORDER LINE' : 'EDITING A QUOTE LINE'}>
+        <Text>
+          {lineEdit.lineLabel} of {lineEdit.origin.label}. Changing the window below changes that line.
+        </Text>
+      </CardDouble>
 
       <CardDouble title="WINDOW">
         <Input label="WINDOW NAME (OPTIONAL)" name="window_name" value={windowName} onChange={(event) => setWindowName(event.target.value)} placeholder="Kitchen hopper" />
@@ -1008,76 +750,14 @@ export default function WindowCostingPage() {
         {glazingOption?.group === 'laminate' ? <Input label="METRES FLAT GROUND" type="number" name="glazing_flat_ground" value={metreDrafts.flatGroundM ?? String(input.flatGroundM)} onChange={(event) => updateMetres('flatGroundM', event.target.value)} min="0" step="0.01" /> : null}
       </CardDouble>
 
-      {lineEdit ? null : (
-        <CardDouble title="QUOTE">
-          <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} placeholder="Job reference" />
-          <CustomerPicker
-            label="CUSTOMER"
-            customers={customers}
-            activeOnly
-            value={customerId}
-            onChange={(nextId, picked) => {
-              setCustomerId(nextId);
-              if (picked) {
-                setCustomerName(picked.name);
-              }
-            }}
-          />
-          {selectedCustomer ? <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text> : <Input label="CUSTOMER NAME" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />}
-          <br />
-          <Input label="QUOTE DATE" type="date" name="quote_date" value={quoteDate} onChange={(event) => setQuoteDate(event.target.value)} />
-          <Input label="QUOTE NOTES" name="quote_notes" value={quoteNotes} onChange={(event) => setQuoteNotes(event.target.value)} />
-        </CardDouble>
-      )}
-
-      {lineEdit ? null : (
-        <CardDouble title={`QUOTE LINES (${quoteLines.length})`}>
-          {quoteLines.length ? (
-            <>
-              <Table>
-                <TableRow>
-                  <TableColumn>WINDOW</TableColumn>
-                  <TableColumn style={{ width: '8ch' }}>QTY</TableColumn>
-                  <TableColumn style={{ width: '14ch' }}>UNIT</TableColumn>
-                  <TableColumn style={{ width: '14ch' }}>TOTAL</TableColumn>
-                  <TableColumn style={{ width: '18ch' }}>ACTIONS</TableColumn>
-                </TableRow>
-                {quoteLines.map((line) => (
-                  <TableRow key={line.item.localId}>
-                    <TableColumn>{line.item.name}</TableColumn>
-                    <TableColumn>{line.item.quantity}</TableColumn>
-                    <TableColumn>{formatCurrency(line.result.price)}</TableColumn>
-                    <TableColumn>{formatCurrency(line.total)}</TableColumn>
-                    <TableColumn style={{ whiteSpace: 'nowrap' }}>
-                      <ActionButton onClick={() => editQuoteItem(line.item.localId)}>Edit</ActionButton> <ActionButton onClick={() => removeQuoteItem(line.item.localId)}>Remove</ActionButton>
-                    </TableColumn>
-                  </TableRow>
-                ))}
-              </Table>
-              <br />
-              <RowSpaceBetween>
-                <Text>QUOTE TOTAL</Text>
-                <Text>
-                  <span className="status-pill status-pill-success">{formatCurrency(quoteTotal)}</span>
-                </Text>
-              </RowSpaceBetween>
-            </>
-          ) : (
-            <Text>No windows on this quote.</Text>
-          )}
-          <br />
-          <ActionButton onClick={addToQuote}>Add Window To Quote</ActionButton>
-        </CardDouble>
-      )}
-
       <CardDouble title="WHAT THESE TERMS MEAN">
         <Text>Terms used by the legacy costing sheet.</Text>
         <br />
         <WindowCostingGlossary />
       </CardDouble>
 
-      {/* A quote line is at cost, so Cmd+P prints the internal sheet, never a customer quote at cost. */}
-      <WindowCostingSheet audience={quoteLine ? 'internal' : sheetAudience} reference={reference} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={quoteNotes} ratesLabel={ratesLabel} rates={rates} windows={sheetWindows} />
+      {/* Cmd+P prints the internal costing sheet of this line. The customer's copy prints from the quote page. */}
+      <WindowCostingSheet title={`${lineEdit.lineLabel} of ${lineEdit.origin.label}`} ratesLabel={ratesLabel} rates={rates} windows={[{ id: lineEdit.localId, name: windowName, quantity: orderQuantity, input, result }]} />
     </AppFrame>
   );
 }

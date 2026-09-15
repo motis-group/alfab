@@ -11,6 +11,7 @@ import CustomerPicker from '@components/CustomerPicker';
 import Card from '@components/Card';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
+import OrderImportPanel from '@components/OrderImportPanel';
 import QuoteDocument, { documentLines } from '@components/QuoteDocument';
 import RowSpaceBetween from '@components/RowSpaceBetween';
 import Table from '@components/Table';
@@ -19,11 +20,13 @@ import TableRow from '@components/TableRow';
 import Text from '@components/Text';
 import { QuotePaper } from '@components/PrintedQuote';
 import PrintedQuote from '@components/PrintedQuote';
+import { usePricing } from '@components/PricingProvider';
 
+import { ExtractedPiece } from '@utils/import/model';
 import { consumeLineEditResult, calculatorFor, persistLineEditRequest } from '@utils/line-editing';
 import { Customer, PricingSource, formatCurrency, todayISODate } from '@utils/order-management';
 import { LineDraft, createLineDraft } from '@utils/order-draft';
-import { QuoteDraft, applyQuoteLineResult, clearQuoteDraft, dropPendingLine, emptyQuoteDraft, peekQuoteDraft, persistQuoteDraft, reissueQuoteDraft, setQuoteMargin } from '@utils/quote-draft';
+import { QuoteDraft, addGlassPieces, applyQuoteLineResult, clearQuoteDraft, dropPendingLine, emptyQuoteDraft, peekQuoteDraft, persistQuoteDraft, reissueQuoteDraft, setQuoteMargin } from '@utils/quote-draft';
 import { quoteEmail } from '@utils/quote-email';
 import { QuoteRecord, findQuoteRecord } from '@utils/quote-register';
 import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuote, SavedQuoteLine, createQuote, findQuote, listQuotes, quoteMarginSummary, quotePaperLines, quoteReference, updateQuote } from '@utils/quote-store';
@@ -64,6 +67,7 @@ export default function QuotePage() {
   const params = useParams<{ id: string }>();
   const id = typeof params?.id === 'string' ? params.id : '';
   const isNew = id === 'new';
+  const { pricingData } = usePricing();
 
   const [draft, setDraft] = useState<QuoteDraft>(emptyQuoteDraft);
   /** A quote that a calculator wrote and that has no line this page can edit. */
@@ -214,6 +218,23 @@ export default function QuotePage() {
 
   function editLine(line: SavedQuoteLine, index: number) {
     priceLine(line.draft, `Line ${index + 1}`, false, typeof line.unitCost === 'number' ? line.unitCost : null);
+  }
+
+  /** Puts the pieces read off a customer's order on the quote, one cut-glass line for each piece. */
+  function addImportedPieces(pieces: ExtractedPiece[]) {
+    try {
+      const next = addGlassPieces(draft, pieces, pricingData);
+      setDraft(next);
+      // The new lines are at the end of the list. The full list opens, so the operator sees their prices.
+      if (next.lines.length > LINES_SHOWN) {
+        setShowAllLines(true);
+      }
+      setError(null);
+      setStatus(`Added ${pieces.length} ${pieces.length === 1 ? 'line' : 'lines'} from the order. Save the quote to keep ${pieces.length === 1 ? 'it' : 'them'}.`);
+    } catch (importError: any) {
+      setStatus(null);
+      setError(importError?.message || 'Unable to price the pieces from the order.');
+    }
   }
 
   /** Opens a new quote that copies this quote. Nothing is written until Save Quote. */
@@ -524,6 +545,10 @@ export default function QuotePage() {
                 <span className="status-pill status-pill-success">{formatCurrency(summary.subtotal)}</span>
               </Text>
             </RowSpaceBetween>
+          </CardDouble>
+
+          <CardDouble title="READ A CUSTOMER'S ORDER">
+            <OrderImportPanel onAdd={addImportedPieces} disabled={!canWrite} />
           </CardDouble>
 
           {draft.lines.length ? (

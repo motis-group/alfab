@@ -371,7 +371,7 @@ export default function WindowRatesSettings() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⚙"
-      navRight={<ActionButton onClick={() => router.push('/glass/windows')}>WINDOW COSTING</ActionButton>}
+      navRight={<ActionButton onClick={() => router.push('/glass/windows?editLine=1')}>WINDOW COSTING</ActionButton>}
       heading="WINDOW RATES"
       sectionNavigationItems={APP_ACCOUNT_SECTION_ITEMS}
       badge={isLoading ? 'LOADING' : hasChanges ? 'UNSAVED CHANGES' : source === 'saved' ? 'SAVED RATES' : 'DEFAULT RATES'}
@@ -524,7 +524,7 @@ export default function WindowRatesSettings() {
         {
           hotkey: '⌘+B',
           body: 'Back',
-          onClick: () => router.push('/glass/windows'),
+          onClick: () => router.push('/glass/windows?editLine=1'),
         },
       ]}
     >

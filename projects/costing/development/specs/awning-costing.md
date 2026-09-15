@@ -16,8 +16,8 @@ carries ten recipes. Both feed the same purchase orders.
 | Rates editor | `/settings/awnings` (`pricing:write` to save; every role can read) |
 | Costing page | `app/glass/awnings/page.tsx` |
 | Printed sheet | `components/AwningCostingSheet.tsx`, print styles shared with the window sheet |
-| Saved costings | `utils/awning-quote-store.ts`, table `quotes`, rows marked `kind: awning` |
-| Printed quotes | `utils/customer-quote-store.ts`, table `quotes`, rows marked `kind: awning-quote` |
+| Saved costings, read only | `utils/awning-quote-store.ts`, table `quotes`, rows marked `kind: awning` |
+| Printed quotes, read only | `utils/customer-quote-store.ts`, table `quotes`, rows marked `kind: awning-quote` |
 | Golden checks | `utils/awning-costing.test.ts` (`npm test`) |
 
 The golden check is the sheet's own worked example, priced on the transcribed sheet rates: 1220 x
@@ -56,20 +56,17 @@ its rate is not zero. See [quotes.md](quotes.md).
 
 ## Working with a costing
 
+The page prices one awning line that a quote or an order sends, as [quotes.md](quotes.md) describes.
+It keeps no quote of its own.
+
 - **Batch price.** The sidebar prices the same awning at runs of 1, 2, 5 and 10. Setup minutes
   divide across the run, so the price for each falls as the run grows.
-- **The calculator's list.** "Add Awning To Quote", under the quote lines, adds the costed awning to
-  a list on the page, as on the window costing. "Create Purchase Order" makes one order line for each
-  awning in the list. See [jobs.md](jobs.md).
-- **Printing.** "Costing Sheet (internal)" on the Print menu shows every cost line, the rates used,
-  the labour minutes and the margin. It starts a new page for each awning. "Quote For Customer"
-  prints the shared customer quote, with one line for each awning. Both documents follow
-  [window-costing.md](window-costing.md), which also describes the quote reference and drafts.
-- **Copying.** The Copy menu holds the same split in text. "Prices For Customer" copies the prices.
-  "Cost Build-up (internal)" carries the build-up and is marked as not for a customer.
-- **Saved costings.** "Save Costing" writes the awning, the customer and the price as a row in
-  `quotes` marked `kind: awning`. The row shows in the quote list and opens on the quote page, as a
-  saved window costing does.
+- **Printing.** Cmd+P prints the internal costing sheet of the line. The sheet shows every cost line,
+  the rates used and the labour minutes, and the margin when its rate is not zero. It prints as the
+  window sheet does, which [window-costing.md](window-costing.md) describes.
+- **Saved costings.** The quotes table can hold rows marked `kind: awning` and `kind: awning-quote`,
+  and no page writes them. They show in the quote list and open on the quote page, as a saved window
+  costing does.
 - **Not priced.** Each line with no rate links to its own field in the rates editor.
 
 ## Rates

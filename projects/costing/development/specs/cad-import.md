@@ -1,6 +1,6 @@
 # CAD File Import (Calculator)
 
-The glass calculator at `/glass/quote` accepts a customer's 2D CAD drawing and fills in the glass geometry: width, height, shape class, radius corners, hole count, and the measured area and edge length used for pricing. An import never changes the glass type, thickness, ceramic banding or scanning. An ad hoc line on the purchase order page (`/glass/new`) opens this calculator to be edited, so an order line gets its geometry there.
+The glass calculator at `/glass/quote` accepts a customer's 2D CAD drawing and fills in the glass geometry: width, height, shape class, radius corners, hole count, and the measured area and edge length used for pricing. An import never changes the glass type, thickness, ceramic banding or scanning. The calculator prices one cut-glass line that a quote or an order sends, so that line gets its geometry there.
 
 ## Supported files
 
@@ -11,7 +11,7 @@ The glass calculator at `/glass/quote` accepts a customer's 2D CAD drawing and f
 | DWG | Converted to DXF on the server, then read in the browser | Needs LibreDWG on the server, see below. |
 | SVG | In the browser | Physical units come from `width`/`height` + `viewBox`. |
 
-One drop zone takes drawings and customer orders, and routes each file by its extension. A DXF, DWG or SVG goes to the CAD import. A PDF or a Word document goes to the order import in [order-import.md](order-import.md). The zone rejects any other extension and lists the accepted types. When the content of a file does not match its extension, such as a PDF saved as `.dxf`, the message says what to ask the customer for.
+The drop zone on the calculator takes a DXF, DWG or SVG drawing. A customer's order in a PDF or a Word document goes on the quote page, as [order-import.md](order-import.md) describes. When the content of a file does not match its extension, such as a PDF saved as `.dxf`, the message says what to ask the customer for.
 
 Entities read from DXF: `LINE`, `ARC`, `CIRCLE`, `ELLIPSE`, `LWPOLYLINE` (with bulges), `POLYLINE`/`VERTEX`, `SPLINE` (NURBS or fit points), `INSERT` (blocks, including scale/rotation/arrays) and `HATCH` boundaries as a fallback. Text, dimensions, leaders, solids, 3D entities, frozen/off layers, invisible entities and paper space are ignored.
 

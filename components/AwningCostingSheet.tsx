@@ -1,9 +1,7 @@
 'use client';
 
 import PrintSheet from '@components/PrintSheet';
-import PrintedQuote from '@components/PrintedQuote';
-import { CustomerQuoteLine } from '@utils/customer-quote-store';
-import { formatCurrency } from '@utils/order-management';
+import { formatCurrency, todayISODate } from '@utils/order-management';
 import { AwningCostResult, AwningCostingInput, AwningRates, CostLine, describeAwning } from '@utils/awning-costing';
 
 export interface AwningCostingSheetAwning {
@@ -15,28 +13,11 @@ export interface AwningCostingSheetAwning {
 }
 
 interface AwningCostingSheetProps {
-  /** Internal shows the cost build-up. Customer shows prices only and is safe to hand over. */
-  audience: 'internal' | 'customer';
-  /** The saved quote's reference, or null while what is on screen has not been saved. */
-  reference: string | null;
-  quoteName: string;
-  customerName: string;
-  quoteDate: string;
-  notes: string;
+  /** The heading of each page. Example: "Line 3 of Q-3F2A9C1E". */
+  title: string;
   ratesLabel: string;
   rates: AwningRates;
   awnings: AwningCostingSheetAwning[];
-}
-
-/** The customer's lines. The page saves these and the sheet prints them, so the record matches the paper. */
-export function awningQuoteLines(awnings: AwningCostingSheetAwning[], rates: AwningRates): CustomerQuoteLine[] {
-  return awnings.map((awning, index) => ({
-    description: awning.name || `Awning ${index + 1}`,
-    spec: describeAwning(awning.input, rates),
-    quantity: awning.quantity,
-    unitPrice: awning.result.price,
-    input: awning.input,
-  }));
 }
 
 function formatQty(line: CostLine): string {
@@ -45,17 +26,14 @@ function formatQty(line: CostLine): string {
 }
 
 /**
- * Costing sheet for the printer. Hidden on screen; printing hides the app around it. Shares the
- * window sheet's class names, so both bench documents print identically: one awning per page. The
- * customer copy is the shared quote document, with each awning as one of its lines.
+ * The costing sheet for the printer. It is hidden on screen, and printing hides the app around it.
+ *
+ * The sheet shows the cost build-up, so it is for Alfab only. It uses the class names of the window
+ * sheet, so both bench documents print the same way: one awning per page.
  */
-export default function AwningCostingSheet({ audience, reference, quoteName, customerName, quoteDate, notes, ratesLabel, rates, awnings }: AwningCostingSheetProps) {
-  if (audience === 'customer') {
-    return <PrintedQuote reference={reference} quoteName={quoteName} customerName={customerName} quoteDate={quoteDate} notes={notes} lines={awningQuoteLines(awnings, rates)} />;
-  }
-
+export default function AwningCostingSheet({ title, ratesLabel, rates, awnings }: AwningCostingSheetProps) {
   return (
-    <PrintSheet audience={audience}>
+    <PrintSheet audience="internal">
       {awnings.map((awning, index) => {
         const { result } = awning;
         const lineTotal = result.price == null ? null : result.price * awning.quantity;
@@ -63,15 +41,14 @@ export default function AwningCostingSheet({ audience, reference, quoteName, cus
         return (
           <article key={awning.id} className="window-costing-sheet__window">
             <header className="window-costing-sheet__heading">
-              <h1 className="window-costing-sheet__title">{quoteName.trim() || 'Awning costing'}</h1>
+              <h1 className="window-costing-sheet__title">{title}</h1>
               <span>
-                {quoteDate}
+                {todayISODate()}
                 {awnings.length > 1 ? ` · awning ${index + 1} of ${awnings.length}` : ''}
               </span>
             </header>
 
             <div className="window-costing-sheet__meta">
-              <span>Customer: {customerName.trim() || 'Walk-in / phone'}</span>
               <span>Awning: {awning.name || `Awning ${index + 1}`}</span>
               <span>Quantity: {awning.quantity}</span>
               <span>Rates: {ratesLabel}</span>
@@ -134,7 +111,6 @@ export default function AwningCostingSheet({ audience, reference, quoteName, cus
               Labour: {result.minutes.total.toFixed(1)} minutes each at {rates.labour.perHour == null ? 'no rate' : formatCurrency(rates.labour.perHour)} per hour, including {result.minutes.setup.toFixed(1)} minutes of setup shared across {result.qty}.
             </p>
             {result.unpriced.length ? <p className="window-costing-sheet__note">Not priced, charged as nil: {result.unpriced.map((entry) => entry.label).join(', ')}.</p> : null}
-            {notes.trim() ? <p className="window-costing-sheet__note">Notes: {notes.trim()}</p> : null}
 
             <footer className="window-costing-sheet__footer">Comments:</footer>
           </article>

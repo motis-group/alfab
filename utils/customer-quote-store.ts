@@ -10,7 +10,8 @@ export const GST_RATE = 0.1;
 
 /**
  * A window or awning quote as it was printed for a customer. A saved costing in the same table holds
- * one item. These rows are the offers that went out. The glass calculator saves its own.
+ * one item. These rows are the offers that went out. The quote list reads them, and no page writes
+ * them.
  */
 export type CustomerQuoteKind = 'window-quote' | 'awning-quote';
 
@@ -31,7 +32,7 @@ export interface CustomerQuoteLine extends QuoteLine {
   input: WindowCostingInput | AwningCostingInput;
 }
 
-/** Everything the printed quote says. Two prints with the same content are the same offer. */
+/** Everything the printed quote says. */
 export interface CustomerQuoteContent {
   kind: CustomerQuoteKind;
   name: string;
@@ -85,47 +86,6 @@ export function quoteTotals(lines: QuoteLine[]) {
 // ponytail: prefix of a uuid, no uniqueness guarantee; a sequential quote number when the quotes table gets a column for it.
 export function quoteReference(id: string): string {
   return `Q-${id.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
-}
-
-/** Identifies the offer a print would record. A reprint with the same fingerprint reuses its record. */
-export function quoteFingerprint(quote: CustomerQuoteContent): string {
-  const { kind, name, customer, customerId, date, notes, lines } = quote;
-  return JSON.stringify({ kind, name, customer, customerId, date, notes, lines });
-}
-
-/** Saves the quote exactly as it will print, and returns the record id the reference is taken from. */
-export async function saveCustomerQuote(quote: CustomerQuoteContent & { issuedBy: string | null; ratesUpdatedAt: string | null }): Promise<string> {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(quote.date)) {
-    throw new Error('Set the quote date: the 30-day price hold runs from it.');
-  }
-  const { subtotal, gst } = quoteTotals(quote.lines);
-  const db = createClient();
-  const { data, error } = await db
-    .from(TABLE)
-    .insert({
-      // As printed, blank included: the paper supplies its own wording for a blank.
-      name: quote.name.trim(),
-      client: quote.customer.trim(),
-      // Midnight UTC, so the day printed is the day read back whatever time zone the database runs in.
-      date: `${quote.date}T00:00:00Z`,
-      specification: {
-        kind: quote.kind,
-        customerId: quote.customerId,
-        notes: quote.notes,
-        lines: quote.lines,
-        issuedBy: quote.issuedBy,
-        issuedAt: new Date().toISOString(),
-        ratesUpdatedAt: quote.ratesUpdatedAt,
-      },
-      cost: { subtotal, gst },
-    })
-    .select('id')
-    .single();
-
-  if (error || !data?.id) {
-    throw new Error(error?.message || 'The quote was saved but no record id came back.');
-  }
-  return data.id as string;
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {

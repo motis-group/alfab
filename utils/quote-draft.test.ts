@@ -2,9 +2,12 @@
 import assert from 'node:assert/strict';
 import { beforeEach, test } from 'node:test';
 
+import { defaultPricingData } from '@components/PricingProvider';
+import { calculateCost } from './calculations';
+import { ExtractedPiece } from './import/model';
 import { LineEditResult } from './line-editing';
-import { QuoteDraft, applyQuoteLineResult, clearQuoteDraft, dropPendingLine, emptyQuoteDraft, peekQuoteDraft, persistQuoteDraft, reissueQuoteDraft, setQuoteMargin } from './quote-draft';
-import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuoteLine } from './quote-store';
+import { QuoteDraft, addGlassPieces, applyQuoteLineResult, clearQuoteDraft, dropPendingLine, emptyQuoteDraft, peekQuoteDraft, persistQuoteDraft, reissueQuoteDraft, setQuoteMargin } from './quote-draft';
+import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuoteLine, priceAtMargin } from './quote-store';
 import { createLineDraft } from './order-draft';
 import { todayISODate } from './order-management';
 
@@ -122,6 +125,22 @@ test('a draft with no margin reads at the default margin', () => {
   (globalThis as { window: { sessionStorage: { setItem: (k: string, v: string) => void } } }).window.sessionStorage.setItem('alfabQuoteDraft', JSON.stringify(draft));
 
   assert.equal(peekQuoteDraft()?.marginPercent, DEFAULT_QUOTE_MARGIN_PERCENT, 'a returning line is priced at a number, not NaN');
+});
+
+test('pieces read off a customer order go on the quote at cost, one cut-glass line for each piece', () => {
+  const piece: ExtractedPiece = { name: ' Side panel ', quantity: 3, spec: { ...createLineDraft().adhocSpec, width: 1000, height: 800 }, confidence: 'read', source: 'line 4', notes: [] };
+  const cost = calculateCost(piece.spec, defaultPricingData).total;
+  assert.ok(cost > 0, 'the piece has a cost for the margin to act on');
+
+  const added = addGlassPieces({ ...emptyQuoteDraft(), marginPercent: 25, lines: [line('a')] }, [piece], defaultPricingData);
+
+  assert.equal(added.lines.length, 2, 'the lines already on the quote stay');
+  const [, glass] = added.lines;
+  assert.equal(glass.draft.pricingSource, 'adhoc_calculator', 'Edit sends the line to the glass calculator');
+  assert.equal(glass.draft.lineNote, 'Side panel');
+  assert.equal(glass.draft.quantityOrdered, 3);
+  assert.equal(glass.unitCost, cost, 'the line holds the cost');
+  assert.equal(glass.draft.unitPriceAtOrder, priceAtMargin(cost, 25), 'the margin of the quote makes the price');
 });
 
 test('a reissued quote copies the saved quote, with no number and a new date', () => {
