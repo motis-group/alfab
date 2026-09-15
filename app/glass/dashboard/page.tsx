@@ -159,14 +159,16 @@ export default function DashboardPage() {
 
           <Card title="OPEN ORDERS BY CUSTOMER">
             {byCustomer.length ? (
-              <Table>
+              <Table data-one-line>
                 <TableRow>
-                  <TableColumn>CUSTOMER</TableColumn>
-                  <TableColumn style={{ width: '8ch' }}>OPEN</TableColumn>
+                  <TableColumn style={{ width: '100%' }}>CUSTOMER</TableColumn>
+                  <TableColumn>OPEN</TableColumn>
                 </TableRow>
                 {byCustomer.map((entry) => (
                   <TableRow key={entry.customerId}>
-                    <TableColumn>{entry.name}</TableColumn>
+                    <TableColumn data-fill title={entry.name}>
+                      {entry.name}
+                    </TableColumn>
                     <TableColumn>{entry.count}</TableColumn>
                   </TableRow>
                 ))}
@@ -181,18 +183,20 @@ export default function DashboardPage() {
       {/* Only what is late or nearly late. A row here is a phone call, so an empty card says so. */}
       <CardDouble title={overdue.length ? `OVERDUE (${overdue.length})` : 'NOTHING OVERDUE'}>
         {overdue.length ? (
-          <Table>
+          <Table data-one-line>
             <TableRow>
-              <TableColumn style={{ width: '16ch' }}>PO NUMBER</TableColumn>
-              <TableColumn>CUSTOMER</TableColumn>
-              <TableColumn style={{ width: '14ch' }}>REQUIRED</TableColumn>
-              <TableColumn style={{ width: '16ch' }}>STATUS</TableColumn>
-              <TableColumn style={{ width: '10ch' }}>ACTIONS</TableColumn>
+              <TableColumn>PO NUMBER</TableColumn>
+              <TableColumn style={{ width: '100%' }}>CUSTOMER</TableColumn>
+              <TableColumn>REQUIRED</TableColumn>
+              <TableColumn>STATUS</TableColumn>
+              <TableColumn>ACTIONS</TableColumn>
             </TableRow>
             {overdue.map((order) => (
               <TableRow key={order.id}>
                 <TableColumn>{order.po_number}</TableColumn>
-                <TableColumn>{customerName(order.customer_id)}</TableColumn>
+                <TableColumn data-fill title={customerName(order.customer_id)}>
+                  {customerName(order.customer_id)}
+                </TableColumn>
                 <TableColumn>
                   <span className="status-error">{order.required_date?.slice(0, 10)}</span>
                 </TableColumn>
@@ -210,18 +214,20 @@ export default function DashboardPage() {
 
       <CardDouble title={dueSoon.length ? `DUE WITHIN 7 DAYS (${dueSoon.length})` : 'NOTHING DUE THIS WEEK'}>
         {dueSoon.length ? (
-          <Table>
+          <Table data-one-line>
             <TableRow>
-              <TableColumn style={{ width: '16ch' }}>PO NUMBER</TableColumn>
-              <TableColumn>CUSTOMER</TableColumn>
-              <TableColumn style={{ width: '14ch' }}>REQUIRED</TableColumn>
-              <TableColumn style={{ width: '16ch' }}>STATUS</TableColumn>
-              <TableColumn style={{ width: '10ch' }}>ACTIONS</TableColumn>
+              <TableColumn>PO NUMBER</TableColumn>
+              <TableColumn style={{ width: '100%' }}>CUSTOMER</TableColumn>
+              <TableColumn>REQUIRED</TableColumn>
+              <TableColumn>STATUS</TableColumn>
+              <TableColumn>ACTIONS</TableColumn>
             </TableRow>
             {dueSoon.map((order) => (
               <TableRow key={order.id}>
                 <TableColumn>{order.po_number}</TableColumn>
-                <TableColumn>{customerName(order.customer_id)}</TableColumn>
+                <TableColumn data-fill title={customerName(order.customer_id)}>
+                  {customerName(order.customer_id)}
+                </TableColumn>
                 <TableColumn>{order.required_date?.slice(0, 10)}</TableColumn>
                 <TableColumn>{statusLabel(order.status)}</TableColumn>
                 <TableColumn>
@@ -276,17 +282,19 @@ export default function DashboardPage() {
 
       <CardDouble title="RECENT ORDERS">
         {recent.length ? (
-          <Table>
+          <Table data-one-line>
             <TableRow>
-              <TableColumn style={{ width: '16ch' }}>PO NUMBER</TableColumn>
-              <TableColumn>CUSTOMER</TableColumn>
-              <TableColumn style={{ width: '16ch' }}>STATUS</TableColumn>
-              <TableColumn style={{ width: '10ch' }}>ACTIONS</TableColumn>
+              <TableColumn>PO NUMBER</TableColumn>
+              <TableColumn style={{ width: '100%' }}>CUSTOMER</TableColumn>
+              <TableColumn>STATUS</TableColumn>
+              <TableColumn>ACTIONS</TableColumn>
             </TableRow>
             {recent.map((order) => (
               <TableRow key={order.id}>
                 <TableColumn>{order.po_number}</TableColumn>
-                <TableColumn>{customerName(order.customer_id)}</TableColumn>
+                <TableColumn data-fill title={customerName(order.customer_id)}>
+                  {customerName(order.customer_id)}
+                </TableColumn>
                 <TableColumn>{statusLabel(order.status)}</TableColumn>
                 <TableColumn>
                   <ActionButton onClick={() => router.push(`/glass/new?orderId=${order.id}`)}>View</ActionButton>
