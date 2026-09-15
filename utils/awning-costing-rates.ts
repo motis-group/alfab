@@ -103,7 +103,7 @@ export const AWNING_RATES_AS_TRANSCRIBED: AwningRates = {
   labour: {
     setupMinutes: 60,
     eachMinutes: 330,
-    // The sheet costs labour at $1.25 a minute. The window sheet uses $85 an hour; see the spec.
+    // The sheet costs labour at $1.25 a minute. A costing charges the window labour rate instead.
     perHour: 75,
   },
   glass: {

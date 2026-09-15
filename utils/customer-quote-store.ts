@@ -9,8 +9,8 @@ const TABLE = 'quotes';
 export const GST_RATE = 0.1;
 
 /**
- * A window or awning quote as it was printed for a customer. Saved costings in the same table are
- * single-item templates; these are the offers that went out. The glass calculator saves its own.
+ * A window or awning quote as it was printed for a customer. A saved costing in the same table holds
+ * one item. These rows are the offers that went out. The glass calculator saves its own.
  */
 export type CustomerQuoteKind = 'window-quote' | 'awning-quote';
 

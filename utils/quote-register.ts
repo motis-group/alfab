@@ -28,8 +28,8 @@ export const QUOTE_KIND_LABELS: Record<QuoteKind, string> = {
 };
 
 /**
- * One saved quote, whichever calculator priced it. The three calculators write to the same table
- * with different shapes; this is the shape the order list reads.
+ * One saved quote of any kind. Each kind is a row in the quotes table with its own shape. This is
+ * the shape the order list reads.
  */
 export interface QuoteRecord {
   id: string;
@@ -53,11 +53,12 @@ export interface QuoteRecord {
    * quote page can edit it. Saving rewrites the row as a quote for a job. The row keeps its id, so
    * the number the customer holds still finds it.
    *
-   * A line with no price is not here. It carries no offer, and it would otherwise print as $0.00.
-   * mergeQuotesForOrder drops such a line for the same reason.
+   * On a quote that a calculator wrote, a line with no price carries no offer and would print as
+   * $0.00. Such a line is not here, and the draft does not carry it. A glass piece at $0 has no
+   * price.
    */
   editableLines: SavedQuoteLine[];
-  /** Purchase order lines this quote would create. */
+  /** The lines on the quote, unpriced ones included. */
   lineCount: number;
   total: number;
   status: QuoteStatus;
@@ -68,18 +69,18 @@ export interface QuoteRecord {
 }
 
 export function fromGlass(quote: SavedGlassQuote): QuoteRecord {
+  const priced = quote.items.filter((item) => item.unitPrice > 0);
+
   return {
     id: quote.id,
     kind: 'glass',
     kindLabel: QUOTE_KIND_LABELS['glass'],
     editable: false,
-    editableLines: quote.items
-      .filter((item) => item.unitPrice > 0)
-      .map((item) => ({
-        draft: createLineDraft({ pricingSource: 'adhoc_calculator', adhocSpec: item.spec, quantityOrdered: Math.max(1, item.quantity), unitPriceAtOrder: item.unitPrice, lineNote: item.name, markupPercent: item.markupPercent }),
-        spec: describeGlassSpecification(item.spec),
-        extras: [],
-      })),
+    editableLines: priced.map((item) => ({
+      draft: createLineDraft({ pricingSource: 'adhoc_calculator', adhocSpec: item.spec, quantityOrdered: Math.max(1, item.quantity), unitPriceAtOrder: item.unitPrice, lineNote: item.name, markupPercent: item.markupPercent }),
+      spec: describeGlassSpecification(item.spec),
+      extras: [],
+    })),
     reference: null,
     name: quote.name,
     customer: quote.customer,
@@ -89,14 +90,14 @@ export function fromGlass(quote: SavedGlassQuote): QuoteRecord {
     total: quote.total,
     status: quote.status,
     purchaseOrderId: quote.purchaseOrderId,
-    draft: quote.items.length
+    draft: priced.length
       ? {
           quoteName: quote.name,
           customerName: quote.customer,
           customerId: quote.customerId,
           quoteDate: quote.date ? quote.date.slice(0, 10) : '',
           quoteNotes: quote.notes,
-          glassLines: quote.items.map((item) => ({
+          glassLines: priced.map((item) => ({
             description: item.name,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
@@ -326,11 +327,11 @@ export interface MergeRefusal {
 }
 
 /**
- * Several quotes as one purchase order.
+ * One or more quotes as one purchase order. A single quote is a merge of one.
  *
- * A boat needs windows, awnings and cut glass, each priced on its own page and saved as its own
- * quote. Converting them together concatenates their lines into one draft, so the customer gets one
- * order and one number.
+ * A quote for a job holds every kind of line. Each calculator also saves quotes of its own, so the
+ * work for one job can sit on several quotes. Converting them together puts their lines in one
+ * draft, so the customer gets one order and one number.
  *
  * One order goes to one customer, so quotes naming different customers are refused. A purchase
  * order carries a single customer id and a single delivery address, and a line carries no customer
@@ -379,7 +380,7 @@ export function mergeQuotesForOrder(records: QuoteRecord[]): MergedQuoteDraft | 
   return {
     draft: {
       quoteName: priced.length === 1 ? label(priced[0]) : priced.map(label).filter(Boolean).join(' + '),
-      customerName: withCustomerId?.customer || priced[0].customer,
+      customerName: withCustomerId?.customer || priced.find((record) => record.customer.trim())?.customer || '',
       customerId: withCustomerId?.customerId || null,
       quoteDate: priced[0].draft!.quoteDate,
       quoteNotes: Array.from(new Set(notes)).join('\n'),

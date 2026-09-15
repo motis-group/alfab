@@ -115,9 +115,10 @@ sets one margin for all its lines. See [quotes.md](quotes.md).
 
 - **Batch price.** The sidebar prices the same window at batches of 1, 2, 5 and 10. Setup and
   development minutes divide across the batch, so the price per window falls as the run grows.
-- **The calculator's list.** "Add Window To Quote" adds the costed window to a list on the page. The
-  list is separate from a quote for a job, which [quotes.md](quotes.md) describes. "Create Purchase
-  Order" makes one order line for each window in the list. See [jobs.md](jobs.md).
+- **The calculator's list.** "Add Window To Quote", under the quote lines, adds the costed window
+  to a list on the page. It is the only add control on the page. The list is separate from a quote
+  for a job, which [quotes.md](quotes.md) describes. "Create Purchase Order" makes one order line for
+  each window in the list. See [jobs.md](jobs.md).
 - **Printing.** The Print menu holds two documents. They print the windows in the list, or the window
   on screen when the list is empty. "Costing Sheet (internal)" shows every cost line, the rates used,
   the labour minutes, margin, packing and uplift. It starts a new page for each window, because a
@@ -216,8 +217,7 @@ made it. The three triggers ship in `docs/order-management-schema.sql`. Keep eac
 table.
 
 A saved costing stores its price and the stamp of the rates that priced it, so reopening it shows
-what was quoted. No page reprices a costing on its archive row. `loadWindowRatesVersion` in
-`utils/window-costing-store.ts` loads an archive row, and nothing calls it.
+what was quoted. No page reprices a costing on its archive row.
 
 ## Seeing a rate change before it is saved
 

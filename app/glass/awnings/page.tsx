@@ -27,7 +27,7 @@ import { AwningQuoteLine, persistQuoteToOrderDraft } from '@utils/quote-to-order
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 import { AwningCostingInput, CostLine, GLAZING_ORDER, costAwning, costAwningBatches, createAwningInput, describeAwning } from '@utils/awning-costing';
 import { AwningRates, DEFAULT_AWNING_RATES, GlazingId, mergeAwningRates } from '@utils/awning-costing-rates';
-import { loadAwningRates, loadAwningRatesVersion } from '@utils/awning-costing-store';
+import { loadAwningRates } from '@utils/awning-costing-store';
 import { saveAwningCosting } from '@utils/awning-quote-store';
 
 const BATCH_SIZES = [1, 2, 5, 10];
@@ -95,7 +95,6 @@ export default function AwningCostingPage() {
   // Customer by default, so a browser Cmd+P prints the safe document. The internal button raises it
   // for one print and `afterprint` puts it back.
   const [sheetAudience, setSheetAudience] = useState<'internal' | 'customer'>('customer');
-  const [comparison, setComparison] = useState<{ id: string; quoted: number | null; today: number | null; onOriginal: number | null } | null>(null);
 
   const describe = useCallback((forInput: AwningCostingInput) => describeAwning(forInput, rates), [rates]);
   // A quote line is priced at cost, because the quote sets the margin.
@@ -360,7 +359,7 @@ export default function AwningCostingPage() {
         result,
         ratesUpdatedAt,
       });
-      setStatus({ tone: 'success', message: 'Costing saved. Load it again from Saved costings.' });
+      setStatus({ tone: 'success', message: 'Costing saved. It is in the order list.' });
     } catch (saveError: any) {
       setStatus({ tone: 'warning', message: saveError?.message || 'Unable to save the costing.' });
     }
@@ -611,13 +610,7 @@ export default function AwningCostingPage() {
       // A quote line is priced at cost. The calculator's own quote, order, prints and copies would carry
       // that cost to a customer, so a quote line offers only the way back.
       actionItems={quoteLine ? [{ body: 'Save To Quote', onClick: saveLineToDocument }, { body: 'Cancel', onClick: cancelLineEdit }] : [
-        {
-          body: 'Add',
-          items: [
-            { icon: '⊹', children: 'Add Awning To Quote', onClick: addToQuote },
-            { icon: '⊹', children: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
-          ],
-        },
+        { body: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
         {
           body: 'Print',
           items: [
@@ -657,6 +650,7 @@ export default function AwningCostingPage() {
       ) : null}
 
       <CardDouble title="AWNING">
+        <Input label="AWNING NAME (OPTIONAL)" name="awning_name" value={awningName} onChange={(event) => setAwningName(event.target.value)} placeholder="Port side, cabin window..." />
         <Text style={{ opacity: 0.7 }}>Glass size, not opening size.</Text>
         <br />
         <Input label="GLASS HEIGHT (MM)" type="number" name="awning_height" value={String(input.heightMm)} onChange={(event) => updateNumber('heightMm', event.target.value)} min="0" />
@@ -695,10 +689,6 @@ export default function AwningCostingPage() {
           <input type="checkbox" checked={input.flyscreen} onChange={(event) => update({ flyscreen: event.target.checked })} /> Flyscreen and clips
         </label>
         <Text style={{ opacity: 0.7 }}>Flyscreen is a selling price in the source sheet and is marked up again. Kept as the sheet had it.</Text>
-        <br />
-        <Input label="AWNING NAME (OPTIONAL)" name="awning_name" value={awningName} onChange={(event) => setAwningName(event.target.value)} placeholder="Port side, cabin window..." />
-        <br />
-        <ActionButton onClick={addToQuote}>Add Awning To Quote</ActionButton>
       </CardDouble>
 
       {lineEdit ? null : (
@@ -758,6 +748,8 @@ export default function AwningCostingPage() {
           ) : (
             <Text>No awnings on this quote.</Text>
           )}
+          <br />
+          <ActionButton onClick={addToQuote}>Add Awning To Quote</ActionButton>
         </CardDouble>
       )}
 

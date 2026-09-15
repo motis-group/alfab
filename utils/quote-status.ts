@@ -6,7 +6,7 @@
  * what the shop does anyway, converting quotes, rather than from a status somebody has to remember
  * to set.
  *
- * Shared by the glass, window and awning quote lists: all three are rows in `quotes`.
+ * Every kind of quote is a row in `quotes`, so one rule serves them all.
  */
 
 import { createClient } from '@utils/db-client';

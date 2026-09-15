@@ -6,7 +6,7 @@ create extension if not exists pgcrypto;
 create table if not exists quotes (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  client text not null default 'No Client',
+  client text not null default '',
   specification jsonb not null,
   cost jsonb not null,
   date timestamptz not null default now(),
@@ -33,6 +33,11 @@ begin
 
   alter table quotes drop constraint if exists quotes_status_check;
   alter table quotes add constraint quotes_status_check check (status in ('open', 'won', 'lost', 'expired'));
+
+  -- A quote with no customer stores a blank. The app reads this column as the customer name, so a
+  -- row that holds the placeholder 'No Client' gets a blank too.
+  alter table quotes alter column client set default '';
+  update quotes set client = '' where client = 'No Client';
 exception
   when undefined_table then
     null;

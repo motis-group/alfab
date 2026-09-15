@@ -4,7 +4,7 @@ import { AwningCostingInput, AwningCostResult, CostLine } from '@utils/awning-co
 
 const TABLE = 'quotes';
 
-/** Saved awning costing. Doubles as a per-customer template: load it to price the same awning again. */
+/** A saved awning costing. The order list shows it, and the quote page opens it as a quote for a job. */
 export interface SavedAwningCosting {
   id: string;
   name: string;
@@ -49,7 +49,7 @@ function asObject(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' ? (value as Record<string, unknown>) : null;
 }
 
-/** Awning costings share the quotes table with the glass and window calculators, so rows carry a kind. */
+/** Every kind of quote shares the quotes table, so rows carry a kind. */
 function toSavedCosting(row: QuoteRow): SavedAwningCosting | null {
   const specification = asObject(row.specification);
   if (!specification || specification.kind !== 'awning' || !specification.input) {
@@ -85,7 +85,7 @@ export async function saveAwningCosting(costing: { name: string; customer: strin
   const db = createClient();
   const { error } = await db.from(TABLE).insert({
     name: costing.name.trim() || 'Awning costing',
-    client: costing.customer.trim() || 'No Client',
+    client: costing.customer.trim(),
     specification: {
       kind: 'awning',
       input: costing.input,

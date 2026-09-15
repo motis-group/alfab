@@ -9,8 +9,9 @@ at `/glass/windows`, which prices made-up aluminium windows. Both feed the same 
 The calculator keeps its own quote of cut-glass pieces. It is separate from a quote for a job, which
 [quotes.md](quotes.md) describes.
 
-The quote holds as many pieces as the job has. Price a piece, name it, add it to the quote, price the
-next. Each piece keeps its own size, glass and quantity, and becomes one purchase order line. The
+The quote holds as many pieces as the job has. Price a piece, name it, add it with "Add Piece To
+Quote" under the quote lines, and price the next. Each piece keeps its own size, glass and
+quantity, and becomes one purchase order line. The
 markup is set once for the quote, under the quote notes, and prices every piece. A change to it
 reprices the whole quote. A piece with a manual unit price keeps that price.
 
@@ -30,8 +31,9 @@ Two actions keep the quote:
   reference.
 
 The quote list at `/glass` shows both rows with the quotes of every other kind. Open on a
-`kind: glass` row shows it on the quote page. When the quote has a priced piece, saving it there
-rewrites the row as a quote for a job.
+`kind: glass` row shows it on the quote page. When the quote has a piece priced above $0, saving it
+there rewrites the row as a quote for a job. A piece at $0 has no price, so it stays off the quote
+page and off any order made from the quote.
 
 ## Customer
 

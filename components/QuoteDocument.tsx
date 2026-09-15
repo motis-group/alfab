@@ -55,7 +55,7 @@ export default function QuoteDocument({ quote }: QuoteDocumentProps) {
           <PrintedQuote {...paper} />
         </>
       ) : (
-        <Text>This quote has no priced line. Open it in the calculator to price it.</Text>
+        <Text>This quote has no priced line. It cannot become an order.</Text>
       )}
     </Window>
   );

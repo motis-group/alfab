@@ -29,8 +29,9 @@ function formatSpread(spread: number | null): string {
 }
 
 /**
- * Whether every gap leans the same way by roughly the same amount. Ten items disagreeing by a
- * similar margin in a similar direction is one event, not ten, and says so.
+ * Whether three or more material gaps sit within 6 percentage points of each other. Ten items that
+ * disagree by a similar amount are one event, not ten. A spread has no sign, so this cannot tell
+ * which list is dearer.
  */
 function systematicOffset(items: DriftItem[]): { low: number; high: number; count: number } | null {
   const spreads = items.filter((item) => (item.spread ?? 0) >= MATERIAL_SPREAD).map((item) => item.spread as number);
@@ -98,10 +99,10 @@ export default function RateDriftReport() {
             <Card title="THIS LOOKS LIKE ONE EVENT">
               <Text>
                 <span className="status-warning">
-                  {offset.count} items disagree, all in the same direction, all between {formatSpread(offset.low)} and {formatSpread(offset.high)}.
+                  {offset.count} items disagree, each by between {formatSpread(offset.low)} and {formatSpread(offset.high)}.
                 </span>
               </Text>
-              <Text>A uniform gap across many items indicates one list took a price rise the other did not.</Text>
+              <Text>A similar gap across many items can mean that one list took a price rise the other did not.</Text>
               <Text style={{ opacity: 0.7 }}>Check against a supplier invoice before editing either list.</Text>
             </Card>
           ) : null}
