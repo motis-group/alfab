@@ -14,7 +14,7 @@ interface QuoteDocumentProps {
   quote: QuoteRecord;
 }
 
-/** A printed quote has its lines as printed. Any other quote shows the lines it would order. */
+/** A quote that has printedLines shows them. Any other quote shows the lines it would order. */
 export function documentLines(quote: QuoteRecord): QuoteLine[] {
   if (quote.printedLines) {
     return quote.printedLines;

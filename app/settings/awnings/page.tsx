@@ -73,10 +73,6 @@ const GLASS_EXTRAS: RateField[] = [
 ];
 
 /**
- * Rates the whole costing leans on. A blank or zero here is not reported as "not priced": it reaches
- * arithmetic as zero and the quote still prints a confident price that is too low.
- */
-/**
  * Rates chosen in another list. The awning costing derives them, so they are shown and not edited.
  * See utils/shared-rates.ts.
  */
@@ -87,6 +83,10 @@ const DERIVED_FIELDS: Record<string, { label: string; href: string }> = {
   ...Object.fromEntries(Object.keys(AWNING_GLASS_FROM_LIST).map((id) => [`glass.options.${id}.list`, { label: 'the glass price list', href: '/settings' }])),
 };
 
+/**
+ * Rates the whole costing leans on. A blank or zero here is not reported as "not priced": it reaches
+ * arithmetic as zero and the quote still prints a confident price that is too low.
+ */
 const SPINE = new Set(['labour.perHour', 'labour.eachMinutes', 'marginRate', 'quantities.anchorPlateM', 'quantities.fixingSets']);
 
 function valueAt(rates: AwningRates, path: string): number | null {
@@ -364,7 +364,7 @@ export default function AwningRatesSettings() {
       </CardDouble>
 
       <CardDouble title="LABOUR">
-        <Text>Setup is divided across the run. Sheet rate $1.25 per minute ($75 per hour); the window costing uses $85.</Text>
+        <Text>Setup is divided across the run.</Text>
         <Input label="THESE LAST KNOWN GOOD" name="asat_labour" value={rates.asAt.labour} onChange={(event) => updateAsAt('labour', event.target.value)} />
         <RateAgeBadge text={rates.asAt.labour} />
         <br />
