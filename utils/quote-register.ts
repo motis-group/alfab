@@ -29,7 +29,7 @@ export const QUOTE_KIND_LABELS: Record<QuoteKind, string> = {
 
 /**
  * One saved quote of any kind. Each kind is a row in the quotes table with its own shape. This is
- * the shape the order list reads.
+ * the shape that the quote list, the dashboard and the quote page read.
  */
 export interface QuoteRecord {
   id: string;
@@ -44,7 +44,10 @@ export interface QuoteRecord {
   date: string;
   /** What the customer reads off a printed quote, e.g. Q-3F2A9C1E. Null for a costing never printed. */
   reference: string | null;
-  /** The lines as they were printed, unpriced ones included. Only a printed quote has them. */
+  /**
+   * The lines the paper prints, unpriced ones included. Only a printed quote and a quote for a job
+   * have them.
+   */
   printedLines?: QuoteLine[];
   /**
    * The lines in the shape the quote page edits.
@@ -394,9 +397,9 @@ export function mergeQuotesForOrder(records: QuoteRecord[]): MergedQuoteDraft | 
 }
 
 /**
- * One saved quote by id, whichever calculator priced it. The four stores have no reader for a
- * single row, and a shop has hundreds of quotes rather than millions, so this reads the register
- * and picks. Null when nothing has that id.
+ * One saved quote by id, whichever calculator priced it. findQuote reads only a quote for a job,
+ * and the other stores have no reader for a single row. A shop has hundreds of quotes rather than
+ * millions, so this reads the register and picks. Null when nothing has that id.
  */
 export async function findQuoteRecord(id: string): Promise<{ record: QuoteRecord | null; errors: string[] }> {
   const { records, errors } = await listQuoteRecords();
