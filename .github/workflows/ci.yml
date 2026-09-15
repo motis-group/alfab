@@ -34,8 +34,9 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      # bash -n parses only its first argument, so run it once for each script.
       - name: Validate deploy scripts
-        run: bash -n scripts/*.sh
+        run: for f in scripts/*.sh; do bash -n "$f" || exit 1; done
 
       - name: Build
         run: npm run build
