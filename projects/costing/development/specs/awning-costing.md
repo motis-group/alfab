@@ -93,10 +93,15 @@ the window and glass rates. It depends on the `set_updated_at` trigger; see
 **Yellow, not priced.** The sheet never held this price. That is clear and grey toughened glass. The
 costing charges the line as nil and says so, rather than quoting them off the Super Grey price.
 
-**Red, fix before saving.** A value that makes every quote wrong without saying so. That is a blank
-or zero on the per-awning minutes, the margin or either fixed quantity. It is also any value below
-zero, or a margin above 1, which is a percentage typed as a whole number. Saving is blocked while a
-red field is present. A shared rate shows as read-only, with a link to the list that sets it.
+**Red, fix before saving.** A value that makes every quote wrong. A blank or zero on the per-awning
+minutes, the margin or either fixed quantity does this without saying so. A blank or zero labour
+rate is red too. The costing reports labour as not priced when that rate is blank, and gives no
+price when it is zero. Red also covers any value below zero, and a margin above 1, which is a
+percentage typed as a whole number.
+
+The editor blocks a save while any rate is red. A shared rate shows as read-only, with a link to the
+list that sets it. The labour rate is a shared rate, so a red labour rate blocks a save here until
+someone fixes it in the window rates.
 
 The editor prices the sheet's own example awning on the current rates and on the edit, so the
 effect of a rate change is visible before it is saved.
