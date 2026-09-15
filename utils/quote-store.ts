@@ -58,6 +58,8 @@ export interface SavedQuoteContent {
   /** Percent on cost. It prices every line that has a cost. */
   marginPercent: number;
   lines: SavedQuoteLine[];
+  /** True if the quote is kept on its customer. A new quote for that customer offers it to reissue. */
+  savedToCustomer: boolean;
 }
 
 export interface SavedQuote extends SavedQuoteContent {
@@ -144,6 +146,8 @@ function rowFields(quote: SavedQuoteContent & { issuedBy: string | null; ratesUp
       notes: quote.notes,
       marginPercent: quote.marginPercent,
       lines: quote.lines,
+      // A quote with no customer on file is on no customer's list, so it is not saved to a customer.
+      savedToCustomer: Boolean(quote.savedToCustomer && quote.customerId),
       issuedBy: quote.issuedBy,
       issuedAt: new Date().toISOString(),
       ratesUpdatedAt: quote.ratesUpdatedAt,
@@ -231,6 +235,7 @@ export function toSavedQuote(row: QuoteRow): SavedQuote | null {
     // of them.
     marginPercent: typeof specification.marginPercent === 'number' ? specification.marginPercent : DEFAULT_QUOTE_MARGIN_PERCENT,
     lines,
+    savedToCustomer: specification.savedToCustomer === true,
     // The stored total is the offer. Calculate the total again only if the row has no total.
     subtotal: typeof cost.subtotal === 'number' ? cost.subtotal : totals.subtotal,
     gst: typeof cost.gst === 'number' ? cost.gst : totals.gst,
