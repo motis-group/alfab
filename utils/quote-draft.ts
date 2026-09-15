@@ -61,7 +61,7 @@ export function peekQuoteDraft(): QuoteDraft | null {
     if (!draft || !Array.isArray(draft.lines)) {
       return null;
     }
-    // A draft written before quotes had a margin. Without a number, a returning line prices as NaN.
+    // A draft with no margin reads at the default. Without a number, a returning line prices as NaN.
     return typeof draft.marginPercent === 'number' ? draft : { ...draft, marginPercent: DEFAULT_QUOTE_MARGIN_PERCENT };
   } catch {
     window.sessionStorage.removeItem(DRAFT_KEY);

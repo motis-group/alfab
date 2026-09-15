@@ -42,7 +42,7 @@ export const WINDOW_GLASS_FROM_LIST: Record<string, GlassListRef> = {
 
 /**
  * The hourly rate both costings charge labour at. The window costing owns the editable value; the
- * awning derives it. One shop, one hourly rate — the two lists held $85 and $75.
+ * awning derives it. One shop, one hourly rate.
  */
 export const DEFAULT_SHARED_LABOUR_PER_HOUR = 85;
 
