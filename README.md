@@ -35,6 +35,9 @@ npm run build
 The workflow `.github/workflows/deploy-ec2.yml` deploys the app to production on
 each push to `main`.
 
+A page that is already open runs the code that it loaded until the page loads
+again. After a deploy, `components/NewVersionNotice.tsx` tells the user to reload.
+
 For AWS RDS -> VPS migration and VPS cutover steps, see:
 
 - `projects/costing/development/ops/vps-postgres-cutover.md`
