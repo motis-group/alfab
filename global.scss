@@ -697,7 +697,8 @@ select option {
 
 /* A table with data-one-line keeps each row on one line. A data-fill cell shows an ellipsis in place
    of text that does not fit. Give the header cell of that column a percentage width. The column then
-   gets the width that the other columns leave. */
+   gets the width that the other columns leave. The card around the table can become narrower than the
+   table. A narrow window then scrolls the table in the card, and the page keeps its width. */
 table[data-one-line] td {
   white-space: nowrap;
 }
@@ -710,6 +711,10 @@ table[data-one-line] td[data-fill] {
   max-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+article:has(table[data-one-line]) {
+  min-width: 0;
 }
 
 /* Printed window costing sheet. Hidden on screen; printing hides the app around it. */

@@ -446,8 +446,7 @@ export default function OrderDashboardPage() {
         </Card>
       )}
 
-      {/* With minWidth 0, a list that is wider than its card scrolls in the card. Without it, the list makes the page wider. */}
-      <Card title={`QUOTES (${filteredQuotes.length})`} style={{ minWidth: 0 }}>
+      <Card title={`QUOTES (${filteredQuotes.length})`}>
         <RowSpaceBetween>
           <Text>
             {selectionRefusal ? <span className="status-warning">{selectionRefusal}</span> : selectedCount ? `${selectedCount} ticked${selectedTotal ? ` · ${formatCurrency(selectedTotal)}` : ''}` : 'Tick more than one to put them on a single order. They must be for the same customer.'}
@@ -524,7 +523,7 @@ export default function OrderDashboardPage() {
       </Card>
 
 
-      <Card title="PURCHASE ORDERS" style={{ minWidth: 0 }}>
+      <Card title="PURCHASE ORDERS">
         {orderNotice ? (
           <Text>
             <span className="status-error">{orderNotice}</span>

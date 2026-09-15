@@ -237,28 +237,37 @@ export default function DashboardPage() {
 
       <CardDouble title="OPEN QUOTES">
         {quotes.filter((quote) => quote.status === 'open').length ? (
-          <Table>
+          <Table data-one-line>
             <TableRow>
-              <TableColumn>QUOTE</TableColumn>
-              <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
-              <TableColumn style={{ width: '13ch' }}>DATE</TableColumn>
-              <TableColumn style={{ width: '13ch' }}>TOTAL</TableColumn>
-              <TableColumn style={{ width: '9ch' }}>ACTIONS</TableColumn>
+              <TableColumn style={{ width: '60%' }}>QUOTE</TableColumn>
+              <TableColumn style={{ width: '40%' }}>CUSTOMER</TableColumn>
+              <TableColumn>DATE</TableColumn>
+              <TableColumn>TOTAL</TableColumn>
+              <TableColumn>ACTIONS</TableColumn>
             </TableRow>
             {quotes
               .filter((quote) => quote.status === 'open')
               .slice(0, 10)
-              .map((quote) => (
-                <TableRow key={quote.id}>
-                  <TableColumn>{quote.name || 'Untitled'}</TableColumn>
-                  <TableColumn>{quote.customer || 'Walk-in'}</TableColumn>
-                  <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
-                  <TableColumn>{formatCurrency(quote.total)}</TableColumn>
-                  <TableColumn>
-                    <ActionButton onClick={() => router.push(`/glass/quotes/${quote.id}`)}>View</ActionButton>
-                  </TableColumn>
-                </TableRow>
-              ))}
+              .map((quote) => {
+                const name = quote.name || 'Untitled';
+                const customer = quote.customer || 'Walk-in';
+
+                return (
+                  <TableRow key={quote.id}>
+                    <TableColumn data-fill title={name}>
+                      {name}
+                    </TableColumn>
+                    <TableColumn data-fill title={customer}>
+                      {customer}
+                    </TableColumn>
+                    <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
+                    <TableColumn>{formatCurrency(quote.total)}</TableColumn>
+                    <TableColumn>
+                      <ActionButton onClick={() => router.push(`/glass/quotes/${quote.id}`)}>View</ActionButton>
+                    </TableColumn>
+                  </TableRow>
+                );
+              })}
           </Table>
         ) : (
           <Text>No open quotes. {QUOTE_STATUS_LABELS.won} quotes are on the Orders page.</Text>
