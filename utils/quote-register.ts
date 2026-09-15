@@ -14,8 +14,9 @@ import { describeGlassSpecification } from '@utils/calculations';
 /**
  * The kind 'quote' is a quote for a job. It holds lines of any kind.
  *
- * The other three kinds are the documents of the calculators. Each holds one kind of line. The
- * register reads them so that old quotes continue to work.
+ * The other three kinds are the documents of the calculators. Each holds one kind of line. Save
+ * Quote on the glass calculator writes a 'glass' quote. Save Costing and Quote For Customer on the
+ * window and awning calculators write a 'window' or an 'awning' quote.
  */
 export type QuoteKind = 'glass' | 'window' | 'awning' | 'quote';
 

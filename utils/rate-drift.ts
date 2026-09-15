@@ -1,14 +1,10 @@
 /**
  * Where the three price lists disagree.
  *
- * Glass, window and awning costings each hold their own rates. Several items appear in more than
- * one list — the same pane of glass, the same hour of labour, the same ceramic banding — and
- * nothing tells anyone when they drift apart. This finds the overlaps and measures the gap.
- *
- * **The gap is not automatically an error.** The lists do not all mean the same thing by a price:
- * the glass calculator's is a base a per-piece markup is applied to, while the window costing's
- * feeds a manufactured window that then carries margin and uplift. A difference may be correct.
- * What is not defensible is nobody being able to say which. This module reports; it does not judge.
+ * Several items appear in more than one list: the same pane of glass, the same hour of labour, the
+ * same ceramic banding. utils/shared-rates.ts chooses each of them once and copies it into the other
+ * lists. This finds the copies and measures the gap between them. A gap of MATERIAL_SPREAD or more
+ * means a list holds its own price for a shared item.
  *
  * Equivalences are declared by hand below rather than matched on label, because "6 mm Tint A/P" and
  * "Grey" may or may not be the same product and a wrong match is worse than a missing one.

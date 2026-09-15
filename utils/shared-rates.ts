@@ -1,10 +1,10 @@
 /**
  * The one place a shared rate is chosen.
  *
- * The same pane of glass appeared in three price lists and each list picked its own number: 6 mm
- * Clear was $92.47 to the glass calculator and $80 to the window costing, a 15.6% gap on identical
- * material. Every shared item is now held once, in the glass price list, and the window and awning
- * rates derive theirs from it. The rates editors show a derived field as read-only.
+ * The same pane of glass, the same hour of labour and the same ceramic banding appear in more than
+ * one price list. Each is chosen in one list and derived by the others, so one item has one price.
+ * The glass price list chooses the glass, ceramic banding and flat polish. The window costing
+ * chooses the labour rate. The rates editors show a derived field as read-only.
  *
  * A window or awning price that has no glass-calculator equivalent — laminate, acrylic, polycarb,
  * the tints — is not shared and keeps its own number.
@@ -51,7 +51,7 @@ export const AWNING_GLASS_FROM_LIST: Record<string, GlassListRef> = {
   supergrey_tgn: { type: 'Super Grey', mm: 6 },
 };
 
-/** Awning rates other than glass that the glass price list also holds. */
+/** Awning rates other than glass that another list chooses. */
 export const AWNING_DERIVED_LABELS: Record<string, string> = {
   'glass.bandingSet': 'Ceramic banding',
   'glass.flatPolishPerM': 'Flat polish',
@@ -89,11 +89,6 @@ export function applySharedRatesToWindow(rates: WindowRates, basePrices: Pricing
   return changed ? { ...rates, glass: { ...rates.glass, options } } : rates;
 }
 
-/**
- * Awning rates with every shared rate taken from the glass list, and the labour rate from the
- * window costing. The awning sheet is the smaller of the two and never had a labour rate of its own
- * that the shop recognised as different.
- */
 /** The rates an awning shares with another list, and where each is chosen. */
 export interface SharedAwningRates {
   basePrices: PricingData['basePrices'];
@@ -105,6 +100,11 @@ export interface SharedAwningRates {
   labourPerHour: number | null;
 }
 
+/**
+ * Awning rates with every shared rate taken from the glass list, and the labour rate from the
+ * window costing. The awning sheet is the smaller of the two and never had a labour rate of its own
+ * that the shop recognised as different.
+ */
 export function applySharedRatesToAwning(rates: AwningRates, shared: SharedAwningRates): AwningRates {
   const options = { ...rates.glass.options };
   for (const [id, ref] of Object.entries(AWNING_GLASS_FROM_LIST)) {
