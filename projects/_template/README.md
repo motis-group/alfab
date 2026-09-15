@@ -28,6 +28,4 @@ for anything you add.
 
 - Generated output the client reads lives under `delivery/`; generated output
   nobody reads is gitignored.
-- Cross-layer paths anchor on the repository root, never on a sibling
-  project. A runbook here still says `./scripts/deploy.sh`, and is still run
-  from the root.
+- Cross-layer paths anchor on the repository root, never on a sibling project.
