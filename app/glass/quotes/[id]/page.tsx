@@ -26,10 +26,10 @@ import { ExtractedPiece } from '@utils/import/model';
 import { consumeLineEditResult, calculatorFor, persistLineEditRequest } from '@utils/line-editing';
 import { Customer, PricingSource, formatCurrency, todayISODate } from '@utils/order-management';
 import { LineDraft, createLineDraft } from '@utils/order-draft';
-import { QuoteDraft, addGlassPieces, applyQuoteLineResult, clearQuoteDraft, dropPendingLine, emptyQuoteDraft, peekQuoteDraft, persistQuoteDraft, setQuoteMargin } from '@utils/quote-draft';
+import { QuoteDraft, addGlassPieces, applyQuoteLineResult, clearQuoteDraft, dropPendingLine, emptyQuoteDraft, peekQuoteDraft, persistQuoteDraft, reissueQuoteDraft, setQuoteMargin } from '@utils/quote-draft';
 import { quoteEmail } from '@utils/quote-email';
 import { QuoteRecord, findQuoteRecord } from '@utils/quote-register';
-import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuoteLine, createQuote, findQuote, quoteMarginSummary, quotePaperLines, quoteReference, updateQuote } from '@utils/quote-store';
+import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuote, SavedQuoteLine, createQuote, findQuote, listQuotes, quoteMarginSummary, quotePaperLines, quoteReference, updateQuote } from '@utils/quote-store';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 
@@ -74,6 +74,8 @@ export default function QuotePage() {
   const [readOnly, setReadOnly] = useState<QuoteRecord | null>(null);
   /** Set while editing a quote that a calculator wrote. Saving rewrites the row. */
   const [carriedOver, setCarriedOver] = useState<{ from: string; dropped: number } | null>(null);
+  /** The quotes saved to a customer. A new quote with no lines lists the ones for its customer. */
+  const [savedQuotes, setSavedQuotes] = useState<SavedQuote[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [canWrite, setCanWrite] = useState(false);
   /** Adding to the customer list needs access to the customer records, not only to quotes. */
@@ -103,6 +105,15 @@ export default function QuotePage() {
       const { data: customerData } = await createClient().from(TABLE_CUSTOMERS).select('*').order('name', { ascending: true });
       setCustomers((customerData as Customer[]) || []);
 
+      // A new quote offers the saved quotes of its customer. A failed read does not stop the new quote.
+      if (isNew) {
+        const saved = await listQuotes().catch(() => null);
+        setSavedQuotes(saved ? saved.filter((quote) => quote.savedToCustomer) : []);
+        if (!saved) {
+          setError('The saved quotes could not be read.');
+        }
+      }
+
       // A line returned from a calculator, or the operator cancelled. The quote waits in a draft.
       const result = consumeLineEditResult();
       const waiting = peekQuoteDraft();
@@ -129,7 +140,7 @@ export default function QuotePage() {
 
       const quote = await findQuote(id);
       if (quote) {
-        setDraft({ id: quote.id, name: quote.name, customer: quote.customer, customerId: quote.customerId || '', date: quote.date ? quote.date.slice(0, 10) : todayISODate(), notes: quote.notes, marginPercent: quote.marginPercent, lines: quote.lines, pendingLineId: null });
+        setDraft({ id: quote.id, name: quote.name, customer: quote.customer, customerId: quote.customerId || '', date: quote.date ? quote.date.slice(0, 10) : todayISODate(), notes: quote.notes, marginPercent: quote.marginPercent, lines: quote.lines, pendingLineId: null, savedToCustomer: quote.savedToCustomer });
         return;
       }
 
@@ -140,7 +151,7 @@ export default function QuotePage() {
       // the number the customer holds still finds the quote after it is saved.
       if (record && record.editableLines.length) {
         // Its prices already hold the margin of the calculator, so the margin of the quote prices none of them.
-        setDraft({ id: record.id, name: record.name, customer: record.customer, customerId: record.customerId || '', date: record.date ? record.date.slice(0, 10) : todayISODate(), notes: record.draft?.quoteNotes || '', marginPercent: DEFAULT_QUOTE_MARGIN_PERCENT, lines: record.editableLines, pendingLineId: null });
+        setDraft({ id: record.id, name: record.name, customer: record.customer, customerId: record.customerId || '', date: record.date ? record.date.slice(0, 10) : todayISODate(), notes: record.draft?.quoteNotes || '', marginPercent: DEFAULT_QUOTE_MARGIN_PERCENT, lines: record.editableLines, pendingLineId: null, savedToCustomer: false });
         setCarriedOver({ from: record.kindLabel, dropped: Math.max(0, record.lineCount - record.editableLines.length) });
         setError(errors.length ? errors.join(' ') : null);
         return;
@@ -224,6 +235,16 @@ export default function QuotePage() {
       setStatus(null);
       setError(importError?.message || 'Unable to price the pieces from the order.');
     }
+  }
+
+  /** Opens a new quote that copies this quote. Nothing is written until Save Quote. */
+  function reissue() {
+    if (!draft.id) {
+      return;
+    }
+    // The new quote reads the copy from the draft, as it does when a line returns from a calculator.
+    persistQuoteDraft(reissueQuoteDraft({ ...draft, id: draft.id }));
+    router.push('/glass/quotes/new');
   }
 
   /** Opens the mail client of the operator with the quotation written. */
@@ -316,7 +337,7 @@ export default function QuotePage() {
     setStatus(null);
 
     try {
-      const content = { name: draft.name, customer: customers.find((entry) => entry.id === draft.customerId)?.name || draft.customer, customerId: draft.customerId || null, date: draft.date, notes: draft.notes, marginPercent: draft.marginPercent, lines: draft.lines };
+      const content = { name: draft.name, customer: customers.find((entry) => entry.id === draft.customerId)?.name || draft.customer, customerId: draft.customerId || null, date: draft.date, notes: draft.notes, marginPercent: draft.marginPercent, lines: draft.lines, savedToCustomer: draft.savedToCustomer };
       const ratesUpdatedAt = draft.lines.map((line) => line.draft.windowRatesUpdatedAt || line.draft.awningRatesUpdatedAt).find(Boolean) || null;
 
       if (draft.id) {
@@ -344,7 +365,9 @@ export default function QuotePage() {
   // A read-only quote has no priced line to put on an order, so it offers no Convert.
   const readOnlyActions = readOnly && documentLines(readOnly).length ? [printAction] : [];
   const addLineAction = { body: 'Add Line', items: LINE_KINDS.map((kind) => ({ icon: '⊹', children: kind.label, onClick: () => addLine(kind.source) })) };
-  const draftActions = [addLineAction, { body: isSaving ? 'Saving...' : 'Save Quote', onClick: isSaving ? undefined : save }, ...(draft.lines.length ? [printAction, { body: 'Send', onClick: sendQuote }] : [])];
+  const draftActions = [addLineAction, { body: isSaving ? 'Saving...' : 'Save Quote', onClick: isSaving ? undefined : save }, ...(draft.lines.length ? [printAction, { body: 'Send', onClick: sendQuote }] : []), ...(draft.id && draft.lines.length ? [{ body: 'Reissue', onClick: reissue }] : [])];
+  // A new quote with no lines lists the quotes saved to its customer, so the operator can copy one.
+  const savedForCustomer = !draft.id && !draft.lines.length && draft.customerId ? savedQuotes.filter((quote) => quote.customerId === draft.customerId) : [];
 
   return (
     <AppFrame
@@ -381,6 +404,21 @@ export default function QuotePage() {
 
       {!isLoading && !readOnly ? (
         <>
+          {draft.reissuedFrom ? (
+            <Card title="REISSUED">
+              <Text>This quote copies {draft.reissuedFrom.reference} of {draft.reissuedFrom.date}. The lines keep the prices of that quote. Edit a line to price it on today&apos;s rates.</Text>
+              <br />
+              {/* A copy of the wrong quote, or one left unsaved, is emptied in one step. The customer stays, so the saved quotes show again. */}
+              <ActionButton
+                onClick={() => {
+                  clearQuoteDraft();
+                  setDraft({ ...emptyQuoteDraft(), customer: draft.customer, customerId: draft.customerId });
+                }}
+              >
+                Discard Copy
+              </ActionButton>
+            </Card>
+          ) : null}
           {carriedOver ? (
             <Card title="WRITTEN IN THE CALCULATOR">
               <Text>The {carriedOver.from.toLowerCase()} calculator wrote this quote. Its lines are here and can be changed. Saving rewrites the quote in the shape this page uses. It keeps its number, so the copy the customer holds still refers to it.</Text>
@@ -398,7 +436,12 @@ export default function QuotePage() {
             <Input label="JOB" name="quote_name" value={draft.name} onChange={(event) => update({ name: event.target.value })} placeholder="What the job is called" />
             <CustomerPicker label="CUSTOMER" customers={customers} value={draft.customerId} onChange={(customerId) => pickCustomer(customerId)} />
             {selectedCustomer ? (
-              <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text>
+              <>
+                <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text>
+                <label>
+                  <input type="checkbox" checked={draft.savedToCustomer} onChange={(event) => update({ savedToCustomer: event.target.checked })} /> Save to {selectedCustomer.name} to reissue later
+                </label>
+              </>
             ) : (
               <>
                 <Input label="CUSTOMER NAME" name="quote_customer" value={draft.customer} onChange={(event) => update({ customer: event.target.value })} placeholder="Walk-in / company name" />
@@ -410,6 +453,31 @@ export default function QuotePage() {
             <Input label="NOTES" name="quote_notes" value={draft.notes} onChange={(event) => update({ notes: event.target.value })} placeholder="Anything the customer should read" />
             <Input label="MARGIN ON COST (%)" type="number" name="quote_margin" value={String(draft.marginPercent)} onChange={(event) => setMargin(event.target.value)} min="0" />
           </CardDouble>
+
+          {savedForCustomer.length ? (
+            <CardDouble title={`SAVED QUOTES (${savedForCustomer.length})`}>
+              <Table>
+                <TableRow>
+                  <TableColumn>QUOTE</TableColumn>
+                  <TableColumn style={{ width: '13ch' }}>DATE</TableColumn>
+                  <TableColumn style={{ width: '8ch' }}>LINES</TableColumn>
+                  <TableColumn style={{ width: '14ch' }}>TOTAL</TableColumn>
+                  <TableColumn style={{ width: '12ch' }}>ACTIONS</TableColumn>
+                </TableRow>
+                {savedForCustomer.map((quote) => (
+                  <TableRow key={quote.id}>
+                    <TableColumn>{[quote.reference, quote.name || 'Untitled'].join(' · ')}</TableColumn>
+                    <TableColumn>{quote.date.slice(0, 10)}</TableColumn>
+                    <TableColumn>{quote.lines.length}</TableColumn>
+                    <TableColumn>{formatCurrency(quote.subtotal)}</TableColumn>
+                    <TableColumn>
+                      <ActionButton onClick={() => setDraft(reissueQuoteDraft(quote))}>Reissue</ActionButton>
+                    </TableColumn>
+                  </TableRow>
+                ))}
+              </Table>
+            </CardDouble>
+          ) : null}
 
           <CardDouble title={`LINES (${draft.lines.length})`}>
             {draft.lines.length ? (

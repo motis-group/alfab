@@ -13,7 +13,7 @@ import type { PricingData } from '@components/PricingProvider';
 import { calculateCost, describeGlassSpecification } from '@utils/calculations';
 import type { ExtractedPiece } from '@utils/import/model';
 import { LineEditResult } from '@utils/line-editing';
-import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuoteLine, applyQuoteMargin } from '@utils/quote-store';
+import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuote, SavedQuoteLine, applyQuoteMargin, quoteReference } from '@utils/quote-store';
 import { createLineDraft } from '@utils/order-draft';
 import { todayISODate } from '@utils/order-management';
 
@@ -31,6 +31,10 @@ export interface QuoteDraft {
   /** Percent on cost. It prices every line that has a cost. */
   marginPercent: number;
   lines: SavedQuoteLine[];
+  /** True if the quote is kept on its customer. Save Quote writes it. */
+  savedToCustomer: boolean;
+  /** The saved quote that this unsaved quote copies. The page names it until the copy is saved. */
+  reissuedFrom?: { reference: string; date: string };
   /**
    * A line that the operator added but did not price.
    *
@@ -41,7 +45,30 @@ export interface QuoteDraft {
 }
 
 export function emptyQuoteDraft(): QuoteDraft {
-  return { id: null, name: '', customer: '', customerId: '', date: todayISODate(), notes: '', marginPercent: DEFAULT_QUOTE_MARGIN_PERCENT, lines: [], pendingLineId: null };
+  return { id: null, name: '', customer: '', customerId: '', date: todayISODate(), notes: '', marginPercent: DEFAULT_QUOTE_MARGIN_PERCENT, lines: [], pendingLineId: null, savedToCustomer: false };
+}
+
+/**
+ * A new quote that copies a saved quote: its customer, lines, notes and margin.
+ *
+ * Each line keeps its price. The date is today, so the 30-day price hold starts again. Save Quote
+ * gives the copy its own number, and the saved quote does not change. The copy is not saved to the
+ * customer, so the saved quotes of a customer do not increase each time a quote is reissued.
+ */
+export function reissueQuoteDraft(source: Pick<SavedQuote, 'id' | 'name' | 'customer' | 'customerId' | 'date' | 'notes' | 'marginPercent' | 'lines'>): QuoteDraft {
+  return {
+    id: null,
+    name: source.name,
+    customer: source.customer,
+    customerId: source.customerId || '',
+    date: todayISODate(),
+    notes: source.notes,
+    marginPercent: source.marginPercent,
+    lines: source.lines,
+    pendingLineId: null,
+    savedToCustomer: false,
+    reissuedFrom: { reference: quoteReference(source.id), date: source.date.slice(0, 10) },
+  };
 }
 
 export function persistQuoteDraft(draft: QuoteDraft): void {
