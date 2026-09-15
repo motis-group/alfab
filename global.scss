@@ -695,6 +695,23 @@ select option {
   color: var(--theme-status-warning);
 }
 
+/* A table with data-one-line keeps each row on one line. A data-fill cell shows an ellipsis in place
+   of text that does not fit. Give the header cell of that column a percentage width. The column then
+   gets the width that the other columns leave. */
+table[data-one-line] td {
+  white-space: nowrap;
+}
+
+table[data-one-line] td + td {
+  padding-left: 1ch;
+}
+
+table[data-one-line] td[data-fill] {
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Printed window costing sheet. Hidden on screen; printing hides the app around it. */
 .window-costing-sheet {
   display: none;
