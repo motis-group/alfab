@@ -57,9 +57,9 @@ one margin for all its lines. See [quotes.md](quotes.md).
 
 - **Batch price.** The sidebar prices the same awning at runs of 1, 2, 5 and 10. Setup minutes
   divide across the run, so the price for each falls as the run grows.
-- **The calculator's list.** "Add Awning To Quote" adds the costed awning to a list on the page, as on
-  the window costing. "Create Purchase Order" makes one order line for each awning in the list. See
-  [jobs.md](jobs.md).
+- **The calculator's list.** "Add Awning To Quote", under the quote lines, adds the costed awning to
+  a list on the page, as on the window costing. "Create Purchase Order" makes one order line for each
+  awning in the list. See [jobs.md](jobs.md).
 - **Printing.** "Costing Sheet (internal)" on the Print menu shows every cost line, the rates used,
   the labour minutes and the margin. It starts a new page for each awning. "Quote For Customer"
   prints the shared customer quote, with one line for each awning. Both documents follow

@@ -711,13 +711,7 @@ export default function WindowCostingPage() {
       // A quote line is priced at cost. The calculator's own quote, order, prints and copies would carry
       // that cost to a customer, so a quote line offers only the way back.
       actionItems={quoteLine ? [{ body: 'Save To Quote', onClick: saveLineToDocument }, { body: 'Cancel', onClick: cancelLineEdit }] : [
-        {
-          body: 'Add',
-          items: [
-            { icon: '⊹', children: 'Add Window To Quote', onClick: addToQuote },
-            { icon: '⊹', children: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
-          ],
-        },
+        { body: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
         {
           body: 'Print',
           items: [
@@ -757,6 +751,7 @@ export default function WindowCostingPage() {
       ) : null}
 
       <CardDouble title="WINDOW">
+        <Input label="WINDOW NAME (OPTIONAL)" name="window_name" value={windowName} onChange={(event) => setWindowName(event.target.value)} placeholder="Kitchen hopper" />
         <Text>SERIES</Text>
         <select value={series.id} onChange={(event) => selectSeries(event.target.value)}>
           {seriesOptions.map((entry) => (
@@ -998,10 +993,6 @@ export default function WindowCostingPage() {
           </>
         )}
         {glazingOption?.group === 'laminate' ? <Input label="METRES FLAT GROUND" type="number" name="glazing_flat_ground" value={metreDrafts.flatGroundM ?? String(input.flatGroundM)} onChange={(event) => updateMetres('flatGroundM', event.target.value)} min="0" step="0.01" /> : null}
-        <br />
-        <Input label="WINDOW NAME (OPTIONAL)" name="window_name" value={windowName} onChange={(event) => setWindowName(event.target.value)} placeholder="Kitchen hopper" />
-        <br />
-        <ActionButton onClick={addToQuote}>Add Window To Quote</ActionButton>
       </CardDouble>
 
       {lineEdit ? null : (
@@ -1070,6 +1061,8 @@ export default function WindowCostingPage() {
           ) : (
             <Text>No windows on this quote.</Text>
           )}
+          <br />
+          <ActionButton onClick={addToQuote}>Add Window To Quote</ActionButton>
         </CardDouble>
       )}
 

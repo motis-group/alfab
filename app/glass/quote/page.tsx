@@ -707,13 +707,7 @@ export default function AdhocQuotePage() {
       // A quote line is priced at cost. The calculator's own quote, order, print and copy would carry
       // that cost to a customer, so a quote line offers only the way back.
       actionItems={quoteLine ? [{ body: 'Save To Quote', onClick: saveLineToDocument }, { body: 'Cancel', onClick: cancelLineEdit }] : [
-        {
-          body: 'Add',
-          items: [
-            { icon: '⊹', children: 'Add To Quote', onClick: addToQuote },
-            { icon: '⊹', children: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
-          ],
-        },
+        { body: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
         { body: 'Print Quote', onClick: printQuote },
         { body: 'Copy Quote', onClick: copyQuoteToClipboard },
         {
@@ -769,8 +763,6 @@ export default function AdhocQuotePage() {
         {!useRecommendedPrice && <Input label={quoteLine ? 'MANUAL UNIT COST ($)' : 'MANUAL UNIT PRICE ($)'} type="number" name="manual_unit_price" value={String(manualUnitPrice)} onChange={(event) => setManualUnitPrice(Math.max(0, numberOrFallback(event.target.value, 0)))} min="0" />}
 
         <Input label="PIECE NAME (OPTIONAL)" name="item_name" value={itemName} onChange={(event) => setItemName(event.target.value)} placeholder="Front window, side panel..." />
-        <br />
-        {lineEdit ? null : <ActionButton onClick={addToQuote}>Add Piece To Quote</ActionButton>}
       </CardDouble>
 
       {lineEdit ? null : (
@@ -854,6 +846,8 @@ export default function AdhocQuotePage() {
           ) : (
             <Text>No pieces on this quote.</Text>
           )}
+          <br />
+          <ActionButton onClick={addToQuote}>Add Piece To Quote</ActionButton>
         </CardDouble>
       )}
 

@@ -610,13 +610,7 @@ export default function AwningCostingPage() {
       // A quote line is priced at cost. The calculator's own quote, order, prints and copies would carry
       // that cost to a customer, so a quote line offers only the way back.
       actionItems={quoteLine ? [{ body: 'Save To Quote', onClick: saveLineToDocument }, { body: 'Cancel', onClick: cancelLineEdit }] : [
-        {
-          body: 'Add',
-          items: [
-            { icon: '⊹', children: 'Add Awning To Quote', onClick: addToQuote },
-            { icon: '⊹', children: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
-          ],
-        },
+        { body: 'Create Purchase Order', onClick: handleCreatePurchaseOrder },
         {
           body: 'Print',
           items: [
@@ -656,6 +650,7 @@ export default function AwningCostingPage() {
       ) : null}
 
       <CardDouble title="AWNING">
+        <Input label="AWNING NAME (OPTIONAL)" name="awning_name" value={awningName} onChange={(event) => setAwningName(event.target.value)} placeholder="Port side, cabin window..." />
         <Text style={{ opacity: 0.7 }}>Glass size, not opening size.</Text>
         <br />
         <Input label="GLASS HEIGHT (MM)" type="number" name="awning_height" value={String(input.heightMm)} onChange={(event) => updateNumber('heightMm', event.target.value)} min="0" />
@@ -694,10 +689,6 @@ export default function AwningCostingPage() {
           <input type="checkbox" checked={input.flyscreen} onChange={(event) => update({ flyscreen: event.target.checked })} /> Flyscreen and clips
         </label>
         <Text style={{ opacity: 0.7 }}>Flyscreen is a selling price in the source sheet and is marked up again. Kept as the sheet had it.</Text>
-        <br />
-        <Input label="AWNING NAME (OPTIONAL)" name="awning_name" value={awningName} onChange={(event) => setAwningName(event.target.value)} placeholder="Port side, cabin window..." />
-        <br />
-        <ActionButton onClick={addToQuote}>Add Awning To Quote</ActionButton>
       </CardDouble>
 
       {lineEdit ? null : (
@@ -757,6 +748,8 @@ export default function AwningCostingPage() {
           ) : (
             <Text>No awnings on this quote.</Text>
           )}
+          <br />
+          <ActionButton onClick={addToQuote}>Add Awning To Quote</ActionButton>
         </CardDouble>
       )}
 
