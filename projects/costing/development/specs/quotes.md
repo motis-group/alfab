@@ -34,7 +34,8 @@ A calculator prices a quote line at cost:
 - The glass calculator applies no markup and hides its markup field. A manual price is a manual
   cost.
 - The window and awning calculators set every margin rate to zero, the Marine Window Service
-  margin included. Packing and uplift stay in the window cost, so the margin applies to them too.
+  margin included. The window calculator also sets the uplift to zero. Packing stays in the window
+  cost, so the margin applies to packing.
 
 The quote stores the cost of each line and each extra, and the price at the margin. The page
 rounds a price to the cent, so the unit price times the quantity is the printed amount.

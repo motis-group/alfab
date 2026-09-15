@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/join', '/api/signin', '/api/signout', '/api/invite/accept', '/api/billing/webhook'];
+// /api/version returns only the build id, which every page already sends.
+const PUBLIC_PATHS = ['/login', '/join', '/api/signin', '/api/signout', '/api/invite/accept', '/api/billing/webhook', '/api/version'];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`));

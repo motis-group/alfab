@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
+import CustomerPicker from '@components/CustomerPicker';
 import Card from '@components/Card';
 import SidebarTabs from '@components/SidebarTabs';
 import CardDouble from '@components/CardDouble';
@@ -511,22 +512,29 @@ export default function WindowCostingPage() {
                   <Text>SUBTOTAL</Text>
                   <Text>{formatCurrency(result.subtotal)}</Text>
                 </RowSpaceBetween>
-                <RowSpaceBetween>
-                  <Text>{quoteLine ? 'MARGIN' : `MARGIN (${formatPercent(result.marginRate)} OF COST)`}</Text>
-                  <Text>{quoteLine ? 'SET ON THE QUOTE' : formatCurrency(result.margin)}</Text>
-                </RowSpaceBetween>
+                {/* The card shows a margin or an uplift only when its rate is not zero. A quote line has no margin and no uplift. */}
+                {result.marginRate ? (
+                  <RowSpaceBetween>
+                    <Text>{`MARGIN (${formatPercent(result.marginRate)} OF COST)`}</Text>
+                    <Text>{formatCurrency(result.margin)}</Text>
+                  </RowSpaceBetween>
+                ) : null}
                 <RowSpaceBetween>
                   <Text>{result.reinforcement ? `${result.reinforcement.label} x ${result.reinforcement.count}` : 'PACKING'}</Text>
                   <Text>{formatCurrency(result.packing)}</Text>
                 </RowSpaceBetween>
-                <RowSpaceBetween>
-                  <Text>{result.unitLabel === 'Per Pair' ? 'PER PAIR (BEFORE UPLIFT)' : 'PER EACH (BEFORE UPLIFT)'}</Text>
-                  <Text>{formatCurrency(result.beforeUplift)}</Text>
-                </RowSpaceBetween>
-                <RowSpaceBetween>
-                  <Text>UPLIFT ({formatPercent(result.upliftRate)} OF THE ABOVE)</Text>
-                  <Text>{formatCurrency(result.uplift)}</Text>
-                </RowSpaceBetween>
+                {result.upliftRate ? (
+                  <>
+                    <RowSpaceBetween>
+                      <Text>{result.unitLabel === 'Per Pair' ? 'PER PAIR (BEFORE UPLIFT)' : 'PER EACH (BEFORE UPLIFT)'}</Text>
+                      <Text>{formatCurrency(result.beforeUplift)}</Text>
+                    </RowSpaceBetween>
+                    <RowSpaceBetween>
+                      <Text>UPLIFT ({formatPercent(result.upliftRate)} OF THE ABOVE)</Text>
+                      <Text>{formatCurrency(result.uplift)}</Text>
+                    </RowSpaceBetween>
+                  </>
+                ) : null}
                 <RowSpaceBetween>
                   <Text>
                     {quoteLine ? 'COST' : 'PRICE'} {result.unitLabel.toUpperCase()}
@@ -1003,27 +1011,18 @@ export default function WindowCostingPage() {
       {lineEdit ? null : (
         <CardDouble title="QUOTE">
           <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} placeholder="Job reference" />
-          <Text>CUSTOMER</Text>
-          <select
+          <CustomerPicker
+            label="CUSTOMER"
+            customers={customers}
+            activeOnly
             value={customerId}
-            onChange={(event) => {
-              const nextId = event.target.value;
+            onChange={(nextId, picked) => {
               setCustomerId(nextId);
-              const picked = customers.find((entry) => entry.id === nextId);
               if (picked) {
                 setCustomerName(picked.name);
               }
             }}
-          >
-            <option value="">Walk-in / not on file</option>
-            {customers
-              .filter((customer) => customer.is_active !== false)
-              .map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}
-                </option>
-              ))}
-          </select>
+          />
           {selectedCustomer ? <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text> : <Input label="CUSTOMER NAME" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />}
           <br />
           <Input label="QUOTE DATE" type="date" name="quote_date" value={quoteDate} onChange={(event) => setQuoteDate(event.target.value)} />

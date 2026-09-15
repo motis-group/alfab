@@ -1,0 +1,107 @@
+.root {
+  position: relative;
+  display: block;
+}
+
+.label {
+  background: var(--theme-border);
+  display: block;
+}
+
+/* Matches the look of Input without its simulated caret. The caret is the browser's here, because
+   this field owns the arrow keys for its list and cannot hand them to the focus walker. */
+.field {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  border-radius: 0;
+  color: var(--theme-text);
+  background: var(--theme-background-input);
+  box-shadow: inset 0 0 0 2px var(--theme-border);
+  font-family: inherit;
+  font-size: var(--font-size);
+  line-height: var(--theme-line-height-base);
+
+  &::placeholder {
+    font-style: italic;
+    color: var(--theme-overlay);
+  }
+
+  &:focus {
+    box-shadow: inset 0 0 0 2px var(--theme-focused-foreground);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    color: var(--theme-button-foreground);
+  }
+}
+
+/* global.scss hangs a list bullet by pairing "text-indent: -1ch" on ul with a hidden 1ch ::before
+   on every "ul li". Both have to go here. In a flex row that ::before is a third flex item, which
+   put the name in the middle of the row instead of at its start, and the negative indent ate the
+   first character of every name under overflow: hidden. This list carries no bullet. */
+.list {
+  text-indent: 0;
+  position: absolute;
+  z-index: var(--z-index-page-select);
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: calc(var(--font-size) * var(--theme-line-height-base) * 11);
+  overflow-y: auto;
+  background: var(--theme-background);
+  box-shadow: inset 0 0 0 2px var(--theme-border);
+}
+
+.list li::before {
+  content: none;
+}
+
+/* One row per name, so eight names take eight rows of the page grid and no more. */
+.row {
+  display: flex;
+  gap: 1ch;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 1ch;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.highlighted {
+  background: var(--theme-focused-foreground);
+  color: var(--theme-focused-text, var(--theme-text));
+}
+
+/* Takes the space the detail does not, so the name reads from the start of the row and the detail
+   stays against the far edge. */
+.name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Who to ask for and how to ring them: enough to tell two alike names apart. It is the first thing
+   to go when the row is too narrow for both. */
+.detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.7;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.empty {
+  padding: 0 1ch;
+  opacity: 0.7;
+  font-style: italic;
+  white-space: normal;
+}

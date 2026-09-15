@@ -424,12 +424,12 @@ export function mergeWindowRates(saved: unknown): WindowRates {
   return applySharedRatesToWindow(mergeValue(DEFAULT_WINDOW_RATES, saved) as WindowRates, defaultBasePrices);
 }
 
-/** The rates with every margin at zero. A line of a quote is priced at cost, because the quote sets the margin. */
+/** The rates with every margin and uplift at zero. The calculator prices a line of a quote at cost, because the quote sets the margin. */
 export function withoutMargins(rates: WindowRates): WindowRates {
   const margins = { ...rates.margins };
   for (const type of Object.keys(margins) as WindowTypeId[]) {
     // A blank Marine Window Service margin means the standard margin, which is now zero.
-    margins[type] = { ...margins[type], margin: 0, marginMws: null };
+    margins[type] = { margin: 0, marginMws: null, uplift: 0 };
   }
   return { ...rates, margins };
 }

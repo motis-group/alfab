@@ -51,7 +51,8 @@ There is no uplift, no packing, no finish, no trims and no per-pair option: the 
 none of them.
 
 The calculator prices a line of a quote for a job with the margin at zero, because that quote sets
-one margin for all its lines. See [quotes.md](quotes.md).
+one margin for all its lines. The price card and the printed costing sheet show the margin only when
+its rate is not zero. See [quotes.md](quotes.md).
 
 ## Working with a costing
 
