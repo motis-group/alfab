@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 
 import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
+import CustomerPicker from '@components/CustomerPicker';
 import Card from '@components/Card';
 import SidebarTabs from '@components/SidebarTabs';
 import CardDouble from '@components/CardDouble';
@@ -1010,27 +1011,18 @@ export default function WindowCostingPage() {
       {lineEdit ? null : (
         <CardDouble title="QUOTE">
           <Input label="QUOTE NAME" name="quote_name" value={quoteName} onChange={(event) => setQuoteName(event.target.value)} placeholder="Job reference" />
-          <Text>CUSTOMER</Text>
-          <select
+          <CustomerPicker
+            label="CUSTOMER"
+            customers={customers}
+            activeOnly
             value={customerId}
-            onChange={(event) => {
-              const nextId = event.target.value;
+            onChange={(nextId, picked) => {
               setCustomerId(nextId);
-              const picked = customers.find((entry) => entry.id === nextId);
               if (picked) {
                 setCustomerName(picked.name);
               }
             }}
-          >
-            <option value="">Walk-in / not on file</option>
-            {customers
-              .filter((customer) => customer.is_active !== false)
-              .map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}
-                </option>
-              ))}
-          </select>
+          />
           {selectedCustomer ? <Text style={{ opacity: 0.7 }}>{[selectedCustomer.contact_name, selectedCustomer.phone].filter(Boolean).join(' · ') || 'No phone on this customer yet.'}</Text> : <Input label="CUSTOMER NAME" name="quote_customer" value={customerName} onChange={(event) => setCustomerName(event.target.value)} placeholder="Walk-in / company name" />}
           <br />
           <Input label="QUOTE DATE" type="date" name="quote_date" value={quoteDate} onChange={(event) => setQuoteDate(event.target.value)} />
