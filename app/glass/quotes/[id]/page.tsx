@@ -10,7 +10,7 @@ import AppFrame from '@components/page/AppFrame';
 import Card from '@components/Card';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
-import QuoteDocument from '@components/QuoteDocument';
+import QuoteDocument, { documentLines } from '@components/QuoteDocument';
 import RowSpaceBetween from '@components/RowSpaceBetween';
 import Table from '@components/Table';
 import TableColumn from '@components/TableColumn';
@@ -323,6 +323,11 @@ export default function QuotePage() {
 
   const heading = readOnly ? readOnly.reference || readOnly.name || 'QUOTE' : reference || (isNew ? 'NEW QUOTE' : 'QUOTE');
 
+  // The actions are in the bar at the top. The messages that they show are directly below the bar.
+  const printAction = { body: 'Print', onClick: () => window.print() };
+  const readOnlyActions = readOnly ? [...(documentLines(readOnly).length ? [printAction] : []), ...(readOnly.draft ? [{ body: 'Convert To Order', onClick: () => convert(readOnly) }] : [])] : [];
+  const draftActions = [{ body: isSaving ? 'Saving...' : 'Save Quote', onClick: isSaving ? undefined : save }, ...(draft.lines.length ? [printAction, { body: 'Send', onClick: sendQuote }] : [])];
+
   return (
     <AppFrame
       previewPixelSRC="/pixel.gif"
@@ -331,8 +336,9 @@ export default function QuotePage() {
       badge={isLoading ? 'LOADING' : undefined}
       navRight={<ActionButton onClick={() => router.push('/glass')}>BACK TO QUOTES</ActionButton>}
       actionItems={[
-        { body: 'Quotes', onClick: () => router.push('/glass') },
+        ...(isLoading ? [] : readOnly ? readOnlyActions : draftActions),
         { body: 'Reload', onClick: load },
+        { body: 'Close', onClick: () => router.push('/glass') },
       ]}
     >
       {error ? (
@@ -353,7 +359,7 @@ export default function QuotePage() {
       {isLoading ? <Text>Loading the quote...</Text> : null}
 
       {/* A quote that a calculator wrote. It is the offer that went out. The page does not edit it. */}
-      {!isLoading && readOnly ? <QuoteDocument quote={readOnly} onClose={() => router.push('/glass')} onConvert={() => convert(readOnly)} /> : null}
+      {!isLoading && readOnly ? <QuoteDocument quote={readOnly} /> : null}
 
       {!isLoading && !readOnly ? (
         <>
@@ -475,15 +481,6 @@ export default function QuotePage() {
               <PrintedQuote reference={reference} quoteName={draft.name} customerName={customerName} quoteDate={draft.date} notes={draft.notes} lines={paperLines} />
             </CardDouble>
           ) : null}
-
-          <RowSpaceBetween>
-            <span>
-              <ActionButton onClick={() => router.push('/glass')}>CLOSE</ActionButton>
-            </span>
-            <span>
-              {draft.lines.length ? <ActionButton onClick={() => window.print()}>PRINT</ActionButton> : null} {draft.lines.length ? <ActionButton onClick={sendQuote}>SEND</ActionButton> : null} <ActionButton onClick={save}>{isSaving ? 'SAVING...' : 'SAVE QUOTE'}</ActionButton>
-            </span>
-          </RowSpaceBetween>
         </>
       ) : null}
     </AppFrame>
