@@ -9,7 +9,7 @@ and one number.
 | --- | --- |
 | Merge, customer rule, warnings and name | `utils/quote-register.ts`, `mergeQuotesForOrder` |
 | Tick and convert | `app/glass/page.tsx` |
-| Convert one quote from its document | `app/glass/quotes/[id]/page.tsx`, `components/QuoteDocument.tsx` |
+| Convert one quote from the quote page | `app/glass/quotes/[id]/page.tsx` |
 | Order from a calculator | `handleCreatePurchaseOrder` in `app/glass/quote/page.tsx`, `app/glass/windows/page.tsx` and `app/glass/awnings/page.tsx` |
 | Draft handover | `utils/quote-to-order.ts` |
 | Order side | `app/glass/new/page.tsx`, `applyQuoteDraft` |
@@ -23,8 +23,8 @@ button shows only when the estimator ticks two or more quotes.
 
 The quote page at `/glass/quotes/<id>` has no Convert for a quote it edits. It edits a quote for a
 job, and a quote from a calculator that has a line priced above $0. Convert those quotes from the
-quote list. The page shows any other quote as its document, and "CONVERT TO ORDER" on the document
-converts that quote. View on the dashboard at `/glass/dashboard` opens the quote page.
+quote list. The page shows any other quote as its document, and "Convert To Order" in the bar at the
+top of the page converts that quote. View on the dashboard at `/glass/dashboard` opens the quote page.
 
 The quote list and the quote page call `mergeQuotesForOrder`, so one quote is a merge of one. Each
 page then opens a new order from the draft on `/glass/new`. The estimator checks the order and saves it.
@@ -67,8 +67,7 @@ exactly one matches. Otherwise, the order notes get `Calculator customer:` and t
 ## Quotes with no priced line
 
 The quote list does not let the estimator tick a quote with no priced line. Its Convert button
-reports that there is nothing to put on an order. The quote document on the quote page shows no
-"CONVERT TO ORDER" for it.
+reports that there is nothing to put on an order. The quote page shows no "Convert To Order" for it.
 
 `mergeQuotesForOrder` accepts such a quote. It leaves the quote off the draft and returns a warning
 that names it. The quote list shows the warnings in its error card and then opens the order page at
@@ -79,7 +78,7 @@ no warning names the unpriced lines.
 
 The merge counts a glass piece at $0 as a priced line. Converting a glass quote puts its $0 pieces on
 the order at $0. When every piece is at $0, the quote page shows the quote as its document, with
-"CONVERT TO ORDER".
+"Convert To Order".
 
 ## The order's name
 

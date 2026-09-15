@@ -1,18 +1,13 @@
 /**
- * A quote for a job. The quote holds lines of any kind.
- *
- * Each calculator held its own quotes before this module. One job then needed three quotes: one for
- * windows, one for awnings, and one for cut glass. The three quotes met only at the purchase order.
- *
- * A job is one offer. A quote therefore holds lines of all three kinds. Each calculator prices one
- * line at a time.
+ * A quote for a job. The quote holds lines of any kind, because a job is one offer. Each calculator
+ * prices one line at a time.
  *
  * A line is a LineDraft. An order line has the same shape. A calculator returns a line in one shape
  * for both documents. A quote does not use the order fields of a LineDraft. Examples: the quantity
  * made, the database id.
  *
- * Rows share the quotes table with the four older shapes. The field specification.kind identifies
- * the shape.
+ * Rows share the quotes table with four other shapes, which the calculators write. The field
+ * specification.kind identifies the shape.
  */
 
 import { GST_RATE, QuoteLine, quoteReference, quoteTotals, toCents } from '@utils/customer-quote-store';
@@ -209,7 +204,7 @@ interface QuoteRow {
   purchase_order_id?: string | null;
 }
 
-/** Reads a quotes row. Returns null for a row of an older kind. */
+/** Reads a quotes row. Returns null for a row of another kind. */
 export function toSavedQuote(row: QuoteRow): SavedQuote | null {
   const specification = asObject(row.specification);
   if (!specification || specification.kind !== QUOTE_KIND || !Array.isArray(specification.lines)) {

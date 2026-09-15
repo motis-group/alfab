@@ -24,7 +24,7 @@ test('a quote for a job holds lines of more than one kind', () => {
   assert.equal(quote?.notes, 'Deposit 50%');
 });
 
-test('a row of an older kind is not a quote for a job', () => {
+test('a row of another kind is not a quote for a job', () => {
   assert.equal(toSavedQuote(row({ kind: 'window-quote', lines: [] })), null);
   assert.equal(toSavedQuote(row({ kind: 'glass', items: [] })), null);
   assert.equal(toSavedQuote(row({ kind: 'quote' })), null, 'a row with no lines is not one either');

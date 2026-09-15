@@ -85,9 +85,8 @@ test('the report is sorted dearest spread first', () => {
 });
 
 /**
- * The report is what proves the consolidation holds. Every shared item is chosen once, in the glass
- * price list, so no two lists can put a different price on the same product. Before this, seven
- * glass items and the labour rate disagreed by 13 to 17 percent.
+ * The report is what proves the shared rates hold. utils/shared-rates.ts chooses each shared item
+ * once, so no two lists can put a different price on the same product.
  */
 test('no shared item drifts', () => {
   const material = materialDrift(items);
