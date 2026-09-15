@@ -235,6 +235,26 @@ test('a glass quote opens with its pieces ready to edit', () => {
   assert.equal(line.draft.unitPriceAtOrder, 100, 'the price is the price it was quoted at');
   assert.equal(line.draft.adhocSpec.glassType, spec.glassType, 'the specification travels, so the piece can be repriced');
   assert.ok(line.spec.length > 0, 'the stored specification describes itself without a rate table');
+  assert.deepEqual(
+    record.draft?.glassLines?.map((glassLine) => glassLine.description),
+    ['Side panel'],
+    'the piece at $0 does not go on an order either'
+  );
+});
+
+test('a glass quote with every piece at $0 has nothing to convert', () => {
+  const record = fromGlass({ id: 'g8', name: 'Offcuts', customer: '', customerId: null, date: '2026-09-10', notes: '', items: [{ name: 'Offcut', spec, quantity: 3, markupPercent: 20, unitPrice: 0, breakdown: null }], total: 0, status: 'open', purchaseOrderId: null, ratesUpdatedAt: null });
+
+  assert.deepEqual(record.editableLines, []);
+  assert.equal(record.draft, null, 'the order list cannot tick it and the quote page cannot convert it');
+  assert.equal(mergeQuotesForOrder([record]), null);
+});
+
+test('a quote with no customer joins the customer another quote names', () => {
+  const walkIn = glassQuote({ customer: '', customerId: null, draft: { ...glassQuote().draft!, customerName: '', customerId: null } });
+  const result = merged([walkIn, windowQuote()]);
+
+  assert.equal(result.draft.customerName, 'Status Houseboats', 'the first quote names nobody, so the name comes from the next');
 });
 
 test('a printed quote keeps the words it printed', () => {

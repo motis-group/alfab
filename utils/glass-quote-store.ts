@@ -61,7 +61,7 @@ function asObject(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' ? (value as Record<string, unknown>) : null;
 }
 
-/** Glass quotes share the quotes table with window costings, so rows carry a kind. */
+/** Every kind of quote shares the quotes table, so rows carry a kind. */
 function toSavedQuote(row: QuoteRow): SavedGlassQuote | null {
   const specification = asObject(row.specification);
   if (!specification || specification.kind !== 'glass' || !Array.isArray(specification.items)) {
@@ -97,7 +97,7 @@ export async function saveGlassQuote(quote: { name: string; customer: string; cu
   const db = createClient();
   const { error } = await db.from(TABLE).insert({
     name: quote.name.trim() || 'Glass quote',
-    client: quote.customer.trim() || 'No Client',
+    client: quote.customer.trim(),
     specification: {
       kind: 'glass',
       customerId: quote.customerId,

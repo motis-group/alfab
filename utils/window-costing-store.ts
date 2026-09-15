@@ -21,7 +21,6 @@ export async function loadWindowRates(): Promise<LoadedWindowRates> {
   return { ...loaded, rates: applySharedRatesToWindow(loaded.rates, glass.rates.basePrices) };
 }
 
-export const loadWindowRatesVersion = (updatedAt: string) => store.loadVersion(updatedAt);
 /** Saves and returns what the table then holds, so a save that did not land is not announced as one. */
 export const saveWindowRates = (rates: WindowRates, expectedUpdatedAt?: string | null) => store.saveAndReload(rates, expectedUpdatedAt);
 export const resetWindowRates = () => store.reset();

@@ -24,10 +24,9 @@ import { Customer, PricingSource, formatCurrency, todayISODate } from '@utils/or
 import { LineDraft, createLineDraft } from '@utils/order-draft';
 import { QuoteDraft, applyQuoteLineResult, clearQuoteDraft, dropPendingLine, emptyQuoteDraft, peekQuoteDraft, persistQuoteDraft, setQuoteMargin } from '@utils/quote-draft';
 import { quoteEmail } from '@utils/quote-email';
-import { QuoteRecord, findQuoteRecord, isMergeRefusal, mergeQuotesForOrder } from '@utils/quote-register';
+import { QuoteRecord, findQuoteRecord } from '@utils/quote-register';
 import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuoteLine, createQuote, findQuote, quoteMarginSummary, quotePaperLines, quoteReference, updateQuote } from '@utils/quote-store';
 import { createClient } from '@utils/db-client';
-import { persistQuoteToOrderDraft } from '@utils/quote-to-order';
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 
 const TABLE_CUSTOMERS = 'customers';
@@ -307,25 +306,12 @@ export default function QuotePage() {
     }
   }
 
-  function convert(record: QuoteRecord) {
-    const merged = mergeQuotesForOrder([record]);
-    if (!merged) {
-      setError('That quote has no priced line to put on an order.');
-      return;
-    }
-    if (isMergeRefusal(merged)) {
-      setError(merged.reason);
-      return;
-    }
-    persistQuoteToOrderDraft(merged.draft);
-    router.push('/glass/new?fromQuote=1');
-  }
-
   const heading = readOnly ? readOnly.reference || readOnly.name || 'QUOTE' : reference || (isNew ? 'NEW QUOTE' : 'QUOTE');
 
   // The actions are in the bar at the top. The messages that they show are directly below the bar.
   const printAction = { body: 'Print', onClick: () => window.print() };
-  const readOnlyActions = readOnly ? [...(documentLines(readOnly).length ? [printAction] : []), ...(readOnly.draft ? [{ body: 'Convert To Order', onClick: () => convert(readOnly) }] : [])] : [];
+  // A read-only quote has no priced line to put on an order, so it offers no Convert.
+  const readOnlyActions = readOnly && documentLines(readOnly).length ? [printAction] : [];
   const draftActions = [{ body: isSaving ? 'Saving...' : 'Save Quote', onClick: isSaving ? undefined : save }, ...(draft.lines.length ? [printAction, { body: 'Send', onClick: sendQuote }] : [])];
 
   return (
@@ -358,7 +344,7 @@ export default function QuotePage() {
 
       {isLoading ? <Text>Loading the quote...</Text> : null}
 
-      {/* A quote that a calculator wrote. It is the offer that went out. The page does not edit it. */}
+      {/* A quote that a calculator wrote, with no priced line to edit or to put on an order. */}
       {!isLoading && readOnly ? <QuoteDocument quote={readOnly} /> : null}
 
       {!isLoading && !readOnly ? (

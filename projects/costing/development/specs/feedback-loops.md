@@ -38,8 +38,9 @@ quote was not won.
 
 A quote can be deleted from the quote list at `/glass` unless it is won. A won quote is refused, in
 the page and in `/api/db`, because it is the record of what its order was sold at. Deleting the order
-first returns it to open. For a quote with a reference, the confirmation warns that the number the
-customer holds will point at nothing.
+first returns it to open. For a quote with a reference, the confirmation warns that a customer who
+holds the number will find nothing. A quote for a job has its reference from its first save, so the
+confirmation does not say that the quote went out.
 
 ## Was the estimate true
 

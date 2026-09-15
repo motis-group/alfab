@@ -216,8 +216,7 @@ made it. The three triggers ship in `docs/order-management-schema.sql`. Keep eac
 table.
 
 A saved costing stores its price and the stamp of the rates that priced it, so reopening it shows
-what was quoted. No page reprices a costing on its archive row. `loadWindowRatesVersion` in
-`utils/window-costing-store.ts` loads an archive row, and nothing calls it.
+what was quoted. No page reprices a costing on its archive row.
 
 ## Seeing a rate change before it is saved
 

@@ -4,7 +4,7 @@ import { CostLine, WindowCostingInput, WindowCostResult, readFinish } from '@uti
 
 const TABLE = 'quotes';
 
-/** Saved window costing. Doubles as a per-customer template: load it to price the same window again. */
+/** A saved window costing. The order list shows it, and the quote page opens it as a quote for a job. */
 export interface SavedWindowCosting {
   id: string;
   name: string;
@@ -50,7 +50,7 @@ function asObject(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' ? (value as Record<string, unknown>) : null;
 }
 
-/** Window costings share the quotes table with the glass calculator, so rows carry a kind. */
+/** Every kind of quote shares the quotes table, so rows carry a kind. */
 function toSavedCosting(row: QuoteRow): SavedWindowCosting | null {
   const specification = asObject(row.specification);
   if (!specification || specification.kind !== 'window' || !specification.input) {
@@ -89,7 +89,7 @@ export async function saveWindowCosting(costing: { name: string; customer: strin
   const db = createClient();
   const { error } = await db.from(TABLE).insert({
     name: costing.name.trim() || 'Window costing',
-    client: costing.customer.trim() || 'No Client',
+    client: costing.customer.trim(),
     specification: {
       kind: 'window',
       input: costing.input,

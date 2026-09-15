@@ -29,7 +29,7 @@ import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 import { CostExtra, CostLine, FINISH_LABELS, Finish, GLASS_GROUP_LABELS, GLAZING_ORDER, LOCK_LABELS, LabourPart, LockType, MullionKind, Reinforcement, STRUT_LABELS, StayType, StrutKind, TRIM_LABELS, TrimMode, WINDOW_TYPES, WindowCostingInput, WindowTypeId, applyWindowOptions, costWindow, glazingFits, costWindowBatches, createWindowInput, describeWindow, switchWindowType, windowOptions } from '@utils/window-costing';
 import { WINDOW_SERIES, WindowProduct, findProduct, productFullName, productLabel, productForInput, seriesOfProduct, visibleSeries } from '@utils/window-catalogue';
 import { DEFAULT_WINDOW_RATES, GlazingId, WindowRates, mergeWindowRates, withoutMargins } from '@utils/window-costing-rates';
-import { loadWindowRates, loadWindowRatesVersion } from '@utils/window-costing-store';
+import { loadWindowRates } from '@utils/window-costing-store';
 import { saveWindowCosting } from '@utils/window-quote-store';
 
 const FINISH_ORDER: Finish[] = ['mill', 'etch', 'powder'];
@@ -119,7 +119,6 @@ export default function WindowCostingPage() {
   // Customer by default, so a browser Cmd+P prints the safe document. The internal button raises it
   // for one print and `afterprint` puts it back.
   const [sheetAudience, setSheetAudience] = useState<'internal' | 'customer'>('customer');
-  const [comparison, setComparison] = useState<{ id: string; quoted: number | null; today: number | null; onOriginal: number | null; stamp: string | null } | null>(null);
 
   const cfg = WINDOW_TYPES[input.type];
   const options = windowOptions(cfg);
@@ -434,7 +433,7 @@ export default function WindowCostingPage() {
         result,
         ratesUpdatedAt,
       });
-      setStatus({ tone: 'success', message: 'Costing saved. Load it again from Saved costings.' });
+      setStatus({ tone: 'success', message: 'Costing saved. It is in the order list.' });
     } catch (saveError: any) {
       setStatus({ tone: 'warning', message: saveError?.message || 'Unable to save the costing.' });
     }

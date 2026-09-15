@@ -133,7 +133,7 @@ function rowFields(quote: SavedQuoteContent & { issuedBy: string | null; ratesUp
   const { subtotal, gst } = quoteTotals(quotePaperLines(quote.lines));
   return {
     name: quote.name.trim(),
-    client: quote.customer.trim() || 'No Client',
+    client: quote.customer.trim(),
     // Use midnight UTC. The date read back is then the date written, in every time zone.
     date: `${quote.date}T00:00:00Z`,
     specification: {

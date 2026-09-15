@@ -70,7 +70,8 @@ a wrong match is worse than a missing one. Uncertain matches stay unmatched.
 A gap under 2 percent is rounding. Each shared rate is set in one list, so the report expects no
 larger gap. A larger gap means a list holds its own price for a shared item, and the report lists it
 for review. When three or more gaps sit within 6 percentage points of each other, the report also
-says they look like one price rise that one list did not get.
+says they can be one price rise that one list did not get. A gap has no sign, so the report does not
+check which list is dearer on each item.
 
 ## Open questions
 

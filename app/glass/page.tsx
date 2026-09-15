@@ -121,7 +121,7 @@ export default function OrderDashboardPage() {
   const [orderLines, setOrderLines] = useState<PurchaseOrderLine[]>([]);
   const [quotes, setQuotes] = useState<QuoteRecord[]>([]);
   const [quoteError, setQuoteError] = useState<string | null>(null);
-  // Quotes ticked for one order. A boat's windows, awnings and cut glass are three quotes.
+  // Quotes ticked to go on one order.
   const [selectedQuotes, setSelectedQuotes] = useState<Set<string>>(new Set());
 
   const [isLoading, setIsLoading] = useState(true);
@@ -222,7 +222,6 @@ export default function OrderDashboardPage() {
     }
   }
 
-  /** Saved quotes from all three calculators. A calculator that cannot be read is named, not hidden. */
   /** Deleting is for a quote nobody answered or one made by mistake. A won quote goes with its order. */
   async function removeQuote(quote: QuoteRecord) {
     const label = quote.reference || quote.name || 'This quote';
@@ -231,7 +230,8 @@ export default function OrderDashboardPage() {
       setQuoteError(refusal);
       return;
     }
-    const warning = quote.reference ? `Delete ${quote.reference}? It was printed for a customer, so the number they hold will point at nothing. This cannot be undone.` : `Delete ${label}? This cannot be undone.`;
+    // A quote for a job has its number from its first save, so the page cannot tell whether a customer has it.
+    const warning = quote.reference ? `Delete ${quote.reference}? If a customer has this number, it will point at nothing. This cannot be undone.` : `Delete ${label}? This cannot be undone.`;
     if (!(await confirm('DELETE QUOTE', warning))) {
       return;
     }
@@ -243,6 +243,7 @@ export default function OrderDashboardPage() {
     }
   }
 
+  /** Every saved quote of every kind. A store that cannot be read is named, not hidden. */
   async function refreshQuotes() {
     const { records, errors } = await listQuoteRecords();
     setQuotes(records);
@@ -285,9 +286,9 @@ export default function OrderDashboardPage() {
   }
 
   /**
-   * A purchase order is an approved quote, so converting is a deliberate act rather than something
-   * that happens when a quote is marked won. Several quotes convert into one order, which is how a
-   * boat's windows, awnings and cut glass reach the customer as one number. Each is marked won.
+   * A purchase order is an approved quote, so converting is a deliberate act. Several quotes for one
+   * customer can convert into one order. Converting marks nothing: saving the order links each quote
+   * to it, and that link makes the quote won.
    */
   async function convertQuotes(records: QuoteRecord[]) {
     const merged = mergeQuotesForOrder(records);

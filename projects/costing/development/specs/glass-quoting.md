@@ -30,8 +30,9 @@ Two actions keep the quote:
   reference.
 
 The quote list at `/glass` shows both rows with the quotes of every other kind. Open on a
-`kind: glass` row shows it on the quote page. When the quote has a priced piece, saving it there
-rewrites the row as a quote for a job.
+`kind: glass` row shows it on the quote page. When the quote has a piece priced above $0, saving it
+there rewrites the row as a quote for a job. A piece at $0 has no price, so it stays off the quote
+page and off any order made from the quote.
 
 ## Customer
 
