@@ -356,7 +356,8 @@ export default function OrderDashboardPage() {
       navRight={<ActionButton onClick={() => router.push('/glass/new')}>NEW ORDER</ActionButton>}
       heading="PURCHASE ORDER DASHBOARD"
       badge={`${ordersInScope.length} TOTAL`}
-      sidebarWidthCh={44}
+      // The filters fit in 30ch. The lists use the rest of the width to keep each row on one line.
+      sidebarWidthCh={30}
       sidebarMobileOrder="top"
       sidebar={
         <>
@@ -472,44 +473,51 @@ export default function OrderDashboardPage() {
         {isLoading ? (
           <Text>Loading quotes...</Text>
         ) : (
-          <Table>
+          <Table data-one-line>
             <TableRow>
-              <TableColumn style={{ width: '4ch' }}>ON</TableColumn>
-              <TableColumn>QUOTE</TableColumn>
-              <TableColumn style={{ width: '10ch' }}>PRODUCT</TableColumn>
-              <TableColumn style={{ width: '22ch' }}>CUSTOMER</TableColumn>
-              <TableColumn style={{ width: '13ch' }}>DATE</TableColumn>
-              <TableColumn style={{ width: '8ch' }}>LINES</TableColumn>
-              <TableColumn style={{ width: '13ch' }}>TOTAL</TableColumn>
-              <TableColumn style={{ width: '22ch' }}>STATUS</TableColumn>
-              <TableColumn style={{ width: '32ch' }}>ACTIONS</TableColumn>
+              <TableColumn>ON</TableColumn>
+              <TableColumn style={{ width: '60%' }}>QUOTE</TableColumn>
+              <TableColumn style={{ width: '40%' }}>CUSTOMER</TableColumn>
+              <TableColumn>DATE</TableColumn>
+              <TableColumn>LINES</TableColumn>
+              <TableColumn>TOTAL</TableColumn>
+              <TableColumn>STATUS</TableColumn>
+              <TableColumn>ACTIONS</TableColumn>
             </TableRow>
 
-            {filteredQuotes.map((quote) => (
-              <TableRow key={quote.id}>
-                <TableColumn>
-                  <input type="checkbox" checked={selectedQuotes.has(quote.id)} disabled={!quote.draft} aria-label={`Put ${quote.name || 'this quote'} on an order`} onChange={() => toggleQuote(quote.id)} />
-                </TableColumn>
-                <TableColumn>{[quote.reference, quote.name || 'Untitled'].filter(Boolean).join(' · ')}</TableColumn>
-                <TableColumn>{quote.kindLabel}</TableColumn>
-                <TableColumn>{quote.customer || 'Walk-in'}</TableColumn>
-                <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
-                <TableColumn>{quote.lineCount}</TableColumn>
-                <TableColumn>{formatCurrency(quote.total)}</TableColumn>
-                <TableColumn>
-                  <span className={QUOTE_STATUS_TONE[quote.status]}>{QUOTE_STATUS_LABELS[quote.status]}</span>
-                </TableColumn>
-                <TableColumn style={{ whiteSpace: 'nowrap' }}>
-                  <ActionButton onClick={() => router.push(`/glass/quotes/${quote.id}`)}>Open</ActionButton>{' '}
-                  <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuotes([quote])}>Convert</ActionButton>{' '}
-                  <ActionButton onClick={role === 'readonly' ? undefined : () => removeQuote(quote)}>Delete</ActionButton>
-                </TableColumn>
-              </TableRow>
-            ))}
+            {filteredQuotes.map((quote) => {
+              const label = [quote.reference, quote.name || 'Untitled'].filter(Boolean).join(' · ');
+              const customer = quote.customer || 'Walk-in';
+
+              return (
+                <TableRow key={quote.id}>
+                  <TableColumn>
+                    <input type="checkbox" checked={selectedQuotes.has(quote.id)} disabled={!quote.draft} aria-label={`Put ${quote.name || 'this quote'} on an order`} onChange={() => toggleQuote(quote.id)} />
+                  </TableColumn>
+                  <TableColumn data-fill title={label}>
+                    {label}
+                  </TableColumn>
+                  <TableColumn data-fill title={customer}>
+                    {customer}
+                  </TableColumn>
+                  <TableColumn>{quote.date ? quote.date.slice(0, 10) : '—'}</TableColumn>
+                  <TableColumn>{quote.lineCount}</TableColumn>
+                  <TableColumn>{formatCurrency(quote.total)}</TableColumn>
+                  <TableColumn>
+                    <span className={QUOTE_STATUS_TONE[quote.status]}>{QUOTE_STATUS_LABELS[quote.status]}</span>
+                  </TableColumn>
+                  <TableColumn>
+                    <ActionButton onClick={() => router.push(`/glass/quotes/${quote.id}`)}>Open</ActionButton>{' '}
+                    <ActionButton onClick={role === 'readonly' ? undefined : () => convertQuotes([quote])}>Convert</ActionButton>{' '}
+                    <ActionButton onClick={role === 'readonly' ? undefined : () => removeQuote(quote)}>Delete</ActionButton>
+                  </TableColumn>
+                </TableRow>
+              );
+            })}
 
             {!filteredQuotes.length && (
               <TableRow>
-                <TableColumn colSpan={9} style={{ textAlign: 'center' }}>
+                <TableColumn colSpan={8} style={{ textAlign: 'center' }}>
                   No quotes match the filters.
                 </TableColumn>
               </TableRow>
@@ -528,27 +536,30 @@ export default function OrderDashboardPage() {
         {isLoading ? (
           <Text>Loading order data...</Text>
         ) : (
-          <Table>
+          <Table data-one-line>
             <TableRow>
-              <TableColumn style={{ width: '16ch' }}>PO NUMBER</TableColumn>
-              <TableColumn style={{ width: '24ch' }}>CUSTOMER</TableColumn>
-              <TableColumn style={{ width: '14ch' }}>RECEIVED</TableColumn>
-              <TableColumn style={{ width: '14ch' }}>REQUIRED</TableColumn>
-              <TableColumn style={{ width: '16ch' }}>STATUS</TableColumn>
-              <TableColumn style={{ width: '12ch' }}>LINES</TableColumn>
-              <TableColumn style={{ width: '14ch' }}>TOTAL</TableColumn>
-              <TableColumn style={{ width: '30ch' }}>ACTIONS</TableColumn>
+              <TableColumn>PO NUMBER</TableColumn>
+              <TableColumn style={{ width: '100%' }}>CUSTOMER</TableColumn>
+              <TableColumn>RECEIVED</TableColumn>
+              <TableColumn>REQUIRED</TableColumn>
+              <TableColumn>STATUS</TableColumn>
+              <TableColumn>LINES</TableColumn>
+              <TableColumn>TOTAL</TableColumn>
+              <TableColumn>ACTIONS</TableColumn>
             </TableRow>
 
             {filteredOrders.map((order) => {
               const lines = linesByOrder[order.id] || [];
               const total = calculateOrderTotal(lines);
               const isOverdue = overdueIds.has(order.id);
+              const customerName = customerMap[order.customer_id]?.name || 'Unknown Customer';
 
               return (
                 <TableRow key={order.id}>
                   <TableColumn>{order.po_number}</TableColumn>
-                  <TableColumn>{customerMap[order.customer_id]?.name || 'Unknown Customer'}</TableColumn>
+                  <TableColumn data-fill title={customerName}>
+                    {customerName}
+                  </TableColumn>
                   <TableColumn>{displayDate(order.received_date)}</TableColumn>
                   <TableColumn>
                     <span className={isOverdue ? 'status-error' : undefined}>{displayDate(order.required_date)}</span>
@@ -562,7 +573,7 @@ export default function OrderDashboardPage() {
                   </TableColumn>
                   <TableColumn>{lines.length}</TableColumn>
                   <TableColumn>{formatCurrency(total)}</TableColumn>
-                  <TableColumn style={{ whiteSpace: 'nowrap' }}>
+                  <TableColumn>
                     <ActionButton onClick={() => router.push(`/glass/new?orderId=${order.id}`)}>View</ActionButton>{' '}
                     <ActionButton onClick={role === 'readonly' ? undefined : () => setOrderArchived(order, !isOrderArchived(order))}>{isOrderArchived(order) ? 'Restore' : 'Archive'}</ActionButton>{' '}
                     <ActionButton onClick={role === 'readonly' ? undefined : () => deleteOrder(order)}>Delete</ActionButton>
