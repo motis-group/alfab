@@ -95,8 +95,9 @@ export interface SharedAwningRates {
 
 /**
  * Awning rates with every shared rate taken from the glass list, and the labour rate from the
- * window costing. The awning sheet is the smaller of the two and never had a labour rate of its own
- * that the shop recognised as different.
+ * window costing. One shop has one hourly rate, and the window costing is the larger of the two, so
+ * it sets that rate. Question 3.1 in projects/costing/discovery/awning-costing-decisions.md asks
+ * whether awning labour costs less.
  */
 export function applySharedRatesToAwning(rates: AwningRates, shared: SharedAwningRates): AwningRates {
   const options = { ...rates.glass.options };
