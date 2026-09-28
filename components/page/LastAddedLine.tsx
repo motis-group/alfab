@@ -10,16 +10,13 @@ import { LastAddedLine as LastAdded } from '@utils/line-editing';
  * The calculator stays open after Add To Quote and keeps the settings of that line. This card names
  * the line and its measurements, so the operator knows which item of the job comes next.
  */
-export default function LastAddedLine({ line, documentLabel }: { line: LastAdded | undefined; documentLabel: string }) {
+export default function LastAddedLine({ line }: { line: LastAdded | undefined }) {
   if (!line) {
     return null;
   }
 
   return (
     <Card title="LAST ADDED">
-      <Text>
-        <span className="status-success">Saved to {documentLabel}.</span>
-      </Text>
       <RowSpaceBetween>
         <Text>{line.lineLabel.toUpperCase()}</Text>
         <Text>{line.name || '—'}</Text>

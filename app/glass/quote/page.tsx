@@ -5,7 +5,6 @@ import '@root/global.scss';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import ActionButton from '@components/ActionButton';
 import AppFrame from '@components/page/AppFrame';
 import CadImportPanel from '@components/CadImportPanel';
 import Card from '@components/Card';
@@ -199,7 +198,6 @@ export default function AdhocQuotePage() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⬡"
-      navRight={<ActionButton onClick={() => router.push('/glass')}>ORDER DASHBOARD</ActionButton>}
       heading={`PRICING A LINE OF ${lineEdit.origin.label.toUpperCase()}`}
       badge={isLoading ? 'LOADING' : `${role.toUpperCase()} SESSION`}
       sidebarWidthCh={44}
@@ -207,7 +205,7 @@ export default function AdhocQuotePage() {
       sidebar={
         <>
           {/* Actions are on the toolbar. */}
-          <LastAddedLine line={lineEdit.lastAdded} documentLabel={lineEdit.origin.label} />
+          <LastAddedLine line={lineEdit.lastAdded} />
           <Card title="THIS PIECE">
             {calculation.error ? (
               <Text>
@@ -323,11 +321,11 @@ export default function AdhocQuotePage() {
         ...(lineEdit.adding
           ? [
               { body: 'Add To Quote', onClick: addLineAndContinue },
-              { body: lineEdit.lastAdded ? 'Back To Quote' : 'Cancel', onClick: cancelLineEdit },
+              { body: 'Back To Quote', onClick: cancelLineEdit },
             ]
           : [
               { body: quoteLine ? 'Save To Quote' : 'Save To Order', onClick: saveLineToDocument },
-              { body: 'Cancel', onClick: cancelLineEdit },
+              { body: quoteLine ? 'Back To Quote' : 'Back To Order', onClick: cancelLineEdit },
             ]),
       ]}
     >

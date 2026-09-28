@@ -280,7 +280,6 @@ export default function WindowCostingPage() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⬡"
-      navRight={<ActionButton onClick={() => router.push('/glass')}>ORDER DASHBOARD</ActionButton>}
       heading={`PRICING A LINE OF ${lineEdit.origin.label.toUpperCase()}`}
       badge={isLoading ? 'LOADING' : `${role.toUpperCase()} SESSION`}
       sidebarWidthCh={48}
@@ -288,7 +287,7 @@ export default function WindowCostingPage() {
       sidebar={
         <>
           {/* Actions are on the toolbar. */}
-          <LastAddedLine line={lineEdit.lastAdded} documentLabel={lineEdit.origin.label} />
+          <LastAddedLine line={lineEdit.lastAdded} />
           {status ? (
             <Card title="LAST ACTION">
               <Text>
@@ -520,11 +519,11 @@ export default function WindowCostingPage() {
         ...(lineEdit.adding
           ? [
               { body: 'Add To Quote', onClick: addLineAndContinue },
-              { body: lineEdit.lastAdded ? 'Back To Quote' : 'Cancel', onClick: cancelLineEdit },
+              { body: 'Back To Quote', onClick: cancelLineEdit },
             ]
           : [
               { body: quoteLine ? 'Save To Quote' : 'Save To Order', onClick: saveLineToDocument },
-              { body: 'Cancel', onClick: cancelLineEdit },
+              { body: quoteLine ? 'Back To Quote' : 'Back To Order', onClick: cancelLineEdit },
             ]),
       ]}
     >
