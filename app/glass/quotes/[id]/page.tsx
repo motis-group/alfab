@@ -208,6 +208,8 @@ export default function QuotePage() {
       customerId: draft.customerId,
       lineLabel,
       returnTo: `/glass/quotes/${draft.id || 'new'}?lineEdited=1`,
+      // A new line stays in the calculator after Add, so the operator can price the next line from it.
+      adding: pending,
     });
     router.push(`${href}?editLine=1`);
   }

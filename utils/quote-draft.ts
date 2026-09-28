@@ -12,7 +12,7 @@
 import type { PricingData } from '@components/PricingProvider';
 import { calculateCost, describeGlassSpecification } from '@utils/calculations';
 import type { ExtractedPiece } from '@utils/import/model';
-import { LineEditResult } from '@utils/line-editing';
+import { LastAddedLine, LineEditRequest, LineEditResult, persistLineEditRequest } from '@utils/line-editing';
 import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuote, SavedQuoteLine, applyQuoteMargin, quoteReference } from '@utils/quote-store';
 import { createLineDraft } from '@utils/order-draft';
 import { todayISODate } from '@utils/order-management';
@@ -130,6 +130,40 @@ export function applyQuoteLineResult(draft: QuoteDraft, result: LineEditResult):
     lines: existing ? draft.lines.map((line) => (line.draft.localId === result.localId ? priced : line)) : [...draft.lines, priced],
     pendingLineId: null,
   };
+}
+
+/**
+ * Adds a new line to the waiting quote, and opens the next new line in the same calculator.
+ *
+ * The operator often prices a run of similar lines. The next line therefore starts from the settings
+ * of the line just added. The next line is not on the quote until the operator adds it too, so a
+ * return without Add leaves the quote as it is.
+ *
+ * Returns null if no quote waits for the line. The calculator then returns the line to the quote.
+ */
+export function addQuoteLineAndContinue(request: LineEditRequest, result: LineEditResult, sizes: LastAddedLine['sizes']): LineEditRequest | null {
+  const waiting = peekQuoteDraft();
+  if (!waiting || request.origin.kind !== 'quote') {
+    return null;
+  }
+
+  // The quote page puts only the first new line on the draft. A later line joins here, with the
+  // calculator that prices it, so Edit on the quote still opens that calculator.
+  const onDraft = waiting.lines.some((line) => line.draft.localId === result.localId) ? waiting : { ...waiting, lines: [...waiting.lines, { draft: request.line, spec: '', extras: [] }] };
+  const added = applyQuoteLineResult(onDraft, result);
+  persistQuoteDraft(added);
+
+  const position = added.lines.findIndex((line) => line.draft.localId === result.localId);
+  const nextLine = createLineDraft({ ...request.line, ...result.line, localId: undefined, id: undefined });
+  const next: LineEditRequest = {
+    ...request,
+    localId: nextLine.localId,
+    line: nextLine,
+    adding: true,
+    lastAdded: { lineLabel: `Line ${position + 1}`, name: result.line.lineNote, sizes },
+  };
+  persistLineEditRequest(next);
+  return next;
 }
 
 /** Sets the margin of the quote and prices every line that has a cost again. */

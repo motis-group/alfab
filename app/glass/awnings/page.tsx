@@ -12,6 +12,7 @@ import Card from '@components/Card';
 import SidebarTabs from '@components/SidebarTabs';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
+import LastAddedLine from '@components/page/LastAddedLine';
 import NoLineToPrice from '@components/page/NoLineToPrice';
 import RowSpaceBetween from '@components/RowSpaceBetween';
 import Table from '@components/Table';
@@ -21,7 +22,8 @@ import Text from '@components/Text';
 
 import { UserRole, formatCurrency } from '@utils/order-management';
 import { defaultAdhocSpec } from '@utils/order-draft';
-import { LineEditRequest, clearLineEditRequest, peekLineEditRequest, persistLineEditResult } from '@utils/line-editing';
+import { LineEditRequest, LineEditResult, clearLineEditRequest, peekLineEditRequest, persistLineEditResult } from '@utils/line-editing';
+import { addQuoteLineAndContinue } from '@utils/quote-draft';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 import { AwningCostingInput, CostLine, GLAZING_ORDER, costAwning, costAwningBatches, createAwningInput, describeAwning } from '@utils/awning-costing';
 import { AwningRates, DEFAULT_AWNING_RATES, GlazingId, mergeAwningRates } from '@utils/awning-costing-rates';
@@ -136,17 +138,18 @@ export default function AwningCostingPage() {
     update({ [field]: Math.max(minimum, numberOrFallback(value, minimum)) } as Partial<AwningCostingInput>);
   }
 
-  /** Returns the priced line to the order or the quote that sent it. */
-  function saveLineToDocument() {
+  /** The line as the calculator prices it. Null, with the reason shown, if the line has no price yet. */
+  function pricedLine(): LineEditResult | null {
     if (!lineEdit) {
-      return;
+      return null;
     }
     if (result.price == null) {
       setStatus({ tone: 'warning', message: 'This line is not priced yet, so there is nothing to send back.' });
-      return;
+      return null;
     }
 
-    persistLineEditResult({
+
+    return {
       origin: lineEdit.origin,
       localId: lineEdit.localId,
       line: {
@@ -162,8 +165,34 @@ export default function AwningCostingPage() {
       },
       spec: describe(input),
       extras: [],
-    });
+    };
+  }
+
+  /** Returns the priced line to the order or the quote that sent it. */
+  function saveLineToDocument() {
+    const priced = pricedLine();
+    if (!lineEdit || !priced) {
+      return;
+    }
+    persistLineEditResult(priced);
     router.push(lineEdit.returnTo);
+  }
+
+  /** Adds the new line to the quote. The calculator stays open with the same settings for the next line. */
+  function addLineAndContinue() {
+    const priced = pricedLine();
+    if (!lineEdit || !priced) {
+      return;
+    }
+    const next = addQuoteLineAndContinue(lineEdit, priced, [{ label: 'HEIGHT', mm: input.heightMm }, { label: 'WIDTH', mm: input.widthMm }]);
+    if (!next) {
+      // No quote waits in this sitting. The line goes back to the quote the usual way.
+      persistLineEditResult(priced);
+      router.push(lineEdit.returnTo);
+      return;
+    }
+    setLineEdit(next);
+    setStatus(null);
   }
 
   /** Leaves the line as the order or the quote holds it. */
@@ -183,7 +212,6 @@ export default function AwningCostingPage() {
     <AppFrame
       previewPixelSRC="/pixel.gif"
       logo="⬡"
-      navRight={<ActionButton onClick={() => router.push('/glass')}>ORDER DASHBOARD</ActionButton>}
       heading={`PRICING A LINE OF ${lineEdit.origin.label.toUpperCase()}`}
       badge={isLoading ? 'LOADING' : `${role.toUpperCase()} SESSION`}
       sidebarWidthCh={48}
@@ -191,6 +219,7 @@ export default function AwningCostingPage() {
       sidebar={
         <>
           {/* Actions are on the toolbar. */}
+          <LastAddedLine line={lineEdit.lastAdded} />
           {status ? (
             <Card title="LAST ACTION">
               <Text>
@@ -387,8 +416,16 @@ export default function AwningCostingPage() {
       }
       // The line belongs to the quote or the order that sent it, so the bar offers only the way back.
       actionItems={[
-        { body: quoteLine ? 'Save To Quote' : 'Save To Order', onClick: saveLineToDocument },
-        { body: 'Cancel', onClick: cancelLineEdit },
+        // A new quote line stays here after Add, so the operator can price the next line from the same settings.
+        ...(lineEdit.adding
+          ? [
+              { body: 'Add To Quote', onClick: addLineAndContinue },
+              { body: 'Back To Quote', onClick: cancelLineEdit },
+            ]
+          : [
+              { body: quoteLine ? 'Save To Quote' : 'Save To Order', onClick: saveLineToDocument },
+              { body: quoteLine ? 'Back To Quote' : 'Back To Order', onClick: cancelLineEdit },
+            ]),
       ]}
     >
       {error && (
@@ -400,9 +437,11 @@ export default function AwningCostingPage() {
       )}
 
       {/* The form below is the line that the quote or the order sent. The way back is in the bar at the top. */}
-      <CardDouble title={lineEdit.origin.kind === 'order' ? 'EDITING AN ORDER LINE' : 'EDITING A QUOTE LINE'}>
+      <CardDouble title={lineEdit.origin.kind === 'order' ? 'EDITING AN ORDER LINE' : lineEdit.adding ? 'ADDING QUOTE LINES' : 'EDITING A QUOTE LINE'}>
         <Text>
-          {lineEdit.lineLabel} of {lineEdit.origin.label}. Changing the awning below changes that line.
+          {lineEdit.adding
+            ? `New awning line for ${lineEdit.origin.label}.`
+            : `${lineEdit.lineLabel} of ${lineEdit.origin.label}. Changing the awning below changes that line.`}
         </Text>
       </CardDouble>
 
