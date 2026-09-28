@@ -343,7 +343,7 @@ export default function AdhocQuotePage() {
       <CardDouble title={lineEdit.origin.kind === 'order' ? 'EDITING AN ORDER LINE' : lineEdit.adding ? 'ADDING QUOTE LINES' : 'EDITING A QUOTE LINE'}>
         <Text>
           {lineEdit.adding
-            ? `A new piece line for ${lineEdit.origin.label}. Add To Quote adds it and keeps these settings, so you can change what differs and add the next one.`
+            ? `New cut glass line for ${lineEdit.origin.label}.`
             : `${lineEdit.lineLabel} of ${lineEdit.origin.label}. Changing the piece below changes that line.`}
         </Text>
       </CardDouble>

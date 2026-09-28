@@ -18,7 +18,7 @@ export default function LastAddedLine({ line, documentLabel }: { line: LastAdded
   return (
     <Card title="LAST ADDED">
       <Text>
-        <span className="status-success">Added to {documentLabel}. The settings stay for the next line.</span>
+        <span className="status-success">Saved to {documentLabel}.</span>
       </Text>
       <RowSpaceBetween>
         <Text>{line.lineLabel.toUpperCase()}</Text>
