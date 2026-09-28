@@ -5,8 +5,8 @@ import { beforeEach, test } from 'node:test';
 import { defaultPricingData } from '@components/PricingProvider';
 import { calculateCost } from './calculations';
 import { ExtractedPiece } from './import/model';
-import { LineEditResult } from './line-editing';
-import { QuoteDraft, addGlassPieces, applyQuoteLineResult, clearQuoteDraft, dropPendingLine, emptyQuoteDraft, peekQuoteDraft, persistQuoteDraft, reissueQuoteDraft, setQuoteMargin } from './quote-draft';
+import { LineEditRequest, LineEditResult, peekLineEditRequest, persistLineEditRequest } from './line-editing';
+import { QuoteDraft, addGlassPieces, addQuoteLineAndContinue, applyQuoteLineResult, clearQuoteDraft, dropPendingLine, emptyQuoteDraft, peekQuoteDraft, persistQuoteDraft, reissueQuoteDraft, setQuoteMargin } from './quote-draft';
 import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuoteLine, priceAtMargin } from './quote-store';
 import { createLineDraft } from './order-draft';
 import { todayISODate } from './order-management';
@@ -156,4 +156,58 @@ test('a reissued quote copies the saved quote, with no number and a new date', (
   assert.deepEqual(copy.lines, saved.lines, 'each line keeps its price');
   assert.equal(copy.savedToCustomer, false, 'reissuing adds no copy to the saved quotes');
   assert.deepEqual(copy.reissuedFrom, { reference: 'Q-3F2A9C1E', date: '2025-03-02' });
+});
+
+function newLineRequest(localId: string): LineEditRequest {
+  return { origin: { kind: 'quote', label: 'Q-3F2A9C1E' }, localId, line: createLineDraft({ localId, pricingSource: 'window_calculator' }), customerId: '', lineLabel: 'A new window line', returnTo: '/glass/quotes/new?lineEdited=1', adding: true };
+}
+
+test('Add To Quote puts the line on the waiting quote and opens the next line with the same settings', () => {
+  const sent = newLineRequest('new-1');
+  persistQuoteDraft({ ...emptyQuoteDraft(), lines: [line('a'), { draft: sent.line, spec: '', extras: [] }], pendingLineId: 'new-1' });
+  persistLineEditRequest(sent);
+
+  const next = addQuoteLineAndContinue(sent, result('new-1'), [{ label: 'HEIGHT', mm: 1200 }, { label: 'LENGTH', mm: 900 }]);
+
+  const waiting = peekQuoteDraft();
+  assert.equal(waiting?.lines.length, 2);
+  assert.equal(waiting?.lines[1].unitCost, 1200, 'the added line is priced');
+  assert.equal(waiting?.pendingLineId, null, 'a return without Add does not remove the added line');
+
+  assert.ok(next);
+  assert.notEqual(next.localId, 'new-1', 'the next line is a line of its own');
+  assert.equal(next.line.localId, next.localId);
+  assert.equal(next.line.lineNote, 'Sliding window', 'the next line starts from the settings of the added line');
+  assert.equal(next.line.quantityOrdered, 4);
+  assert.equal(next.adding, true);
+  assert.deepEqual(next.lastAdded, { lineLabel: 'Line 2', name: 'Sliding window', sizes: [{ label: 'HEIGHT', mm: 1200 }, { label: 'LENGTH', mm: 900 }] });
+  assert.equal(peekLineEditRequest()?.localId, next.localId, 'a reload of the calculator opens the next line');
+});
+
+test('each Add To Quote adds one more line', () => {
+  const first = newLineRequest('new-1');
+  persistQuoteDraft({ ...emptyQuoteDraft(), lines: [{ draft: first.line, spec: '', extras: [] }], pendingLineId: 'new-1' });
+
+  const second = addQuoteLineAndContinue(first, result('new-1'), []);
+  assert.ok(second);
+  const third = addQuoteLineAndContinue(second, result(second.localId, { lineNote: 'Hopper' }), []);
+
+  assert.equal(peekQuoteDraft()?.lines.length, 2);
+  assert.equal(third?.lastAdded?.lineLabel, 'Line 2');
+  assert.equal(third?.line.lineNote, 'Hopper');
+  assert.equal(peekQuoteDraft()?.lines[1].draft.pricingSource, 'window_calculator', 'Edit on the quote opens the same calculator');
+});
+
+test('the next line is not on the quote until it is added', () => {
+  const sent = newLineRequest('new-1');
+  persistQuoteDraft({ ...emptyQuoteDraft(), lines: [{ draft: sent.line, spec: '', extras: [] }], pendingLineId: 'new-1' });
+  addQuoteLineAndContinue(sent, result('new-1'), []);
+
+  // Back To Quote returns with no result. The quote page then drops only a pending line, and there is none.
+  assert.equal(dropPendingLine(peekQuoteDraft()!).lines.length, 1);
+});
+
+test('with no quote waiting, Add To Quote gives the line back to the calculator to return', () => {
+  clearQuoteDraft();
+  assert.equal(addQuoteLineAndContinue(newLineRequest('new-1'), result('new-1'), []), null);
 });

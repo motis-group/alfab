@@ -36,6 +36,16 @@ export interface OrderSnapshot {
  */
 export type LineEditOrigin = { kind: 'order'; order: OrderSnapshot; label: string } | { kind: 'quote'; label: string };
 
+/** The line that a calculator added last. The sidebar names it, so the operator knows which line is next. */
+export interface LastAddedLine {
+  /** Example: "Line 4". */
+  lineLabel: string;
+  /** The name the operator gave the line. Empty if none. */
+  name: string;
+  /** The measurements in the words of the calculator. Example: HEIGHT 1200, LENGTH 900. */
+  sizes: { label: string; mm: number }[];
+}
+
 export interface LineEditRequest {
   origin: LineEditOrigin;
   /** The line being edited, by its draft id. */
@@ -48,6 +58,13 @@ export interface LineEditRequest {
   lineLabel: string;
   /** Where the calculator returns to. */
   returnTo: string;
+  /**
+   * True if the line is new to a quote. The calculator then adds the line to the quote and stays
+   * open with the same settings, so the operator can price the next line without a trip back.
+   */
+  adding?: boolean;
+  /** The line that this calculator added last on this trip. */
+  lastAdded?: LastAddedLine;
 }
 
 /**

@@ -11,6 +11,7 @@ import Card from '@components/Card';
 import SidebarTabs from '@components/SidebarTabs';
 import CardDouble from '@components/CardDouble';
 import Input from '@components/Input';
+import LastAddedLine from '@components/page/LastAddedLine';
 import NoLineToPrice from '@components/page/NoLineToPrice';
 import RowSpaceBetween from '@components/RowSpaceBetween';
 import Table from '@components/Table';
@@ -22,7 +23,8 @@ import WindowCostingSheet from '@components/WindowCostingSheet';
 
 import { UserRole, formatCurrency } from '@utils/order-management';
 import { defaultAdhocSpec } from '@utils/order-draft';
-import { LineEditRequest, clearLineEditRequest, peekLineEditRequest, persistLineEditResult } from '@utils/line-editing';
+import { LineEditRequest, LineEditResult, clearLineEditRequest, peekLineEditRequest, persistLineEditResult } from '@utils/line-editing';
+import { addQuoteLineAndContinue } from '@utils/quote-draft';
 import { fetchCurrentSessionUser } from '@utils/session-client';
 import { CostExtra, CostLine, FINISH_LABELS, Finish, GLASS_GROUP_LABELS, GLAZING_ORDER, LOCK_LABELS, LabourPart, LockType, MullionKind, Reinforcement, STRUT_LABELS, StayType, StrutKind, TRIM_LABELS, TrimMode, WINDOW_TYPES, WindowCostingInput, WindowTypeId, applyWindowOptions, costWindow, glazingFits, costWindowBatches, createWindowInput, describeWindow, switchWindowType, windowOptions } from '@utils/window-costing';
 import { WINDOW_SERIES, WindowProduct, findProduct, productFullName, productLabel, productForInput, seriesOfProduct, visibleSeries } from '@utils/window-catalogue';
@@ -204,17 +206,18 @@ export default function WindowCostingPage() {
     updateNumber(field, value);
   }
 
-  /** Returns the priced line to the order or the quote that sent it. */
-  function saveLineToDocument() {
+  /** The line as the calculator prices it. Null, with the reason shown, if the line has no price yet. */
+  function pricedLine(): LineEditResult | null {
     if (!lineEdit) {
-      return;
+      return null;
     }
     if (result.price == null) {
       setStatus({ tone: 'warning', message: 'This line is not priced yet, so there is nothing to send back.' });
-      return;
+      return null;
     }
 
-    persistLineEditResult({
+
+    return {
       origin: lineEdit.origin,
       localId: lineEdit.localId,
       line: {
@@ -230,8 +233,34 @@ export default function WindowCostingPage() {
       },
       spec: describe(input),
       extras: extrasList.map((extra) => ({ label: extra.label, total: extra.total })),
-    });
+    };
+  }
+
+  /** Returns the priced line to the order or the quote that sent it. */
+  function saveLineToDocument() {
+    const priced = pricedLine();
+    if (!lineEdit || !priced) {
+      return;
+    }
+    persistLineEditResult(priced);
     router.push(lineEdit.returnTo);
+  }
+
+  /** Adds the new line to the quote. The calculator stays open with the same settings for the next line. */
+  function addLineAndContinue() {
+    const priced = pricedLine();
+    if (!lineEdit || !priced) {
+      return;
+    }
+    const next = addQuoteLineAndContinue(lineEdit, priced, [{ label: 'HEIGHT', mm: input.heightMm }, { label: 'LENGTH', mm: input.lengthMm }]);
+    if (!next) {
+      // No quote waits in this sitting. The line goes back to the quote the usual way.
+      persistLineEditResult(priced);
+      router.push(lineEdit.returnTo);
+      return;
+    }
+    setLineEdit(next);
+    setStatus(null);
   }
 
   /** Leaves the line as the order or the quote holds it. */
@@ -259,6 +288,7 @@ export default function WindowCostingPage() {
       sidebar={
         <>
           {/* Actions are on the toolbar. */}
+          <LastAddedLine line={lineEdit.lastAdded} documentLabel={lineEdit.origin.label} />
           {status ? (
             <Card title="LAST ACTION">
               <Text>
@@ -486,8 +516,17 @@ export default function WindowCostingPage() {
       }
       // The line belongs to the quote or the order that sent it, so the bar offers only the way back.
       actionItems={[
-        { body: quoteLine ? 'Save To Quote' : 'Save To Order', onClick: saveLineToDocument },
-        { body: 'Cancel', onClick: cancelLineEdit },
+        // A new quote line stays here after Add, so the operator can price the next line from the same settings.
+        ...(lineEdit.adding
+          ? [
+              { body: 'Add To Quote', onClick: addLineAndContinue },
+              { body: 'Add And Return', onClick: saveLineToDocument },
+              { body: lineEdit.lastAdded ? 'Back To Quote' : 'Cancel', onClick: cancelLineEdit },
+            ]
+          : [
+              { body: quoteLine ? 'Save To Quote' : 'Save To Order', onClick: saveLineToDocument },
+              { body: 'Cancel', onClick: cancelLineEdit },
+            ]),
       ]}
     >
       {error && (
@@ -499,9 +538,11 @@ export default function WindowCostingPage() {
       )}
 
       {/* The form below is the line that the quote or the order sent. The way back is in the bar at the top. */}
-      <CardDouble title={lineEdit.origin.kind === 'order' ? 'EDITING AN ORDER LINE' : 'EDITING A QUOTE LINE'}>
+      <CardDouble title={lineEdit.origin.kind === 'order' ? 'EDITING AN ORDER LINE' : lineEdit.adding ? 'ADDING QUOTE LINES' : 'EDITING A QUOTE LINE'}>
         <Text>
-          {lineEdit.lineLabel} of {lineEdit.origin.label}. Changing the window below changes that line.
+          {lineEdit.adding
+            ? `A new window line for ${lineEdit.origin.label}. Add To Quote adds it and keeps these settings, so you can change what differs and add the next one.`
+            : `${lineEdit.lineLabel} of ${lineEdit.origin.label}. Changing the window below changes that line.`}
         </Text>
       </CardDouble>
 
