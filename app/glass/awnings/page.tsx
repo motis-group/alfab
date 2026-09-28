@@ -421,7 +421,6 @@ export default function AwningCostingPage() {
         ...(lineEdit.adding
           ? [
               { body: 'Add To Quote', onClick: addLineAndContinue },
-              { body: 'Add And Return', onClick: saveLineToDocument },
               { body: lineEdit.lastAdded ? 'Back To Quote' : 'Cancel', onClick: cancelLineEdit },
             ]
           : [

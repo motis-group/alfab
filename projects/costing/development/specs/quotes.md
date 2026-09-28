@@ -26,11 +26,11 @@ nothing and shows the way to a new quote. The navigation therefore has no calcul
 While a calculator prices a line, its toolbar offers only Save To Quote and Cancel. For a line of an
 order, Save To Order replaces Save To Quote.
 
-A new quote line offers Add To Quote, Add And Return, and Cancel. Add To Quote puts the line on the
+A new quote line offers Add To Quote and Cancel. Add To Quote puts the line on the
 quote and keeps the calculator open with the same settings, so the operator changes what differs and
 adds the next line. A LAST ADDED card names the line number and the height and width (length for a
 window) of the line added last. After the first Add, Cancel reads Back To Quote. It returns without
-the line on screen, and the lines already added stay. Add And Return adds the line and returns.
+the line on screen, and the lines already added stay.
 
 "Read a customer's order" on the quote page reads an order from a PDF or a Word document. Each ticked
 piece becomes a cut-glass line at cost. See [order-import.md](order-import.md).
