@@ -1013,3 +1013,10 @@ article:has(table[data-one-line]) {
   background: var(--theme-status-error-subdued);
   color: var(--theme-status-error);
 }
+
+/* A rule under each line of the quote, so the eye follows one line across to its price. */
+.quote-lines td {
+  border-bottom: 1px solid var(--theme-border);
+  padding-top: 0.5ch;
+  padding-bottom: 0.5ch;
+}

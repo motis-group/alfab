@@ -111,8 +111,9 @@ export default function AdhocQuotePage() {
             setMarkupPercent(line.markupPercent);
             setItemName(line.lineNote);
             // An order line keeps its price until the operator asks for the recommended one. A quote
-            // line with no cost yet is priced from its specification.
-            setUseRecommendedPrice(request.origin.kind === 'quote' && !line.unitPriceAtOrder);
+            // line is priced from its specification, so a change to the piece changes its cost. The
+            // cost it had stays as the manual cost, for an operator who clears the box.
+            setUseRecommendedPrice(request.origin.kind === 'quote');
             setManualUnitPrice(line.unitPriceAtOrder);
           }
         }
