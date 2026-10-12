@@ -39,6 +39,9 @@ The page lists the first 10 lines, and a button shows the rest. A line after the
 back from its calculator opens the full list, so the operator sees its price. Lines from a customer's
 order open the full list in the same way.
 
+An edited line is priced from the rates again, so a change to the piece changes its cost. The glass
+calculator keeps the previous cost as the manual cost. To keep that cost, clear the rates box.
+
 ## Margin
 
 The quote has one margin, in percent on cost. The margin is a markup: 20 percent prices a $100 cost

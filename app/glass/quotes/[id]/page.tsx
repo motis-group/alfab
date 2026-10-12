@@ -483,36 +483,38 @@ export default function QuotePage() {
 
           <CardDouble title={`LINES (${draft.lines.length})`}>
             {draft.lines.length ? (
-              <Table>
-                <TableRow>
-                  <TableColumn>ITEM</TableColumn>
-                  <TableColumn style={{ width: '12ch' }}>PRICED IN</TableColumn>
-                  <TableColumn style={{ width: '6ch' }}>QTY</TableColumn>
-                  <TableColumn style={{ width: '14ch' }}>UNIT</TableColumn>
-                  <TableColumn style={{ width: '14ch' }}>AMOUNT</TableColumn>
-                  <TableColumn style={{ width: '16ch' }}>ACTIONS</TableColumn>
-                </TableRow>
-                {(showAllLines ? draft.lines : draft.lines.slice(0, LINES_SHOWN)).map((line, index) => (
-                  <TableRow key={line.draft.localId}>
-                    <TableColumn>
-                      {line.draft.lineNote || `${sourceLabel(line.draft.pricingSource)} ${index + 1}`}
-                      {line.spec ? <div className="printed-quote__spec">{line.spec}</div> : null}
-                      {typeof line.unitCost === 'number' ? null : (
-                        <div className="printed-quote__spec">
-                          <span className="status-warning">Priced with its own margin. Edit it to use the quote margin.</span>
-                        </div>
-                      )}
-                    </TableColumn>
-                    <TableColumn>{sourceLabel(line.draft.pricingSource)}</TableColumn>
-                    <TableColumn>{line.draft.quantityOrdered}</TableColumn>
-                    <TableColumn>{formatCurrency(line.draft.unitPriceAtOrder)}</TableColumn>
-                    <TableColumn>{formatCurrency(line.draft.unitPriceAtOrder * line.draft.quantityOrdered)}</TableColumn>
-                    <TableColumn style={{ whiteSpace: 'nowrap' }}>
-                      <ActionButton onClick={() => editLine(line, index)}>Edit</ActionButton> <ActionButton onClick={() => removeLine(line.draft.localId)}>Remove</ActionButton>
-                    </TableColumn>
+              <div className="quote-lines">
+                <Table>
+                  <TableRow>
+                    <TableColumn>ITEM</TableColumn>
+                    <TableColumn style={{ width: '12ch' }}>PRICED IN</TableColumn>
+                    <TableColumn style={{ width: '6ch' }}>QTY</TableColumn>
+                    <TableColumn style={{ width: '14ch' }}>UNIT</TableColumn>
+                    <TableColumn style={{ width: '14ch' }}>AMOUNT</TableColumn>
+                    <TableColumn style={{ width: '16ch' }}>ACTIONS</TableColumn>
                   </TableRow>
-                ))}
-              </Table>
+                  {(showAllLines ? draft.lines : draft.lines.slice(0, LINES_SHOWN)).map((line, index) => (
+                    <TableRow key={line.draft.localId}>
+                      <TableColumn>
+                        {line.draft.lineNote || `${sourceLabel(line.draft.pricingSource)} ${index + 1}`}
+                        {line.spec ? <div className="printed-quote__spec">{line.spec}</div> : null}
+                        {typeof line.unitCost === 'number' ? null : (
+                          <div className="printed-quote__spec">
+                            <span className="status-warning">Priced with its own margin. Edit it to use the quote margin.</span>
+                          </div>
+                        )}
+                      </TableColumn>
+                      <TableColumn>{sourceLabel(line.draft.pricingSource)}</TableColumn>
+                      <TableColumn>{line.draft.quantityOrdered}</TableColumn>
+                      <TableColumn>{formatCurrency(line.draft.unitPriceAtOrder)}</TableColumn>
+                      <TableColumn>{formatCurrency(line.draft.unitPriceAtOrder * line.draft.quantityOrdered)}</TableColumn>
+                      <TableColumn style={{ whiteSpace: 'nowrap' }}>
+                        <ActionButton onClick={() => editLine(line, index)}>Edit</ActionButton> <ActionButton onClick={() => removeLine(line.draft.localId)}>Remove</ActionButton>
+                      </TableColumn>
+                    </TableRow>
+                  ))}
+                </Table>
+              </div>
             ) : (
               <Text>No lines yet. Pick a kind under Add Line at the top. Its calculator prices the line at cost, and the line comes back here.</Text>
             )}
