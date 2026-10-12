@@ -111,3 +111,6 @@ typings/
 .idea
 .vercel
 .precheckout-backup-*/
+
+# A customer contact export. Client data, never committed.
+/Contacts.csv
