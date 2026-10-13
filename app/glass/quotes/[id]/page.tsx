@@ -2,7 +2,7 @@
 
 import '@root/global.scss';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 import ActionButton from '@components/ActionButton';
@@ -87,6 +87,8 @@ export default function QuotePage() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [showAllLines, setShowAllLines] = useState(false);
+  /** The quote as last read or written, so leaving a field that did not change writes nothing. */
+  const lastSaved = useRef('');
 
   const load = useCallback(async () => {
     setIsLoading(true);
@@ -129,7 +131,12 @@ export default function QuotePage() {
         if (restored.lines.findIndex((line) => line.draft.localId === result?.localId) >= LINES_SHOWN) {
           setShowAllLines(true);
         }
+        // A line back from its calculator saves the quote. Read and clear in one step, so a second load does not.
+        const returned = new URLSearchParams(window.location.search).get('lineEdited') === '1';
         clearURLFlag();
+        if (returned) {
+          writeQuote(restored, { customers: (customerData as Customer[]) || [], username: user.username, canWrite: userCan(user, 'quotes:write') });
+        }
         return;
       }
 
@@ -232,7 +239,8 @@ export default function QuotePage() {
         setShowAllLines(true);
       }
       setError(null);
-      setStatus(`Added ${pieces.length} ${pieces.length === 1 ? 'line' : 'lines'} from the order. Save the quote to keep ${pieces.length === 1 ? 'it' : 'them'}.`);
+      setStatus(`Added ${pieces.length} ${pieces.length === 1 ? 'line' : 'lines'} from the order.`);
+      autoSave(next);
     } catch (importError: any) {
       setStatus(null);
       setError(importError?.message || 'Unable to price the pieces from the order.');
@@ -268,8 +276,20 @@ export default function QuotePage() {
     }
   }
 
-  function removeLine(localId: string) {
-    setDraft((current) => ({ ...current, lines: current.lines.filter((line) => line.draft.localId !== localId) }));
+  /** A saved quote saves the removal at once, so it asks first and keeps at least one line. */
+  function removeLine(localId: string, label: string) {
+    if (draft.id) {
+      if (draft.lines.length === 1) {
+        setError('A saved quote needs at least one line. Add the new line first, then remove this one.');
+        return;
+      }
+      if (!window.confirm(`Remove ${label} from the quote?`)) {
+        return;
+      }
+    }
+    const next = { ...draft, lines: draft.lines.filter((line) => line.draft.localId !== localId) };
+    setDraft(next);
+    autoSave(next);
   }
 
   function update(partial: Partial<QuoteDraft>) {
@@ -311,7 +331,7 @@ export default function QuotePage() {
       const added: Customer = { id: data.id as string, name, is_active: true };
       setCustomers((current) => [...current, added].sort((a, b) => a.name.localeCompare(b.name)));
       update({ customerId: added.id, customer: added.name });
-      setStatus(`${added.name} is on the customer list. Save the quote to keep them on it.`);
+      setStatus(`${added.name} is on the customer list.`);
     } catch (addError: any) {
       setError(addError?.message || 'Unable to add the customer.');
     } finally {
@@ -324,33 +344,38 @@ export default function QuotePage() {
     setDraft((current) => setQuoteMargin(current, Number.isFinite(percent) ? Math.max(0, percent) : 0));
   }
 
-  async function save() {
-    if (!canWrite) {
-      setError('Saving a quote needs access.');
+  /** Saves a quote that has a number. A new quote gets its number from a returned line or Save Quote. */
+  function autoSave(target: QuoteDraft) {
+    if (target.id) {
+      writeQuote(target);
+    }
+  }
+
+  /** Writes the quote. Load passes the session, because the state does not hold it yet. */
+  async function writeQuote(target: QuoteDraft, session = { customers, username, canWrite }) {
+    if (!session.canWrite || !target.lines.length) {
       return;
     }
-    if (!draft.lines.length) {
-      setError('A quote with no line is not an offer. Add a line first.');
+    const content = { name: target.name, customer: session.customers.find((entry) => entry.id === target.customerId)?.name || target.customer, customerId: target.customerId || null, date: target.date, notes: target.notes, marginPercent: target.marginPercent, lines: target.lines, savedToCustomer: target.savedToCustomer };
+    const key = JSON.stringify({ id: target.id, ...content });
+    if (key === lastSaved.current) {
       return;
     }
 
     setIsSaving(true);
     setError(null);
-    setStatus(null);
 
     try {
-      const content = { name: draft.name, customer: customers.find((entry) => entry.id === draft.customerId)?.name || draft.customer, customerId: draft.customerId || null, date: draft.date, notes: draft.notes, marginPercent: draft.marginPercent, lines: draft.lines, savedToCustomer: draft.savedToCustomer };
-      const ratesUpdatedAt = draft.lines.map((line) => line.draft.windowRatesUpdatedAt || line.draft.awningRatesUpdatedAt).find(Boolean) || null;
+      const ratesUpdatedAt = target.lines.map((line) => line.draft.windowRatesUpdatedAt || line.draft.awningRatesUpdatedAt).find(Boolean) || null;
 
-      if (draft.id) {
-        await updateQuote(draft.id, { ...content, issuedBy: username, ratesUpdatedAt });
-        setStatus(`Quote ${quoteReference(draft.id)} saved.`);
+      if (target.id) {
+        await updateQuote(target.id, { ...content, issuedBy: session.username, ratesUpdatedAt });
+        lastSaved.current = key;
         setCarriedOver(null);
         clearQuoteDraft();
       } else {
-        const newId = await createQuote({ ...content, issuedBy: username, ratesUpdatedAt });
+        const newId = await createQuote({ ...content, issuedBy: session.username, ratesUpdatedAt });
         clearQuoteDraft();
-        setStatus(`Quote ${quoteReference(newId)} saved.`);
         router.replace(`/glass/quotes/${newId}`);
       }
     } catch (saveError: any) {
@@ -367,7 +392,9 @@ export default function QuotePage() {
   // A read-only quote has no priced line to put on an order, so it offers no Convert.
   const readOnlyActions = readOnly && documentLines(readOnly).length ? [printAction] : [];
   const addLineAction = { body: 'Add Line', items: LINE_KINDS.map((kind) => ({ icon: '⊹', children: kind.label, onClick: () => addLine(kind.source) })) };
-  const draftActions = [addLineAction, { body: isSaving ? 'Saving...' : 'Save Quote', onClick: isSaving ? undefined : save }, ...(draft.lines.length ? [printAction, { body: 'Send', onClick: sendQuote }] : []), ...(draft.id && draft.lines.length ? [{ body: 'Reissue', onClick: reissue }] : [])];
+  // A new quote whose lines did not come from a calculator, such as a copy, has no number until Save Quote.
+  const saveAction = !draft.id && draft.lines.length ? [{ body: isSaving ? 'Saving...' : 'Save Quote', onClick: isSaving ? undefined : () => writeQuote(draft) }] : [];
+  const draftActions = [addLineAction, ...saveAction, ...(draft.lines.length ? [printAction, { body: 'Send', onClick: sendQuote }] : []), ...(draft.id && draft.lines.length ? [{ body: 'Reissue', onClick: reissue }] : [])];
   // A new quote with no lines lists the quotes saved to its customer, so the operator can copy one.
   const savedForCustomer = !draft.id && !draft.lines.length && draft.customerId ? savedQuotes.filter((quote) => quote.customerId === draft.customerId) : [];
 
@@ -376,7 +403,7 @@ export default function QuotePage() {
       previewPixelSRC="/pixel.gif"
       logo="⬡"
       heading={heading}
-      badge={isLoading ? 'LOADING' : undefined}
+      badge={isLoading ? 'LOADING' : isSaving ? 'SAVING' : lastSaved.current ? 'SAVED' : undefined}
       navRight={<ActionButton onClick={() => router.push('/glass')}>BACK TO QUOTES</ActionButton>}
       actionItems={[
         ...(isLoading ? [] : readOnly ? readOnlyActions : draftActions),
@@ -434,7 +461,8 @@ export default function QuotePage() {
             </Card>
           ) : null}
 
-          <CardDouble title="QUOTE">
+          {/* Leaving a field saves the quote. Blur bubbles up from every field. */}
+          <CardDouble title="QUOTE" onBlur={() => autoSave(draft)}>
             <Input label="JOB" name="quote_name" value={draft.name} onChange={(event) => update({ name: event.target.value })} placeholder="What the job is called" />
             <CustomerPicker label="CUSTOMER" customers={customers} value={draft.customerId} onChange={(customerId) => pickCustomer(customerId)} />
             {selectedCustomer ? (
@@ -509,7 +537,7 @@ export default function QuotePage() {
                       <TableColumn>{formatCurrency(line.draft.unitPriceAtOrder)}</TableColumn>
                       <TableColumn>{formatCurrency(line.draft.unitPriceAtOrder * line.draft.quantityOrdered)}</TableColumn>
                       <TableColumn style={{ whiteSpace: 'nowrap' }}>
-                        <ActionButton onClick={() => editLine(line, index)}>Edit</ActionButton> <ActionButton onClick={() => removeLine(line.draft.localId)}>Remove</ActionButton>
+                        <ActionButton onClick={() => editLine(line, index)}>Edit</ActionButton> <ActionButton onClick={() => removeLine(line.draft.localId, `line ${index + 1}`)}>Remove</ActionButton>
                       </TableColumn>
                     </TableRow>
                   ))}
