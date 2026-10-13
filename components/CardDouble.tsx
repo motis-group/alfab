@@ -40,7 +40,7 @@ const CardDouble: React.FC<CardProps> = ({ children, mode, title, style, ...rest
   }
 
   return (
-    <article className={styles.card}>
+    <article className={styles.card} {...rest}>
       {titleElement}
       <section className={styles.children}>
         <section className={styles.borderChildren} style={style}>
