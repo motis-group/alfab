@@ -34,6 +34,12 @@ adds the next line. A LAST ADDED card names the line number and the height and w
 window) of the line added last. Back To Quote returns without the line on screen, and the lines
 already added stay.
 
+A quote saves itself. A line that comes back from its calculator saves the quote, and a new quote
+gets its number then. On a quote with a number, leaving a field, Remove and lines read from an order
+also save it. Remove asks first, and refuses the last line of a saved quote. The badge shows SAVING,
+then SAVED. Save Quote shows only on a new quote whose lines did not come from a calculator, such as
+a copy.
+
 "Read a customer's order" on the quote page reads an order from a PDF or a Word document. Each ticked
 piece becomes a cut-glass line at cost. See [order-import.md](order-import.md).
 
@@ -98,7 +104,7 @@ customers page at `/glass/clients`.
 ## Saved quotes
 
 A quote that a customer orders again can be saved to that customer. Pick the customer from the list,
-tick "Save to <customer> to reissue later", and click Save Quote. The box shows only for a customer
+and tick "Save to <customer> to reissue later". The box shows only for a customer
 on the list, because a walk-in has no saved quotes. The row keeps the flag in
 `specification.savedToCustomer`. The quote page saves a quote from a calculator as a quote for a job,
 so every saved quote is a quote for a job.
@@ -109,8 +115,9 @@ copies it, saved or not.
 
 The copy has the customer, lines, notes and margin of the saved quote, and the date of today. The
 30-day price hold starts again on that date. Each line keeps its price, and a change to the rates
-does not change it. Until Save Quote, the page names the quote that the copy came from. Edit a line
-to price it on today's rates. Save Quote gives the copy its own number. The saved quote does not
+does not change it. Until it is saved, the page names the quote that the copy came from. Edit a line
+to price it on today's rates. Save Quote, or a line back from its calculator, gives the copy its own
+number. The saved quote does not
 change, and the copy is not saved to the customer.
 
 An unsaved copy stays in the browser tab, so New Quote opens it again. Discard Copy empties the new
