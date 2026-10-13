@@ -24,7 +24,9 @@ own, so it does not name, save, print or convert a quote. A calculator that open
 nothing and shows the way to a new quote. The navigation therefore has no calculator section.
 
 While a calculator prices a line, its toolbar offers only Save To Quote and Back To Quote. For a line
-of an order, Save To Order and Back To Order replace them. The toolbar is the only way out.
+of an order, Save To Order and Back To Order replace them. The toolbar is the only way out. Save To
+Order saves an order that has been saved before. A new order is saved by Save Order, the one save
+action on the order page.
 
 A new quote line offers Add To Quote and Back To Quote. Add To Quote puts the line on the
 quote and keeps the calculator open with the same settings, so the operator changes what differs and

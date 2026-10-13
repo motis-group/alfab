@@ -213,19 +213,25 @@ export default function NewPurchaseOrderPage() {
         }
 
         setRole(user.effectiveRole as UserRole);
-        const { customers: loadedCustomers } = await loadBaseData();
+        const { customers: loadedCustomers, customerProducts: loadedCustomerProducts } = await loadBaseData();
 
         // A line came back from a calculator. The whole order travelled with it, so the page picks
         // up where it left off whether or not the order had been saved. A line sent by a quote
         // comes back to the quote, not here.
         const lineResult = consumeLineEditResult();
         if (lineResult && lineResult.origin.kind === 'order') {
-          restoreOrderSnapshot(applyOrderLineEditResult(lineResult.origin.order, lineResult));
+          const restored = applyOrderLineEditResult(lineResult.origin.order, lineResult);
+          restoreOrderSnapshot(restored);
           setActiveLineId(lineResult.localId);
           if (typeof window !== 'undefined') {
             const nextUrl = new URL(window.location.href);
             nextUrl.searchParams.delete('lineEdited');
             window.history.replaceState({}, '', `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+          }
+          // Save To Order in the calculator saves a saved order. A new order still needs Save Order.
+          if (restored.isEditingOrder && restored.orderForm.id) {
+            await handleSaveOrder(restored, { customerProducts: loadedCustomerProducts, canEdit: user.effectiveRole !== 'readonly', stay: true });
+            setActiveLineId(lineResult.localId);
           }
           return;
         }
@@ -419,8 +425,14 @@ export default function NewPurchaseOrderPage() {
     });
   }
 
-  async function handleSaveOrder() {
-    if (!canEditOrders) {
+  /**
+   * Saves the order and opens the dashboard. With stay, the page reads the saved order back, so new
+   * lines get their ids. Load passes the order and the session, because the state does not hold them yet.
+   */
+  async function handleSaveOrder(order: OrderSnapshot, session: { customerProducts: CustomerProduct[]; canEdit: boolean; stay: boolean }) {
+    const { orderForm, lineDrafts, loadedLineIds, isEditingOrder } = order;
+    const { customerProducts } = session;
+    if (!session.canEdit) {
       return;
     }
 
@@ -557,6 +569,10 @@ export default function NewPurchaseOrderPage() {
         if (linkError) throw linkError;
       }
 
+      if (session.stay) {
+        await loadOrderForEdit(orderId);
+        return;
+      }
       router.push(`/glass?orderId=${orderId}`);
       router.refresh();
     } catch (error: any) {
@@ -644,11 +660,11 @@ export default function NewPurchaseOrderPage() {
       logo="⬡"
       navRight={<ActionButton onClick={() => router.push('/glass')}>BACK TO DASHBOARD</ActionButton>}
       heading={isEditingOrder ? 'EDIT PURCHASE ORDER' : 'CREATE PURCHASE ORDER'}
-      badge={isEditingOrder ? 'EDIT MODE' : 'NEW ORDER'}
+      badge={isSaving ? 'SAVING' : isEditingOrder ? 'EDIT MODE' : 'NEW ORDER'}
       sidebarWidthCh={44}
       sidebarMobileOrder="bottom"
       sidebar={
-        <Card title="SAVE ORDER">
+        <Card title="ORDER">
           <RowSpaceBetween>
             <Text>ORDER TOTAL</Text>
             <Text>{formatCurrency(orderTotal)}</Text>
@@ -671,10 +687,7 @@ export default function NewPurchaseOrderPage() {
             </>
           )}
           <br />
-          <RowSpaceBetween>
-            <ActionButton onClick={handleSaveOrder}>{isSaving ? 'Saving...' : isEditingOrder ? 'Update Purchase Order' : 'Save Purchase Order'}</ActionButton>
-            <ActionButton onClick={() => router.push('/glass')}>Cancel</ActionButton>
-          </RowSpaceBetween>
+          <ActionButton onClick={() => router.push('/glass')}>Cancel</ActionButton>
           {isEditingOrder ? (
             <>
               <br />
@@ -688,7 +701,7 @@ export default function NewPurchaseOrderPage() {
         {
           hotkey: '⌘+S',
           body: isSaving ? 'Saving...' : 'Save Order',
-          onClick: handleSaveOrder,
+          onClick: () => handleSaveOrder({ orderForm, lineDrafts, loadedLineIds, isEditingOrder, archivedAt }, { customerProducts, canEdit: canEditOrders, stay: false }),
         },
         {
           hotkey: '⌘+N',
