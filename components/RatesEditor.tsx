@@ -17,7 +17,8 @@ import { RateAgeBadge, RateReviewCard } from '@components/RateAgeNotice';
 
 import { APP_ACCOUNT_SECTION_ITEMS } from '@utils/app-navigation';
 import { formatCurrency } from '@utils/order-management';
-import { RateCatalogue, RateEntry, RateIssue, RateSection, blockingIssues, findRates, formatRate, listIssues, parseRate, rateAt, withRate } from '@utils/rate-catalogue';
+import { gradeAsAt, needsReview } from '@utils/rate-age';
+import { RateCatalogue, RateEntry, RateIssue, RateSection, blockingIssues, findRates, formatRate, listIssues, parseRate, rateAt, sharedByList, summariseSections, withRate } from '@utils/rate-catalogue';
 import { LoadedRates } from '@utils/rates-store';
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 
@@ -66,9 +67,11 @@ export function ExampleImpact({ example, before, after }: { example: string; bef
   );
 }
 
-type Status ={ tone: 'success' | 'warning' | 'error'; message: string } | null;
+type Status = { tone: 'success' | 'warning' | 'error'; message: string } | null;
 
 const ISSUES_SHOWN = 12;
+
+type Detail = 'issues' | 'age' | 'terms' | null;
 
 export default function RatesEditor<T extends RatesDocument>({ catalogue, heading, listName, back, defaults, load, save, reset, impact, groupNote, sidebarExtra, intro }: RatesEditorProps<T>) {
   const router = useRouter();
@@ -83,6 +86,9 @@ export default function RatesEditor<T extends RatesDocument>({ catalogue, headin
   const [search, setSearch] = useState('');
   const [highlight, setHighlight] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
+  const [sharedShown, setSharedShown] = useState<Record<string, boolean>>({});
+  const [detail, setDetail] = useState<Detail>(null);
 
   const issues = useMemo(() => listIssues(catalogue, rates), [catalogue, rates]);
   const issueAt = useMemo(() => new Map(issues.map((issue) => [issue.path, issue])), [issues]);
@@ -123,11 +129,18 @@ export default function RatesEditor<T extends RatesDocument>({ catalogue, headin
     })();
   }, [listName, load, router, show]);
 
-  const jumpTo = useCallback((path: string) => {
-    setSearch('');
-    setHighlight(path);
-    window.setTimeout(() => document.getElementById(`rate-${path}`)?.scrollIntoView({ block: 'center' }), 60);
-  }, []);
+  const jumpTo = useCallback(
+    (path: string) => {
+      const section = catalogue.entries.find((entry) => entry.path === path)?.section;
+      setSearch('');
+      setHighlight(path);
+      if (section) {
+        setOpened((prev) => ({ ...prev, [section]: true }));
+      }
+      window.setTimeout(() => document.getElementById(`rate-${path}`)?.scrollIntoView({ block: 'center' }), 120);
+    },
+    [catalogue]
+  );
 
   useEffect(() => {
     if (isLoading) {
@@ -235,67 +248,83 @@ export default function RatesEditor<T extends RatesDocument>({ catalogue, headin
     );
   }
 
-  function renderList(entries: RateEntry[]) {
-    return (
-      <Table>
-        <TableRow>
-          <TableColumn style={{ width: '32ch' }}>RATE</TableColumn>
-          <TableColumn style={{ width: '16ch' }}>UNIT</TableColumn>
-          <TableColumn>VALUE</TableColumn>
-        </TableRow>
-        {entries.map((entry, index) => {
-          const issue = issueAt.get(entry.path);
-          const cellClass = issue ? (issue.tone === 'error' ? 'rate-cell-error' : 'rate-cell-warning') : undefined;
-          const startsGroup = entry.group && (index === 0 || entries[index - 1].group !== entry.group);
+  function renderList(section: RateSection, entries: RateEntry[]) {
+    const tucked = query || sharedShown[section.key] ? [] : entries.filter((entry) => entry.shared && !issueAt.has(entry.path) && highlight !== entry.path);
+    const shown = entries.filter((entry) => !tucked.includes(entry));
 
-          return (
-            <Fragment key={entry.path}>
-              {startsGroup ? (
+    return (
+      <>
+        <Table>
+          <TableRow>
+            <TableColumn style={{ width: '32ch' }}>RATE</TableColumn>
+            <TableColumn style={{ width: '16ch' }}>UNIT</TableColumn>
+            <TableColumn>VALUE</TableColumn>
+          </TableRow>
+          {shown.map((entry, index) => {
+            const issue = issueAt.get(entry.path);
+            const cellClass = issue ? (issue.tone === 'error' ? 'rate-cell-error' : 'rate-cell-warning') : undefined;
+            const startsGroup = entry.group && (index === 0 || shown[index - 1].group !== entry.group);
+
+            return (
+              <Fragment key={entry.path}>
+                {startsGroup ? (
+                  <TableRow>
+                    <TableColumn>
+                      <strong>{entry.group}</strong>
+                    </TableColumn>
+                    <TableColumn />
+                    <TableColumn>{groupNote ? groupNote(rates, entry) : ''}</TableColumn>
+                  </TableRow>
+                ) : null}
                 <TableRow>
-                  <TableColumn>
-                    <strong>{entry.group}</strong>
+                  <TableColumn id={`rate-${entry.path}`} className={cellClass}>
+                    {highlight === entry.path ? <span className="status-pill status-pill-warning">{entry.label}</span> : entry.label}
+                    {issue ? (
+                      <>
+                        {' '}
+                        <span className={`status-pill ${issue.tone === 'error' ? 'status-pill-error' : 'status-pill-warning'}`}>{issue.badge}</span>
+                      </>
+                    ) : null}
                   </TableColumn>
-                  <TableColumn />
-                  <TableColumn>{groupNote ? groupNote(rates, entry) : ''}</TableColumn>
+                  <TableColumn className={cellClass}>{entry.unit}</TableColumn>
+                  <TableColumn className={cellClass}>{rateInput(entry)}</TableColumn>
                 </TableRow>
-              ) : null}
-              <TableRow>
-                <TableColumn id={`rate-${entry.path}`} className={cellClass}>
-                  {highlight === entry.path ? <span className="status-pill status-pill-warning">{entry.label}</span> : entry.label}
-                  {issue ? (
-                    <>
-                      {' '}
-                      <span className={`status-pill ${issue.tone === 'error' ? 'status-pill-error' : 'status-pill-warning'}`}>{issue.badge}</span>
-                    </>
-                  ) : null}
-                </TableColumn>
-                <TableColumn className={cellClass}>{entry.unit}</TableColumn>
-                <TableColumn className={cellClass}>{rateInput(entry)}</TableColumn>
-              </TableRow>
-              {entry.shared ? (
-                <TableRow>
-                  <TableColumn className={cellClass} colSpan={3}>
-                    <span style={{ opacity: 0.7 }}>Set in {entry.shared.list}.</span> <ActionButton onClick={() => router.push(entry.shared?.href ?? '/settings')}>Open</ActionButton>
-                  </TableColumn>
-                </TableRow>
-              ) : null}
-              {issue ? (
-                <TableRow>
-                  <TableColumn className={cellClass} colSpan={3}>
-                    {issueText(issue)}
-                  </TableColumn>
-                </TableRow>
-              ) : null}
-            </Fragment>
-          );
-        })}
-      </Table>
+                {entry.shared ? (
+                  <TableRow>
+                    <TableColumn className={cellClass} colSpan={3}>
+                      <span style={{ opacity: 0.7 }}>Set in {entry.shared.list}.</span> <ActionButton onClick={() => router.push(entry.shared?.href ?? '/settings')}>Open</ActionButton>
+                    </TableColumn>
+                  </TableRow>
+                ) : null}
+                {issue ? (
+                  <TableRow>
+                    <TableColumn className={cellClass} colSpan={3}>
+                      {issueText(issue)}
+                    </TableColumn>
+                  </TableRow>
+                ) : null}
+              </Fragment>
+            );
+          })}
+        </Table>
+        {sharedByList(tucked).map((line) => (
+          <Text key={line.href}>
+            {line.count} rate{line.count === 1 ? '' : 's'} set in {line.list}. <ActionButton onClick={() => router.push(line.href)}>Open</ActionButton> <ActionButton onClick={() => setSharedShown((prev) => ({ ...prev, [section.key]: true }))}>Show Here</ActionButton>
+          </Text>
+        ))}
+      </>
     );
   }
 
   const saveLabel = !canWrite ? 'Saving Needs Access' : blocking.length ? `Fix ${blocking.length} Rate${blocking.length === 1 ? '' : 's'} To Save` : hasChanges ? 'Save Changes' : 'No Changes To Save';
   const warnings = issues.length - blocking.length;
-  const sections = catalogue.sections.map((section) => ({ section, entries: found.filter((entry) => entry.section === section.key) })).filter(({ entries }) => entries.length > 0);
+  const overview = summariseSections(catalogue, rates);
+  const mustOpen = new Set(overview.filter((line) => line.toFix > 0).map((line) => line.key));
+  const isOpen = (key: string) => Boolean(query) || mustOpen.has(key) || Boolean(opened[key]);
+  const sections = catalogue.sections.map((section) => ({ section, entries: found.filter((entry) => entry.section === section.key) })).filter(({ section, entries }) => entries.length > 0 && isOpen(section.key));
+  const sectionTitle = (key: string) => catalogue.sections.find((section) => section.key === key)?.title || key;
+  const stale = needsReview(gradeAsAt(rates.asAt, sectionTitle)).length;
+  const toggleDetail = (wanted: Detail) => setDetail((current) => (current === wanted ? null : wanted));
 
   return (
     <AppFrame
@@ -331,63 +360,7 @@ export default function RatesEditor<T extends RatesDocument>({ catalogue, headin
 
           {hasChanges && impact ? <Card title="WHAT THIS CHANGES">{impact(savedRates, rates)}</Card> : null}
 
-          {issues.length ? (
-            <Card title={blocking.length ? 'RATES TO FIX' : 'RATES TO CHECK'}>
-              {blocking.length ? (
-                <Text>
-                  <span className="status-error">
-                    {blocking.length} rate{blocking.length === 1 ? '' : 's'} would make quotes wrong. Saving is blocked until fixed.
-                  </span>
-                </Text>
-              ) : null}
-              {warnings ? (
-                <Text>
-                  <span className="status-warning">
-                    {warnings} rate{warnings === 1 ? '' : 's'} to check. A save is not blocked.
-                  </span>
-                </Text>
-              ) : null}
-              <br />
-              <Table>
-                {[...blocking, ...issues.filter((issue) => issue.tone !== 'error')].slice(0, ISSUES_SHOWN).map((issue) => (
-                  <TableRow key={issue.path}>
-                    <TableColumn style={{ width: '32ch' }}>
-                      {issue.label}
-                      <br />
-                      <span className={issue.tone === 'error' ? 'status-error' : 'status-warning'}>{issue.badge.toUpperCase()}</span>
-                    </TableColumn>
-                    <TableColumn>
-                      <ActionButton onClick={() => jumpTo(issue.path)}>Show</ActionButton>
-                    </TableColumn>
-                  </TableRow>
-                ))}
-              </Table>
-              {issues.length > ISSUES_SHOWN ? <Text>and {issues.length - ISSUES_SHOWN} more.</Text> : null}
-            </Card>
-          ) : null}
-
           {sidebarExtra ? sidebarExtra(rates) : null}
-
-          <RateReviewCard asAt={rates.asAt} label={(key) => catalogue.sections.find((section) => section.key === key)?.title || key} />
-
-          <Card title="FIND A RATE">
-            <Input label="SEARCH" name="rate_search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="name, group or section" />
-            {query ? (
-              <>
-                <Text>
-                  {found.length} rate{found.length === 1 ? '' : 's'} match.
-                </Text>
-                <br />
-                <ActionButton onClick={() => setSearch('')}>Clear Search</ActionButton>
-              </>
-            ) : null}
-          </Card>
-
-          <Card title="THESE RATES">
-            <Text>{source === 'saved' && updatedAt ? `Saved ${new Date(updatedAt).toLocaleString()}.` : 'No saved rates yet, so the defaults are in use.'}</Text>
-            <br />
-            <Text>Blank = not priced. Percentages are typed as whole numbers: 40 is 40%.</Text>
-          </Card>
         </>
       }
       actionItems={[
@@ -395,13 +368,84 @@ export default function RatesEditor<T extends RatesDocument>({ catalogue, headin
         { hotkey: '⌘+B', body: 'Back', onClick: () => router.push(back.href) },
       ]}
     >
-      {sections.length === 0 ? (
+      <Card title="FIND A RATE">
+        <Input label="SEARCH" name="rate_search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="name, group or section" />
+        {query ? (
+          <Text>
+            {found.length} rate{found.length === 1 ? '' : 's'} match. <ActionButton onClick={() => setSearch('')}>Clear Search</ActionButton>
+          </Text>
+        ) : (
+          <Text>{source === 'saved' && updatedAt ? `Saved ${new Date(updatedAt).toLocaleString()}.` : 'Defaults in use; nothing saved yet.'} Blank = not priced. 40 is 40%.</Text>
+        )}
+        {blocking.length ? <ActionButton onClick={() => toggleDetail('issues')}>{`${blocking.length} To Fix`}</ActionButton> : null}
+        {warnings ? <ActionButton onClick={() => toggleDetail('issues')}>{`${warnings} To Check`}</ActionButton> : null}
+        {stale ? <ActionButton onClick={() => toggleDetail('age')}>{`${stale} Price Date${stale === 1 ? '' : 's'} Old`}</ActionButton> : null}
+        {intro ? <ActionButton onClick={() => toggleDetail('terms')}>What The Terms Mean</ActionButton> : null}
+      </Card>
+
+      {detail === 'issues' && issues.length ? (
+        <Card title={blocking.length ? 'RATES TO FIX' : 'RATES TO CHECK'}>
+          {blocking.length ? (
+            <Text>
+              <span className="status-error">
+                {blocking.length} rate{blocking.length === 1 ? '' : 's'} would make quotes wrong. Saving is blocked until fixed.
+              </span>
+            </Text>
+          ) : null}
+          {warnings ? (
+            <Text>
+              <span className="status-warning">
+                {warnings} rate{warnings === 1 ? '' : 's'} to check. A save is not blocked.
+              </span>
+            </Text>
+          ) : null}
+          <br />
+          <Table>
+            {[...blocking, ...issues.filter((issue) => issue.tone !== 'error')].slice(0, ISSUES_SHOWN).map((issue) => (
+              <TableRow key={issue.path}>
+                <TableColumn style={{ width: '32ch' }}>
+                  {issue.label}
+                  <br />
+                  <span className={issue.tone === 'error' ? 'status-error' : 'status-warning'}>{issue.badge.toUpperCase()}</span>
+                </TableColumn>
+                <TableColumn>
+                  <ActionButton onClick={() => jumpTo(issue.path)}>Show</ActionButton>
+                </TableColumn>
+              </TableRow>
+            ))}
+          </Table>
+          {issues.length > ISSUES_SHOWN ? <Text>and {issues.length - ISSUES_SHOWN} more.</Text> : null}
+        </Card>
+      ) : null}
+      {detail === 'age' ? <RateReviewCard asAt={rates.asAt} label={sectionTitle} /> : null}
+      {detail === 'terms' ? intro : null}
+
+      {query && found.length === 0 ? (
         <Card title="NO MATCHES">
           <Text>No rate matches “{query}”.</Text>
         </Card>
       ) : null}
 
-      {query ? null : intro}
+      {query ? null : (
+        <Card title="SECTIONS">
+          <Table>
+            {overview.map((line) => (
+              <TableRow key={line.key}>
+                <TableColumn style={{ width: '34ch' }}>{line.title}</TableColumn>
+                <TableColumn style={{ width: '12ch' }}>
+                  {line.rates} rate{line.rates === 1 ? '' : 's'}
+                </TableColumn>
+                <TableColumn style={{ width: '24ch' }}>
+                  {line.toFix ? <span className="status-error">{line.toFix} TO FIX </span> : null}
+                  {line.toCheck ? <span className="status-warning">{line.toCheck} TO CHECK</span> : null}
+                  {line.toFix || line.toCheck ? null : 'OK'}
+                </TableColumn>
+                <TableColumn>{mustOpen.has(line.key) ? null : <ActionButton onClick={() => setOpened((prev) => ({ ...prev, [line.key]: !prev[line.key] }))}>{opened[line.key] ? 'Close' : 'Open'}</ActionButton>}</TableColumn>
+              </TableRow>
+            ))}
+          </Table>
+        </Card>
+      )}
 
       {sections.map(({ section, entries }) => {
         const errors = entries.filter((entry) => issueAt.get(entry.path)?.tone === 'error').length;
@@ -414,7 +458,7 @@ export default function RatesEditor<T extends RatesDocument>({ catalogue, headin
             <Input label="PRICES LAST KNOWN GOOD" name={`asat-${section.key}`} value={asAt} onChange={(event) => updateAsAt(section.key, event.target.value)} placeholder="unknown" disabled={!canWrite} />
             <RateAgeBadge text={asAt} />
             <br />
-            {section.grid && !query ? renderGrid(section, entries) : renderList(entries)}
+            {section.grid && !query ? renderGrid(section, entries) : renderList(section, entries)}
           </CardDouble>
         );
       })}

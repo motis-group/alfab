@@ -100,8 +100,8 @@ price when it is zero. Red also covers any value below zero.
 the save. The editor shows the margin as a percentage and stores it as a fraction: 40 is stored as
 0.4.
 
-The editor blocks a save while any rate is red. A shared rate shows as read-only, with a link to the
-list that sets it. The labour rate is a shared rate, so a red labour rate blocks a save here until
+The editor blocks a save while any rate is red. Shared rates are counted on one line with a link to the
+list that sets them, and show read-only when opened. The labour rate is a shared rate, so a red labour rate blocks a save here until
 someone fixes it in the window rates.
 
 The editor prices the sheet's own example awning on the current rates and on the edit, so the

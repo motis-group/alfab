@@ -19,6 +19,8 @@ import {
   parseRate,
   rateAt,
   rateEntry,
+  sharedByList,
+  summariseSections,
   withRate,
 } from './rate-catalogue';
 import { AWNING_GLASS_FROM_LIST, WINDOW_GLASS_FROM_LIST, applySharedRatesToAwning, applySharedRatesToWindow } from './shared-rates';
@@ -331,4 +333,40 @@ test('every glass price in a table sits in a column the table shows', () => {
     }
     assert.deepEqual(Array.from(new Set(cells.map((entry) => entry.cell?.column))).sort(), [...(section.grid?.columns ?? [])].sort(), 'no empty column');
   }
+});
+
+for (const list of LISTS) {
+  test(`the ${list.name} overview has one line per section and accounts for every rate and issue`, () => {
+    const lines = summariseSections(list.catalogue, list.defaults);
+    const issues = listIssues(list.catalogue, list.defaults);
+
+    assert.deepEqual(
+      lines.map((line) => line.key),
+      list.catalogue.sections.map((section) => section.key).filter((key) => list.catalogue.entries.some((entry) => entry.section === key))
+    );
+    assert.equal(lines.reduce((sum, line) => sum + line.rates, 0), list.catalogue.entries.length);
+    assert.equal(lines.reduce((sum, line) => sum + line.toFix, 0), blockingIssues(issues).length);
+    assert.equal(lines.reduce((sum, line) => sum + line.toCheck, 0), issues.length - blockingIssues(issues).length);
+  });
+}
+
+test('the overview puts a broken rate against its own section and no other', () => {
+  const entry = rateEntry(WINDOW_RATE_CATALOGUE, 'margins.T5573.margin');
+  const lines = summariseSections(WINDOW_RATE_CATALOGUE, withRate(DEFAULT_WINDOW_RATES, entry.path, -0.1));
+
+  assert.deepEqual(
+    lines.filter((line) => line.toFix > 0).map((line) => [line.key, line.toFix]),
+    [[entry.section, 1]]
+  );
+});
+
+test('rates another list sets roll up to one line per owning list', () => {
+  const windowGlass = WINDOW_RATE_CATALOGUE.entries.filter((entry) => entry.shared);
+  assert.deepEqual(sharedByList(windowGlass), [{ list: windowGlass[0].shared?.list, href: '/settings', count: windowGlass.length }]);
+
+  const awning = sharedByList(AWNING_RATE_CATALOGUE.entries);
+  assert.deepEqual(awning.map((line) => line.href).sort(), ['/settings', '/settings/windows']);
+  assert.equal(awning.reduce((sum, line) => sum + line.count, 0), AWNING_RATE_CATALOGUE.entries.filter((entry) => entry.shared).length);
+
+  assert.deepEqual(sharedByList(GLASS_RATE_CATALOGUE.entries), []);
 });

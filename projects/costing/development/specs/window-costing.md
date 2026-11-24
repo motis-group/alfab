@@ -169,10 +169,15 @@ a rate that has a default price falls back to that default, so an older saved do
 quote wrong either. Only rates that are blank by default stay blank.
 
 Each section carries the date its prices were last known good. The editor shows the date, a
-search box, the unit of every rate, and the resulting price per metre for each extrusion. A glass
-price the glass price list sets shows read-only, with a link to that list. The label, unit and save
+search box, the unit of every rate, and the resulting price per metre for each extrusion. The label, unit and save
 rule of every rate are declared in `utils/rate-catalogue.ts`; `components/RatesEditor.tsx` renders
 whatever that catalogue declares, for the glass, window and awning rates alike.
+
+The editor opens as a list of sections, each with its rate count and one status: OK, to check or to
+fix. A section shows its rates when someone opens it. A section with a red rate is always open, and
+a search shows every matching rate whatever is closed. Rates another list sets are counted on one
+line per owning list, with a link to that list; a shared rate with a problem stays in view. The
+warnings, the stale price dates and the glossary sit behind buttons beside the search box.
 
 ## The words the sheet assumed
 

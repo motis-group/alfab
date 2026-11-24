@@ -151,6 +151,46 @@ export function blockingIssues(issues: RateIssue[]): RateIssue[] {
   return issues.filter((issue) => issue.tone === 'error');
 }
 
+export interface SectionSummary {
+  key: string;
+  title: string;
+  rates: number;
+  toFix: number;
+  toCheck: number;
+}
+
+export function summariseSections(catalogue: RateCatalogue, document: unknown): SectionSummary[] {
+  const tones = new Map(listIssues(catalogue, document).map((issue) => [issue.path, issue.tone]));
+
+  return catalogue.sections
+    .map((section) => {
+      const entries = catalogue.entries.filter((entry) => entry.section === section.key);
+      return {
+        key: section.key,
+        title: section.title,
+        rates: entries.length,
+        toFix: entries.filter((entry) => tones.get(entry.path) === 'error').length,
+        toCheck: entries.filter((entry) => tones.get(entry.path) === 'warning').length,
+      };
+    })
+    .filter((line) => line.rates > 0);
+}
+
+export interface SharedLine extends SharedRate {
+  count: number;
+}
+
+export function sharedByList(entries: RateEntry[]): SharedLine[] {
+  const lines = new Map<string, SharedLine>();
+  for (const entry of entries) {
+    if (entry.shared) {
+      const line = lines.get(entry.shared.href) ?? { ...entry.shared, count: 0 };
+      lines.set(entry.shared.href, { ...line, count: line.count + 1 });
+    }
+  }
+  return Array.from(lines.values());
+}
+
 const GLASS_OTHER: Array<{ key: keyof typeof defaultPricingData.otherPrices; group: string; label: string; unit: string; kind: RateKind }> = [
   { key: 'holePrice4to6', group: 'Holes', label: '4-6 mm', unit: '$ per hole', kind: 'money' },
   { key: 'holePrice8to12', group: 'Holes', label: '8-12 mm', unit: '$ per hole', kind: 'money' },
