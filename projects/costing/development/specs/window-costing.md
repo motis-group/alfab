@@ -13,7 +13,8 @@ only; the Queensland branch of the sheet is not implemented (`state` is fixed to
 | Rates editor | `/settings/windows` (`pricing:write` to save; every role can read) |
 | Costing page | `app/glass/windows/page.tsx` |
 | Printed sheet | `components/WindowCostingSheet.tsx`, print styles in `global.scss` |
-| Rate severity | `utils/window-rate-health.ts` |
+| Rate catalogue: label, unit, kind and save rules of every rate | `utils/rate-catalogue.ts` |
+| Rates editor component, shared with the glass and awning rates | `components/RatesEditor.tsx` |
 | Glossary | `utils/window-costing-glossary.ts`, shown by `components/WindowCostingGlossary.tsx` |
 | Saved costings, read only | `utils/window-quote-store.ts`, table `quotes`, rows marked `kind: window` |
 | Printed quotes, read only | `utils/customer-quote-store.ts`, table `quotes`, rows marked `kind: window-quote` |
@@ -158,15 +159,18 @@ really costs.
 - Zero on a rate the whole costing leans on: the labour rate, a supplier price per kilogram, a glass
   price per square metre, the etch anodising rate. Zero is never reported as not priced.
 - A value below zero, which turns a cost line into a credit.
-- A fraction above 1, which is a percentage typed as a whole number: 40 instead of 0.4 makes the
-  margin 40 times the cost.
+- A percentage above 100. The editor shows a loading, an offcut, a margin and an uplift as a
+  percentage and stores each as a fraction: 40 is stored as 0.4.
 
 Saving is blocked while any red field is present. `mergeWindowRates` is the second guard: a blank on
 a rate that has a default price falls back to that default, so an older saved document cannot make a
 quote wrong either. Only rates that are blank by default stay blank.
 
 Each section carries the date its prices were last known good. The editor shows the date, a
-search box, the unit of every rate, and the resulting price per metre for each extrusion.
+search box, the unit of every rate, and the resulting price per metre for each extrusion. A glass
+price the glass price list sets shows read-only, with a link to that list. The label, unit and save
+rule of every rate are declared in `utils/rate-catalogue.ts`; `components/RatesEditor.tsx` renders
+whatever that catalogue declares, for the glass, window and awning rates alike.
 
 ## The words the sheet assumed
 

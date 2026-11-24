@@ -19,10 +19,15 @@ export const APP_WORK_SECTION_ITEMS: AppSectionItem[] = [
 
 export const APP_ACCOUNT_SECTION_ITEMS: AppSectionItem[] = [
   { href: '/account', label: 'Appearance' },
-  { href: '/settings', label: 'Costing' },
-  { href: '/settings/windows', label: 'Window Rates' },
-  { href: '/settings/awnings', label: 'Awning Rates' },
-  { href: '/settings/drift', label: 'Price Drift' },
+  {
+    label: 'Rates',
+    items: [
+      { href: '/settings', label: 'Glass Rates' },
+      { href: '/settings/windows', label: 'Window Rates' },
+      { href: '/settings/awnings', label: 'Awning Rates' },
+      { href: '/settings/drift', label: 'Price Drift' },
+    ],
+  },
   { href: '/account/team', label: 'Team' },
   { href: '/settings/billing', label: 'Billing' },
 ];
