@@ -14,6 +14,7 @@ import {
   blockingIssues,
   checkRate,
   findRates,
+  keepBrokenSectionsOpen,
   formatRate,
   listIssues,
   parseRate,
@@ -369,4 +370,17 @@ test('rates another list sets roll up to one line per owning list', () => {
   assert.equal(awning.reduce((sum, line) => sum + line.count, 0), AWNING_RATE_CATALOGUE.entries.filter((entry) => entry.shared).length);
 
   assert.deepEqual(sharedByList(GLASS_RATE_CATALOGUE.entries), []);
+});
+
+test('a section opened by a broken rate stays open once the rate is fixed', () => {
+  const entry = rateEntry(WINDOW_RATE_CATALOGUE, 'labourPerHour');
+  const broken = summariseSections(WINDOW_RATE_CATALOGUE, withRate(DEFAULT_WINDOW_RATES, entry.path, null));
+  const fixed = summariseSections(WINDOW_RATE_CATALOGUE, withRate(DEFAULT_WINDOW_RATES, entry.path, 4));
+
+  const whileBroken = keepBrokenSectionsOpen({}, broken);
+  assert.deepEqual(whileBroken, { [entry.section]: true });
+
+  const afterFix = keepBrokenSectionsOpen(whileBroken, fixed);
+  assert.equal(afterFix[entry.section], true);
+  assert.equal(afterFix, whileBroken, 'nothing new to open returns the same record, so the editor does not render again');
 });

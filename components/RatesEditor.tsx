@@ -18,7 +18,7 @@ import { RateAgeBadge, RateReviewCard } from '@components/RateAgeNotice';
 import { APP_ACCOUNT_SECTION_ITEMS } from '@utils/app-navigation';
 import { formatCurrency } from '@utils/order-management';
 import { gradeAsAt, needsReview } from '@utils/rate-age';
-import { RateCatalogue, RateEntry, RateIssue, RateSection, blockingIssues, findRates, formatRate, listIssues, parseRate, rateAt, sharedByList, summariseSections, withRate } from '@utils/rate-catalogue';
+import { RateCatalogue, RateEntry, RateIssue, RateSection, blockingIssues, findRates, formatRate, keepBrokenSectionsOpen, listIssues, parseRate, rateAt, sharedByList, summariseSections, withRate } from '@utils/rate-catalogue';
 import { LoadedRates } from '@utils/rates-store';
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 
@@ -318,7 +318,10 @@ export default function RatesEditor<T extends RatesDocument>({ catalogue, headin
 
   const saveLabel = !canWrite ? 'Saving Needs Access' : blocking.length ? `Fix ${blocking.length} Rate${blocking.length === 1 ? '' : 's'} To Save` : hasChanges ? 'Save Changes' : 'No Changes To Save';
   const warnings = issues.length - blocking.length;
-  const overview = summariseSections(catalogue, rates);
+  const overview = useMemo(() => summariseSections(catalogue, rates), [catalogue, rates]);
+  useEffect(() => {
+    setOpened((prev) => keepBrokenSectionsOpen(prev, overview));
+  }, [overview]);
   const mustOpen = new Set(overview.filter((line) => line.toFix > 0).map((line) => line.key));
   const isOpen = (key: string) => Boolean(query) || mustOpen.has(key) || Boolean(opened[key]);
   const sections = catalogue.sections.map((section) => ({ section, entries: found.filter((entry) => entry.section === section.key) })).filter(({ section, entries }) => entries.length > 0 && isOpen(section.key));

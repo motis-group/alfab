@@ -174,7 +174,8 @@ rule of every rate are declared in `utils/rate-catalogue.ts`; `components/RatesE
 whatever that catalogue declares, for the glass, window and awning rates alike.
 
 The editor opens as a list of sections, each with its rate count and one status: OK, to check or to
-fix. A section shows its rates when someone opens it. A section with a red rate is always open, and
+fix. A section shows its rates when someone opens it. A section with a red rate is always open and stays open once
+the rate is fixed, and
 a search shows every matching rate whatever is closed. Rates another list sets are counted on one
 line per owning list, with a link to that list; a shared rate with a problem stays in view. The
 warnings, the stale price dates and the glossary sit behind buttons beside the search box.

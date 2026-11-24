@@ -176,6 +176,11 @@ export function summariseSections(catalogue: RateCatalogue, document: unknown): 
     .filter((line) => line.rates > 0);
 }
 
+export function keepBrokenSectionsOpen(opened: Record<string, boolean>, summary: SectionSummary[]): Record<string, boolean> {
+  const broken = summary.filter((line) => line.toFix > 0 && !opened[line.key]);
+  return broken.length ? { ...opened, ...Object.fromEntries(broken.map((line) => [line.key, true])) } : opened;
+}
+
 export interface SharedLine extends SharedRate {
   count: number;
 }
