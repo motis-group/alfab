@@ -332,7 +332,7 @@ export default function RatesEditor<T extends RatesDocument>({ catalogue, headin
           {hasChanges && impact ? <Card title="WHAT THIS CHANGES">{impact(savedRates, rates)}</Card> : null}
 
           {issues.length ? (
-            <Card title={blocking.length ? 'RATES TO FIX' : 'RATES NOT PRICED'}>
+            <Card title={blocking.length ? 'RATES TO FIX' : 'RATES TO CHECK'}>
               {blocking.length ? (
                 <Text>
                   <span className="status-error">
@@ -343,7 +343,7 @@ export default function RatesEditor<T extends RatesDocument>({ catalogue, headin
               {warnings ? (
                 <Text>
                   <span className="status-warning">
-                    {warnings} rate{warnings === 1 ? '' : 's'} not priced or free. Those lines are charged as nil.
+                    {warnings} rate{warnings === 1 ? '' : 's'} to check. A save is not blocked.
                   </span>
                 </Text>
               ) : null}
@@ -405,11 +405,11 @@ export default function RatesEditor<T extends RatesDocument>({ catalogue, headin
 
       {sections.map(({ section, entries }) => {
         const errors = entries.filter((entry) => issueAt.get(entry.path)?.tone === 'error').length;
-        const notPriced = entries.filter((entry) => issueAt.get(entry.path)?.tone === 'warning').length;
+        const toCheck = entries.filter((entry) => issueAt.get(entry.path)?.tone === 'warning').length;
         const asAt = rates.asAt[section.key] ?? '';
 
         return (
-          <CardDouble key={section.key} title={`${section.title}${errors ? ` — ${errors} TO FIX` : ''}${notPriced ? ` — ${notPriced} NOT PRICED` : ''}`}>
+          <CardDouble key={section.key} title={`${section.title}${errors ? ` — ${errors} TO FIX` : ''}${toCheck ? ` — ${toCheck} TO CHECK` : ''}`}>
             {section.note ? <Text>{section.note}</Text> : null}
             <Input label="PRICES LAST KNOWN GOOD" name={`asat-${section.key}`} value={asAt} onChange={(event) => updateAsAt(section.key, event.target.value)} placeholder="unknown" disabled={!canWrite} />
             <RateAgeBadge text={asAt} />

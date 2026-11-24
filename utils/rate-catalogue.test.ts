@@ -145,7 +145,7 @@ test('a blank or a zero on a rate the awning costing leans on blocks the save', 
     assert.equal(awningIssue(path, null)?.tone, 'error', `${path} blank`);
     assert.equal(awningIssue(path, 0)?.tone, 'error', `${path} zero`);
   }
-  assert.equal(awningIssue('marginRate', 1.5)?.tone, 'error', '150 percent is a typing slip');
+  assert.equal(awningIssue('marginRate', 1.5)?.tone, 'warning', '150 percent saves with a warning');
   assert.equal(awningIssue('parts.frame', -1)?.tone, 'error');
 });
 
@@ -210,10 +210,14 @@ test('a window rate below zero is an error anywhere', () => {
   assert.equal(windowIssue('margins.T5573.margin', -0.1)?.tone, 'error');
 });
 
-test('a stored share above one whole is an error', () => {
-  assert.equal(windowIssue('margins.T5573.margin', 40)?.tone, 'error', '40 means 4000 percent');
+test('a share above one whole is a warning that does not block a save', () => {
+  const margin = windowIssue('margins.T5573.margin', 1.5);
+  assert.equal(margin?.tone, 'warning');
+  assert.equal(margin?.badge, 'over 100%');
+  assert.deepEqual(blockingIssues(margin ? [margin] : []), []);
+  assert.equal(windowIssue('margins.T5573.margin', 1), null);
   assert.equal(windowIssue('margins.T5573.margin', 0.4), null);
-  assert.equal(windowIssue('suppliers.capral.loading', 20)?.tone, 'error');
+  assert.equal(windowIssue('suppliers.capral.loading', 20)?.tone, 'warning');
   assert.equal(windowIssue('glass.loading', 0.2), null);
   assert.equal(windowIssue('labour.T5573.develop.areaK', 0.8), null);
   assert.equal(windowIssue('labourPerHour', 95), null);

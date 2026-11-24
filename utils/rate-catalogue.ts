@@ -132,7 +132,7 @@ export function checkRate(entry: RateEntry, value: number | null): RateIssue | n
     return issue('error', 'below zero', 'Below zero.');
   }
   if (entry.kind === 'percent' && value > 1) {
-    return issue('error', 'over 100%', 'Above 100 percent.');
+    return issue('warning', 'over 100%', 'Above 100 percent. Check it is meant.');
   }
   if (value === 0 && entry.zero === 'block') {
     return issue('error', 'zero', 'Zero. Every costing that uses it comes out short.');

@@ -159,8 +159,10 @@ really costs.
 - Zero on a rate the whole costing leans on: the labour rate, a supplier price per kilogram, a glass
   price per square metre, the etch anodising rate. Zero is never reported as not priced.
 - A value below zero, which turns a cost line into a credit.
-- A percentage above 100. The editor shows a loading, an offcut, a margin and an uplift as a
-  percentage and stores each as a fraction: 40 is stored as 0.4.
+
+**Yellow, over 100%.** A percentage above 100. A margin on cost can be meant that high, so the
+editor asks for a check and does not block the save. The editor shows a loading, an offcut, a margin
+and an uplift as a percentage and stores each as a fraction: 40 is stored as 0.4.
 
 Saving is blocked while any red field is present. `mergeWindowRates` is the second guard: a blank on
 a rate that has a default price falls back to that default, so an older saved document cannot make a
