@@ -42,7 +42,7 @@ minimum applies, the breakdown shows what it added rather than burying it in the
 
 ## Rates
 
-Glass rates live in `glass_costing_rates`, one JSON document, edited under Settings. Saving keeps
+Glass rates live in `glass_costing_rates`, one JSON document, edited under Settings → Rates → Glass Rates. A blank glass rate blocks the save, because the glass calculator cannot price on it. Saving keeps
 the document it replaced as an archive row, so an old price can be reproduced. A blank never
 overwrites a price: it would read as zero and quote the job short.
 
@@ -52,4 +52,4 @@ The rates are company-wide, so two estimators who quote the same job give the sa
 
 The glass price list also sets the glass, ceramic banding and flat polish prices that the window and
 awning rates share. [pricing-health.md](pricing-health.md) lists each shared rate and shows how
-**Settings → Price Drift** checks that the lists agree.
+**Settings → Rates → Price Drift** checks that the lists agree.

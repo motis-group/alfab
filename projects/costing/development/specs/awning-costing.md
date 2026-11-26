@@ -94,11 +94,14 @@ costing charges the line as nil and says so, rather than quoting them off the Su
 **Red, fix before saving.** A value that makes every quote wrong. A blank or zero on the per-awning
 minutes, the margin or either fixed quantity does this without saying so. A blank or zero labour
 rate is red too. The costing reports labour as not priced when that rate is blank, and gives no
-price when it is zero. Red also covers any value below zero, and a margin above 1, which is a
-percentage typed as a whole number.
+price when it is zero. Red also covers any value below zero.
 
-The editor blocks a save while any rate is red. A shared rate shows as read-only, with a link to the
-list that sets it. The labour rate is a shared rate, so a red labour rate blocks a save here until
+**Yellow, over 100%.** A margin above 100 percent. The editor asks for a check and does not block
+the save. The editor shows the margin as a percentage and stores it as a fraction: 40 is stored as
+0.4.
+
+The editor blocks a save while any rate is red. Shared rates are counted on one line with a link to the
+list that sets them, and show read-only when opened. The labour rate is a shared rate, so a red labour rate blocks a save here until
 someone fixes it in the window rates.
 
 The editor prices the sheet's own example awning on the current rates and on the edit, so the

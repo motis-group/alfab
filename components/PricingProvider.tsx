@@ -1,99 +1,15 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { GlassType, EdgeworkType, GlassThickness } from '@utils/calculations';
-import { loadGlassRates, mergeGlassRates, resetGlassRates, saveGlassRates } from '@utils/glass-rate-store';
+import { PricingData, defaultPricingData } from '@utils/glass-rates';
+import { LoadedGlassRates, loadGlassRates, mergeGlassRates, resetGlassRates, saveGlassRates } from '@utils/glass-rate-store';
 
-export interface PricingData {
-  basePrices: Record<GlassType, Partial<Record<GlassThickness, number>>>;
-  edgeworkPrices: Record<EdgeworkType, Record<'4-6' | '8-12', number>>;
-  otherPrices: {
-    holePrice4to6: number;
-    holePrice8to12: number;
-    shapeSimple4to6: number;
-    shapeSimple8to12: number;
-    shapeComplex4to6: number;
-    shapeComplex8to12: number;
-    ceramicBanding: number;
-    scanning: number;
-    /** The least a piece is charged, however small. 0 until Nick says what it is. */
-    minCharge: number;
-    /** The smallest area a piece is charged at, in square metres. 0 charges the exact area. */
-    minAreaSqm: number;
-  };
-  /**
-   * When each group of prices was last known good, as free text. Read by utils/rate-age.ts, which
-   * grades it so a price nobody has checked for years says so instead of quoting silently.
-   */
-  asAt: Record<'basePrices' | 'edgeworkPrices' | 'otherPrices', string>;
-}
-
-// Default pricing data
-export const defaultPricingData: PricingData = {
-  // The legacy calculator recorded no dates against these prices. "unknown" is reported as needing a
-  // check rather than treated as current.
-  asAt: {
-    basePrices: 'unknown',
-    edgeworkPrices: 'unknown',
-    otherPrices: 'unknown',
-  },
-  basePrices: {
-    Clear: {
-      4: 83.96,
-      5: 87.59,
-      6: 92.47,
-      8: 200.63,
-      10: 221.78,
-      12: 270.74,
-    },
-    Green: {
-      4: 102.19,
-      5: 104.61,
-      6: 109.5,
-      8: 242.79,
-      10: 267.62,
-      12: 292.06,
-    },
-    Grey: {
-      4: 102.19,
-      5: 104.61,
-      6: 109.5,
-      8: 242.79,
-      10: 267.62,
-      12: 292.06,
-    },
-    'Dark Grey': {
-      5: 128.97,
-    },
-    'Super Grey': {
-      6: 198.12,
-    },
-  },
-  edgeworkPrices: {
-    'ROUGH ARRIS': { '4-6': 0, '8-12': 0 },
-    'FLAT GRIND - STRAIGHT': { '4-6': 4.31, '8-12': 7.59 },
-    'FLAT GRIND - CURVED': { '4-6': 8.85, '8-12': 17.67 },
-    'FLAT POLISH - STRAIGHT': { '4-6': 4.56, '8-12': 8.85 },
-    'FLAT POLISH - CURVED': { '4-6': 12.66, '8-12': 25.27 },
-  },
-  otherPrices: {
-    holePrice4to6: 6.33,
-    holePrice8to12: 8.85,
-    shapeSimple4to6: 7.59,
-    shapeSimple8to12: 12.65,
-    shapeComplex4to6: 12.65,
-    shapeComplex8to12: 25.27,
-    ceramicBanding: 63.68,
-    scanning: 90,
-    // Nothing until the shop says otherwise, which is exactly what the calculator did before.
-    minCharge: 0,
-    minAreaSqm: 0,
-  },
-};
+export type { PricingData } from '@utils/glass-rates';
+export { defaultPricingData };
 
 interface PricingContextType {
   pricingData: PricingData;
-  updatePricingData: (data: PricingData) => Promise<void>;
+  updatePricingData: (data: PricingData, expectedUpdatedAt?: string | null) => Promise<LoadedGlassRates>;
   resetToDefaults: () => Promise<void>;
   /** Whether these are the company's saved rates or the code defaults, and when they were saved. */
   source: 'saved' | 'default';
@@ -146,11 +62,12 @@ export function PricingProvider({ children }: PricingProviderProps) {
     };
   }, []);
 
-  const updatePricingData = async (data: PricingData) => {
-    const loaded = await saveGlassRates(data, updatedAt);
+  const updatePricingData = async (data: PricingData, expectedUpdatedAt: string | null = updatedAt) => {
+    const loaded = await saveGlassRates(data, expectedUpdatedAt);
     setPricingData(loaded.rates);
     setSource(loaded.source);
     setUpdatedAt(loaded.updatedAt);
+    return loaded;
   };
 
   const resetToDefaults = async () => {

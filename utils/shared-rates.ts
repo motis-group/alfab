@@ -51,6 +51,12 @@ export const AWNING_GLASS_FROM_LIST: Record<string, GlassListRef> = {
   supergrey_tgn: { type: 'Super Grey', mm: 6 },
 };
 
+export const AWNING_RATES_FROM_OTHER_LISTS: Record<string, 'glass' | 'window'> = {
+  'labour.perHour': 'window',
+  'glass.bandingSet': 'glass',
+  'glass.flatPolishPerM': 'glass',
+};
+
 function priceFrom(basePrices: PricingData['basePrices'], ref: GlassListRef): number | null {
   const value = basePrices[ref.type]?.[ref.mm];
   return typeof value === 'number' && value > 0 ? value : null;
