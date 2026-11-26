@@ -20,7 +20,7 @@ const TABLE = 'quotes';
 /** The value of specification.kind for a quote for a job. */
 export const QUOTE_KIND = 'quote';
 
-/** The margin a new quote starts at, in percent on cost. The glass calculator's markup starts at the same figure. */
+/** The margin a new quote line starts at, in percent on cost. The glass calculator's markup starts at the same figure. */
 export const DEFAULT_QUOTE_MARGIN_PERCENT = 20;
 
 /** One line on a quote. The line holds the price and the calculator input. */
@@ -28,7 +28,7 @@ export interface SavedQuoteLine {
   /** The line as the calculator returns it. The same calculator can edit the line again. */
   draft: LineDraft;
   /**
-   * One unit at cost, as the calculator priced it. The margin of the quote makes the price.
+   * One unit at cost, as the calculator priced it. The margin of the line, draft.markupPercent, makes the price.
    *
    * A line with no cost keeps its price, which already holds a margin. Examples: a line of a quote
    * that a calculator wrote, a line of a quote whose row stores no costs, and a piece with a manual
@@ -43,7 +43,7 @@ export interface SavedQuoteLine {
    * A later change to the catalogue must not change the text.
    */
   spec: string;
-  /** Items charged in addition. An item has a cost when the margin of the quote prices it. */
+  /** Items charged in addition. An item has a cost when the margin of its line prices it. */
   extras: { label: string; total: number | null; cost?: number | null }[];
 }
 
@@ -55,8 +55,6 @@ export interface SavedQuoteContent {
   /** The date on the quote. The 30-day price hold starts on this date. */
   date: string;
   notes: string;
-  /** Percent on cost. It prices every line that has a cost. */
-  marginPercent: number;
   lines: SavedQuoteLine[];
   /** True if the quote is kept on its customer. A new quote for that customer offers it to reissue. */
   savedToCustomer: boolean;
@@ -101,7 +99,7 @@ export function priceAtMargin(cost: number, marginPercent: number): number {
   return toCents(cost * (1 + marginPercent / 100));
 }
 
-/** Prices a line from its cost at the margin of the quote. A line with no cost keeps its price. */
+/** Prices a line from its cost at a margin, and keeps that margin on the line. A line with no cost keeps its price. */
 export function applyQuoteMargin(line: SavedQuoteLine, marginPercent: number): SavedQuoteLine {
   if (typeof line.unitCost !== 'number') {
     return line;
@@ -144,7 +142,6 @@ function rowFields(quote: SavedQuoteContent & { issuedBy: string | null; ratesUp
       kind: QUOTE_KIND,
       customerId: quote.customerId,
       notes: quote.notes,
-      marginPercent: quote.marginPercent,
       lines: quote.lines,
       // A quote with no customer on file is on no customer's list, so it is not saved to a customer.
       savedToCustomer: Boolean(quote.savedToCustomer && quote.customerId),
@@ -231,9 +228,6 @@ export function toSavedQuote(row: QuoteRow): SavedQuote | null {
     customerId: text(specification.customerId),
     date: row.date || '',
     notes: text(specification.notes) || '',
-    // A row with no margin reads at the default. Its lines have no cost, so the default prices none
-    // of them.
-    marginPercent: typeof specification.marginPercent === 'number' ? specification.marginPercent : DEFAULT_QUOTE_MARGIN_PERCENT,
     lines,
     savedToCustomer: specification.savedToCustomer === true,
     // The stored total is the offer. Calculate the total again only if the row has no total.

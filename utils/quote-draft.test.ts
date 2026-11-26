@@ -6,8 +6,8 @@ import { defaultPricingData } from '@components/PricingProvider';
 import { calculateCost } from './calculations';
 import { ExtractedPiece } from './import/model';
 import { LineEditRequest, LineEditResult, peekLineEditRequest, persistLineEditRequest } from './line-editing';
-import { QuoteDraft, addGlassPieces, addQuoteLineAndContinue, applyQuoteLineResult, clearQuoteDraft, dropPendingLine, emptyQuoteDraft, peekQuoteDraft, persistQuoteDraft, reissueQuoteDraft, setQuoteMargin } from './quote-draft';
-import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuoteLine, priceAtMargin } from './quote-store';
+import { QuoteDraft, addGlassPieces, addQuoteLineAndContinue, applyQuoteLineResult, clearQuoteDraft, dropPendingLine, emptyQuoteDraft, peekQuoteDraft, persistQuoteDraft, reissueQuoteDraft, setLineMargin } from './quote-draft';
+import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuoteLine, priceAtMargin, quoteMarginSummary } from './quote-store';
 import { createLineDraft } from './order-draft';
 import { todayISODate } from './order-management';
 
@@ -64,27 +64,53 @@ test('a priced line returns with the fields of the calculator and no others', ()
   assert.equal(applied.pendingLineId, null, 'the line has a price, so it is no longer pending');
 });
 
-test('a calculator prices a quote line at cost, and the margin of the quote makes the price', () => {
-  const draft: QuoteDraft = { ...emptyQuoteDraft(), marginPercent: 25, lines: [line('a')] };
+test('a calculator prices a quote line at cost, and the margin of the line makes the price', () => {
+  const draft: QuoteDraft = { ...emptyQuoteDraft(), lines: [{ ...line('a', { markupPercent: 25 }), unitCost: 1000 }] };
 
-  const [priced] = applyQuoteLineResult(draft, result('a', { unitPriceAtOrder: 1200 })).lines;
+  const [priced] = applyQuoteLineResult(draft, result('a', { unitPriceAtOrder: 1200, markupPercent: 0 })).lines;
 
   assert.equal(priced.unitCost, 1200, 'the calculator sent the cost');
-  assert.equal(priced.draft.unitPriceAtOrder, 1500, 'the quote adds 25 percent');
+  assert.equal(priced.draft.unitPriceAtOrder, 1500, 'the line adds its 25 percent, not the zero the calculator priced at');
   assert.equal(priced.draft.markupPercent, 25, 'an order made from the quote carries the margin');
-  assert.deepEqual(priced.extras, [{ label: 'Trims', total: 50, cost: 40 }], 'an extra takes the same margin');
+  assert.deepEqual(priced.extras, [{ label: 'Trims', total: 50, cost: 40 }], 'an extra takes the margin of its line');
 });
 
-test('a new margin prices every line at cost again, and leaves a line at its own margin alone', () => {
-  const atCost: SavedQuoteLine = { ...line('a', { quantityOrdered: 2, unitPriceAtOrder: 120 }), unitCost: 100 };
-  const ownMargin = line('b', { unitPriceAtOrder: 140 });
-  const draft: QuoteDraft = { ...emptyQuoteDraft(), marginPercent: 20, lines: [atCost, ownMargin] };
+test('a new line that the quote does not hold yet is priced at the default margin', () => {
+  const [priced] = applyQuoteLineResult(emptyQuoteDraft(), result('new-line', { unitPriceAtOrder: 100, markupPercent: 0 })).lines;
 
-  const repriced = setQuoteMargin(draft, 33.333);
+  assert.equal(priced.draft.markupPercent, DEFAULT_QUOTE_MARGIN_PERCENT);
+  assert.equal(priced.draft.unitPriceAtOrder, priceAtMargin(100, DEFAULT_QUOTE_MARGIN_PERCENT));
+});
 
-  assert.equal(repriced.marginPercent, 33.333);
+test('a line at its own margin comes back from its calculator at the default margin, not at bare cost', () => {
+  const carried = line('a', { unitPriceAtOrder: 1400, markupPercent: 0 });
+  const draft: QuoteDraft = { ...emptyQuoteDraft(), lines: [carried] };
+
+  const [priced] = applyQuoteLineResult(draft, result('a', { unitPriceAtOrder: 1000, markupPercent: 0 })).lines;
+
+  assert.equal(priced.unitCost, 1000);
+  assert.equal(priced.draft.markupPercent, DEFAULT_QUOTE_MARGIN_PERCENT);
+  assert.equal(priced.draft.unitPriceAtOrder, priceAtMargin(1000, DEFAULT_QUOTE_MARGIN_PERCENT));
+});
+
+test('a new margin on one line prices that line again and leaves the other lines alone', () => {
+  const windows: SavedQuoteLine = { ...line('a', { quantityOrdered: 2, unitPriceAtOrder: 120, markupPercent: 20 }), unitCost: 100 };
+  const glass: SavedQuoteLine = { ...line('b', { quantityOrdered: 4, unitPriceAtOrder: 67.5, markupPercent: 35, pricingSource: 'adhoc_calculator' }), unitCost: 50, extras: [{ label: 'Polish', total: 13.5, cost: 10 }] };
+  const ownMargin = line('c', { unitPriceAtOrder: 140 });
+  const draft: QuoteDraft = { ...emptyQuoteDraft(), lines: [windows, glass, ownMargin] };
+
+  const repriced = setLineMargin(draft, 'a', 33.333);
+
   assert.equal(repriced.lines[0].draft.unitPriceAtOrder, 133.33, 'the price is to the cent');
-  assert.equal(repriced.lines[1].draft.unitPriceAtOrder, 140, 'a line carried over from a calculator keeps its price');
+  assert.equal(repriced.lines[0].draft.markupPercent, 33.333);
+  assert.equal(repriced.lines[1], glass, 'the glass line keeps its 35 percent');
+  assert.equal(repriced.lines[2], ownMargin);
+  const summary = quoteMarginSummary(repriced.lines);
+  assert.equal(summary.cost, 400, 'two windows at $100 and four panes at $50');
+  assert.equal(summary.margin, 136.66, 'the windows add $66.66 and the panes add $70');
+  assert.equal(summary.fixed, 140, 'the line at its own margin counts apart');
+
+  assert.equal(setLineMargin(draft, 'c', 50).lines[2], ownMargin, 'a line with no cost has no margin to change');
 });
 
 test('a line that the quote does not hold is added, not discarded', () => {
@@ -119,20 +145,12 @@ test('the reader discards a damaged draft', () => {
   assert.equal(peekQuoteDraft(), null);
 });
 
-test('a draft with no margin reads at the default margin', () => {
-  const draft: Partial<QuoteDraft> = { ...emptyQuoteDraft(), lines: [line('a')] };
-  delete draft.marginPercent;
-  (globalThis as { window: { sessionStorage: { setItem: (k: string, v: string) => void } } }).window.sessionStorage.setItem('alfabQuoteDraft', JSON.stringify(draft));
-
-  assert.equal(peekQuoteDraft()?.marginPercent, DEFAULT_QUOTE_MARGIN_PERCENT, 'a returning line is priced at a number, not NaN');
-});
-
 test('pieces read off a customer order go on the quote at cost, one cut-glass line for each piece', () => {
   const piece: ExtractedPiece = { name: ' Side panel ', quantity: 3, spec: { ...createLineDraft().adhocSpec, width: 1000, height: 800 }, confidence: 'read', source: 'line 4', notes: [] };
   const cost = calculateCost(piece.spec, defaultPricingData).total;
   assert.ok(cost > 0, 'the piece has a cost for the margin to act on');
 
-  const added = addGlassPieces({ ...emptyQuoteDraft(), marginPercent: 25, lines: [line('a')] }, [piece], defaultPricingData);
+  const added = addGlassPieces({ ...emptyQuoteDraft(), lines: [line('a')] }, [piece], defaultPricingData);
 
   assert.equal(added.lines.length, 2, 'the lines already on the quote stay');
   const [, glass] = added.lines;
@@ -140,11 +158,11 @@ test('pieces read off a customer order go on the quote at cost, one cut-glass li
   assert.equal(glass.draft.lineNote, 'Side panel');
   assert.equal(glass.draft.quantityOrdered, 3);
   assert.equal(glass.unitCost, cost, 'the line holds the cost');
-  assert.equal(glass.draft.unitPriceAtOrder, priceAtMargin(cost, 25), 'the margin of the quote makes the price');
+  assert.equal(glass.draft.unitPriceAtOrder, priceAtMargin(cost, DEFAULT_QUOTE_MARGIN_PERCENT), 'a new line starts at the default margin');
 });
 
 test('a reissued quote copies the saved quote, with no number and a new date', () => {
-  const saved = { id: '3f2a9c1e-0000-4000-8000-000000000000', name: '670 Outlaw windows', customer: 'Bar Crusher', customerId: 'c1', date: '2025-03-02T00:00:00.000Z', notes: 'Deposit 50%', marginPercent: 35, lines: [{ ...line('a', { quantityOrdered: 2, unitPriceAtOrder: 135 }), unitCost: 100 }] };
+  const saved = { id: '3f2a9c1e-0000-4000-8000-000000000000', name: '670 Outlaw windows', customer: 'Bar Crusher', customerId: 'c1', date: '2025-03-02T00:00:00.000Z', notes: 'Deposit 50%', lines: [{ ...line('a', { quantityOrdered: 2, unitPriceAtOrder: 135, markupPercent: 35 }), unitCost: 100 }] };
 
   const copy = reissueQuoteDraft(saved);
 
@@ -152,8 +170,7 @@ test('a reissued quote copies the saved quote, with no number and a new date', (
   assert.equal(copy.date, todayISODate(), 'the 30-day price hold starts again');
   assert.equal(copy.customerId, 'c1');
   assert.equal(copy.notes, 'Deposit 50%');
-  assert.equal(copy.marginPercent, 35, 'a line at cost keeps its price only at the margin it was saved at');
-  assert.deepEqual(copy.lines, saved.lines, 'each line keeps its price');
+  assert.deepEqual(copy.lines, saved.lines, 'each line keeps its price and its margin');
   assert.equal(copy.savedToCustomer, false, 'reissuing adds no copy to the saved quotes');
   assert.deepEqual(copy.reissuedFrom, { reference: 'Q-3F2A9C1E', date: '2025-03-02' });
 });
