@@ -52,10 +52,13 @@ calculator keeps the previous cost as the manual cost. To keep that cost, clear 
 
 ## Margin
 
-The quote has one margin, in percent on cost. The margin is a markup: 20 percent prices a $100 cost
-at $120. The margin prices every line that has a cost, and a change to it prices those lines again.
+Each line has its own margin, in percent on cost. The margin is a markup: 20 percent prices a $100
+cost at $120. The page shows the margin of each line that has a cost, and a change to it prices that
+line and its extras again. The other lines keep their prices. The line stores its margin as the
+markup of its draft, so a line edited in its calculator comes back at the same margin.
 
-A new quote starts at 20 percent, the markup that the glass calculator starts at. The awning rates
+A new line starts at 20 percent, the markup that the glass calculator starts at. This includes a
+piece read off a customer's order. The awning rates
 carry a 40 percent margin, and the window rates carry 35 or 40 percent by type. A window or awning
 line at 20 percent is therefore cheaper than the rates alone make it.
 
@@ -67,13 +70,13 @@ A calculator prices a quote line at cost:
   margin included. The window calculator also sets the uplift to zero. Packing stays in the window
   cost, so the margin applies to packing.
 
-The quote stores the cost of each line and each extra, and the price at the margin. The page
+The quote stores the cost of each line and each extra, and the price at the margin of the line. The page
 rounds a price to the cent, so the unit price times the quantity is the printed amount.
 
 ## The customer's copy
 
 The paper shows prices only. It shows no cost and no margin. An order made from the quote gets the
-prices. A glass line on the order carries the margin as its markup.
+prices. A glass line on the order carries the margin of its quote line as its markup.
 
 The layout of the paper follows an invoice: the issuer, the customer, one row for each line, and a
 totals block with GST. The type is Berkeley Mono, served from `public/fonts`.
@@ -90,8 +93,9 @@ reads as expired, as [feedback-loops.md](feedback-loops.md) describes.
 
 A line with no cost keeps its price, which already holds the margin of its calculator. Two examples
 are a line of a quote that a calculator wrote, and a line of a quote whose row stores no costs. The
-margin of the quote does not change that price. The page marks the line and totals it apart. Edit the
-line to price it at cost.
+line has no margin to change. The page shows no margin for the line, marks it, and totals it apart.
+Edit the line to price it at cost. It then comes back at 20 percent, not at the markup of its
+calculator.
 
 ## Customer
 
@@ -113,7 +117,7 @@ A new quote lists the saved quotes of its customer until the quote has a line. R
 copies a saved quote into the new quote. Reissue in the toolbar of a quote opens a new quote that
 copies it, saved or not.
 
-The copy has the customer, lines, notes and margin of the saved quote, and the date of today. The
+The copy has the customer, notes and lines of the saved quote, each line at its margin, and the date of today. The
 30-day price hold starts again on that date. Each line keeps its price, and a change to the rates
 does not change it. Until it is saved, the page names the quote that the copy came from. Edit a line
 to price it on today's rates. Save Quote, or a line back from its calculator, gives the copy its own

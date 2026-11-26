@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuoteLine, applyQuoteMargin, quoteMarginSummary, quotePaperLines, quoteTotal, toSavedQuote } from './quote-store';
+import { SavedQuoteLine, applyQuoteMargin, quoteMarginSummary, quotePaperLines, quoteTotal, toSavedQuote } from './quote-store';
 import { createLineDraft } from './order-draft';
 
 function line(over: Partial<SavedQuoteLine['draft']>, spec = 'A specification'): SavedQuoteLine {
@@ -35,11 +35,6 @@ test('the reader discards a line that has no draft', () => {
   assert.equal(quote?.lines.length, 1);
 });
 
-test('the reader keeps the margin a quote was saved at', () => {
-  assert.equal(toSavedQuote(row({ kind: 'quote', marginPercent: 35, lines: [line({ localId: 'a' })] }))?.marginPercent, 35);
-  assert.equal(toSavedQuote(row({ kind: 'quote', lines: [line({ localId: 'a' })] }))?.marginPercent, DEFAULT_QUOTE_MARGIN_PERCENT, 'a row with no margin reads at the default');
-});
-
 test('the reader keeps whether a quote is saved to its customer', () => {
   assert.equal(toSavedQuote(row({ kind: 'quote', customerId: 'c1', savedToCustomer: true, lines: [line({ localId: 'a' })] }))?.savedToCustomer, true);
   assert.equal(toSavedQuote(row({ kind: 'quote', customerId: 'c1', lines: [line({ localId: 'a' })] }))?.savedToCustomer, false, 'a row with no flag is not saved');
@@ -65,7 +60,7 @@ test('the paper never carries the cost of an extra', () => {
   assert.deepEqual(paper.extras, [{ label: 'Trims', total: 12 }]);
 });
 
-test('a line at cost is priced at the margin of the quote, to the cent', () => {
+test('a line at cost is priced at its margin, to the cent', () => {
   const priced = applyQuoteMargin({ ...line({ localId: 'a', quantityOrdered: 3 }), unitCost: 83.337, extras: [{ label: 'Trims', total: 10, cost: 10 }, { label: 'Second glazing', total: null, cost: null }] }, 20);
 
   assert.equal(priced.draft.unitPriceAtOrder, 100, '83.337 plus 20 percent is 100.0044, printed as $100.00');

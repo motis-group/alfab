@@ -26,10 +26,10 @@ import { ExtractedPiece } from '@utils/import/model';
 import { consumeLineEditResult, calculatorFor, persistLineEditRequest } from '@utils/line-editing';
 import { Customer, PricingSource, formatCurrency, todayISODate } from '@utils/order-management';
 import { LineDraft, createLineDraft } from '@utils/order-draft';
-import { QuoteDraft, addGlassPieces, applyQuoteLineResult, clearQuoteDraft, dropPendingLine, emptyQuoteDraft, peekQuoteDraft, persistQuoteDraft, reissueQuoteDraft, setQuoteMargin } from '@utils/quote-draft';
+import { QuoteDraft, addGlassPieces, applyQuoteLineResult, clearQuoteDraft, dropPendingLine, emptyQuoteDraft, peekQuoteDraft, persistQuoteDraft, reissueQuoteDraft, setLineMargin } from '@utils/quote-draft';
 import { quoteEmail } from '@utils/quote-email';
 import { QuoteRecord, findQuoteRecord } from '@utils/quote-register';
-import { DEFAULT_QUOTE_MARGIN_PERCENT, SavedQuote, SavedQuoteLine, createQuote, findQuote, listQuotes, quoteMarginSummary, quotePaperLines, quoteReference, updateQuote } from '@utils/quote-store';
+import { SavedQuote, SavedQuoteLine, createQuote, findQuote, listQuotes, quoteMarginSummary, quotePaperLines, quoteReference, updateQuote } from '@utils/quote-store';
 import { createClient } from '@utils/db-client';
 import { fetchCurrentSessionUser, userCan } from '@utils/session-client';
 
@@ -55,9 +55,6 @@ function sourceLabel(source: PricingSource): string {
  * A quote holds lines of any kind. No single calculator owns the quote. The operator prices each
  * line in the calculator for its kind. The line then returns to this page. An order line uses the
  * same procedure.
- *
- * The calculator prices a quote line at cost. The quote sets one margin, and the margin prices every
- * line.
  *
  * The quote waits in a draft while a line is away, because the operator edits the line on another
  * page.
@@ -147,7 +144,7 @@ export default function QuotePage() {
 
       const quote = await findQuote(id);
       if (quote) {
-        setDraft({ id: quote.id, name: quote.name, customer: quote.customer, customerId: quote.customerId || '', date: quote.date ? quote.date.slice(0, 10) : todayISODate(), notes: quote.notes, marginPercent: quote.marginPercent, lines: quote.lines, pendingLineId: null, savedToCustomer: quote.savedToCustomer });
+        setDraft({ id: quote.id, name: quote.name, customer: quote.customer, customerId: quote.customerId || '', date: quote.date ? quote.date.slice(0, 10) : todayISODate(), notes: quote.notes, lines: quote.lines, pendingLineId: null, savedToCustomer: quote.savedToCustomer });
         return;
       }
 
@@ -157,8 +154,7 @@ export default function QuotePage() {
       // Its lines carry the calculator input, so this page can edit them. The row keeps its id, so
       // the number the customer holds still finds the quote after it is saved.
       if (record && record.editableLines.length) {
-        // Its prices already hold the margin of the calculator, so the margin of the quote prices none of them.
-        setDraft({ id: record.id, name: record.name, customer: record.customer, customerId: record.customerId || '', date: record.date ? record.date.slice(0, 10) : todayISODate(), notes: record.draft?.quoteNotes || '', marginPercent: DEFAULT_QUOTE_MARGIN_PERCENT, lines: record.editableLines, pendingLineId: null, savedToCustomer: false });
+        setDraft({ id: record.id, name: record.name, customer: record.customer, customerId: record.customerId || '', date: record.date ? record.date.slice(0, 10) : todayISODate(), notes: record.draft?.quoteNotes || '', lines: record.editableLines, pendingLineId: null, savedToCustomer: false });
         setCarriedOver({ from: record.kindLabel, dropped: Math.max(0, record.lineCount - record.editableLines.length) });
         setError(errors.length ? errors.join(' ') : null);
         return;
@@ -339,9 +335,9 @@ export default function QuotePage() {
     }
   }
 
-  function setMargin(value: string) {
+  function setMargin(localId: string, value: string) {
     const percent = Number(value);
-    setDraft((current) => setQuoteMargin(current, Number.isFinite(percent) ? Math.max(0, percent) : 0));
+    setDraft((current) => setLineMargin(current, localId, Number.isFinite(percent) ? Math.max(0, percent) : 0));
   }
 
   /** Saves a quote that has a number. A new quote gets its number from a returned line or Save Quote. */
@@ -356,7 +352,7 @@ export default function QuotePage() {
     if (!session.canWrite || !target.lines.length) {
       return;
     }
-    const content = { name: target.name, customer: session.customers.find((entry) => entry.id === target.customerId)?.name || target.customer, customerId: target.customerId || null, date: target.date, notes: target.notes, marginPercent: target.marginPercent, lines: target.lines, savedToCustomer: target.savedToCustomer };
+    const content = { name: target.name, customer: session.customers.find((entry) => entry.id === target.customerId)?.name || target.customer, customerId: target.customerId || null, date: target.date, notes: target.notes, lines: target.lines, savedToCustomer: target.savedToCustomer };
     const key = JSON.stringify({ id: target.id, ...content });
     if (key === lastSaved.current) {
       return;
@@ -481,7 +477,6 @@ export default function QuotePage() {
             <br />
             <Input label="DATE" type="date" name="quote_date" value={draft.date} onChange={(event) => update({ date: event.target.value })} />
             <Input label="NOTES" name="quote_notes" value={draft.notes} onChange={(event) => update({ notes: event.target.value })} placeholder="Anything the customer should read" />
-            <Input label="MARGIN ON COST (%)" type="number" name="quote_margin" value={String(draft.marginPercent)} onChange={(event) => setMargin(event.target.value)} min="0" />
           </CardDouble>
 
           {savedForCustomer.length ? (
@@ -517,6 +512,7 @@ export default function QuotePage() {
                     <TableColumn>ITEM</TableColumn>
                     <TableColumn style={{ width: '12ch' }}>PRICED IN</TableColumn>
                     <TableColumn style={{ width: '6ch' }}>QTY</TableColumn>
+                    <TableColumn style={{ width: '10ch' }}>MARGIN %</TableColumn>
                     <TableColumn style={{ width: '14ch' }}>UNIT</TableColumn>
                     <TableColumn style={{ width: '14ch' }}>AMOUNT</TableColumn>
                     <TableColumn style={{ width: '16ch' }}>ACTIONS</TableColumn>
@@ -528,12 +524,13 @@ export default function QuotePage() {
                         {line.spec ? <div className="printed-quote__spec">{line.spec}</div> : null}
                         {typeof line.unitCost === 'number' ? null : (
                           <div className="printed-quote__spec">
-                            <span className="status-warning">Priced with its own margin. Edit it to use the quote margin.</span>
+                            <span className="status-warning">Priced with its own margin. Edit it to set a margin here.</span>
                           </div>
                         )}
                       </TableColumn>
                       <TableColumn>{sourceLabel(line.draft.pricingSource)}</TableColumn>
                       <TableColumn>{line.draft.quantityOrdered}</TableColumn>
+                      <TableColumn>{typeof line.unitCost === 'number' ? <Input type="number" name={`line_margin_${index + 1}`} aria-label={`Margin on cost of line ${index + 1}`} value={String(line.draft.markupPercent)} onChange={(event) => setMargin(line.draft.localId, event.target.value)} onBlur={() => autoSave(draft)} min="0" /> : null}</TableColumn>
                       <TableColumn>{formatCurrency(line.draft.unitPriceAtOrder)}</TableColumn>
                       <TableColumn>{formatCurrency(line.draft.unitPriceAtOrder * line.draft.quantityOrdered)}</TableColumn>
                       <TableColumn style={{ whiteSpace: 'nowrap' }}>
@@ -560,7 +557,7 @@ export default function QuotePage() {
                   <Text>{formatCurrency(summary.cost)}</Text>
                 </RowSpaceBetween>
                 <RowSpaceBetween>
-                  <Text>MARGIN ({draft.marginPercent}%)</Text>
+                  <Text>MARGIN</Text>
                   <Text>{formatCurrency(summary.margin)}</Text>
                 </RowSpaceBetween>
               </>

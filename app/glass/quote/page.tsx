@@ -351,7 +351,6 @@ export default function AdhocQuotePage() {
         <GlassSpecificationFields spec={spec} onChange={setSpec} basePrices={pricingData.basePrices} />
         <br />
         <Input label="QUANTITY" type="number" name="quote_quantity" value={String(quantity)} onChange={(event) => setQuantity(Math.max(1, numberOrFallback(event.target.value, 1)))} min="1" />
-        {/* An order line has no quote around it, so its markup is set here. A quote sets one margin for every line. */}
         {quoteLine ? <Text style={{ opacity: 0.7 }}>Priced at cost. The quote sets the margin.</Text> : <Input label="MARKUP (%)" type="number" name="line_markup" value={String(markupPercent)} onChange={(event) => setMarkupPercent(Math.max(0, numberOrFallback(event.target.value, 0)))} min="0" />}
 
         <label>

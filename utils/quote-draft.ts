@@ -28,8 +28,6 @@ export interface QuoteDraft {
   /** The date on the quote. Format: yyyy-mm-dd. */
   date: string;
   notes: string;
-  /** Percent on cost. It prices every line that has a cost. */
-  marginPercent: number;
   lines: SavedQuoteLine[];
   /** True if the quote is kept on its customer. Save Quote writes it. */
   savedToCustomer: boolean;
@@ -45,7 +43,7 @@ export interface QuoteDraft {
 }
 
 export function emptyQuoteDraft(): QuoteDraft {
-  return { id: null, name: '', customer: '', customerId: '', date: todayISODate(), notes: '', marginPercent: DEFAULT_QUOTE_MARGIN_PERCENT, lines: [], pendingLineId: null, savedToCustomer: false };
+  return { id: null, name: '', customer: '', customerId: '', date: todayISODate(), notes: '', lines: [], pendingLineId: null, savedToCustomer: false };
 }
 
 /**
@@ -55,7 +53,7 @@ export function emptyQuoteDraft(): QuoteDraft {
  * gives the copy its own number, and the saved quote does not change. The copy is not saved to the
  * customer, so the saved quotes of a customer do not increase each time a quote is reissued.
  */
-export function reissueQuoteDraft(source: Pick<SavedQuote, 'id' | 'name' | 'customer' | 'customerId' | 'date' | 'notes' | 'marginPercent' | 'lines'>): QuoteDraft {
+export function reissueQuoteDraft(source: Pick<SavedQuote, 'id' | 'name' | 'customer' | 'customerId' | 'date' | 'notes' | 'lines'>): QuoteDraft {
   return {
     id: null,
     name: source.name,
@@ -63,7 +61,6 @@ export function reissueQuoteDraft(source: Pick<SavedQuote, 'id' | 'name' | 'cust
     customerId: source.customerId || '',
     date: todayISODate(),
     notes: source.notes,
-    marginPercent: source.marginPercent,
     lines: source.lines,
     pendingLineId: null,
     savedToCustomer: false,
@@ -91,8 +88,7 @@ export function peekQuoteDraft(): QuoteDraft | null {
     if (!draft || !Array.isArray(draft.lines)) {
       return null;
     }
-    // A draft with no margin reads at the default. Without a number, a returning line prices as NaN.
-    return typeof draft.marginPercent === 'number' ? draft : { ...draft, marginPercent: DEFAULT_QUOTE_MARGIN_PERCENT };
+    return draft;
   } catch {
     window.sessionStorage.removeItem(DRAFT_KEY);
     return null;
@@ -111,10 +107,11 @@ export function clearQuoteDraft(): void {
  * The calculator sets the price, the quantity, the note and the specification. The quote owns the
  * other fields of the line. This function therefore copies only the fields of the calculator.
  *
- * A calculator prices a quote line at cost. The margin of the quote makes the price.
+ * A calculator prices a quote line at cost. The margin of the line makes the price.
  */
 export function applyQuoteLineResult(draft: QuoteDraft, result: LineEditResult): QuoteDraft {
   const existing = draft.lines.find((line) => line.draft.localId === result.localId);
+  const marginPercent = typeof existing?.unitCost === 'number' ? existing.draft.markupPercent : DEFAULT_QUOTE_MARGIN_PERCENT;
   const priced = applyQuoteMargin(
     {
       draft: { ...(existing?.draft ?? createLineDraft({ localId: result.localId })), ...result.line },
@@ -122,7 +119,7 @@ export function applyQuoteLineResult(draft: QuoteDraft, result: LineEditResult):
       spec: result.spec,
       extras: result.extras.map((extra) => ({ ...extra, cost: extra.total })),
     },
-    draft.marginPercent
+    marginPercent
   );
 
   return {
@@ -166,9 +163,9 @@ export function addQuoteLineAndContinue(request: LineEditRequest, result: LineEd
   return next;
 }
 
-/** Sets the margin of the quote and prices every line that has a cost again. */
-export function setQuoteMargin(draft: QuoteDraft, marginPercent: number): QuoteDraft {
-  return { ...draft, marginPercent, lines: draft.lines.map((line) => applyQuoteMargin(line, marginPercent)) };
+/** Sets the margin of one line and prices that line again. A line with no cost keeps its price. */
+export function setLineMargin(draft: QuoteDraft, localId: string, marginPercent: number): QuoteDraft {
+  return { ...draft, lines: draft.lines.map((line) => (line.draft.localId === localId ? applyQuoteMargin(line, marginPercent) : line)) };
 }
 
 /** Removes a line that the operator added but did not price. */
@@ -182,8 +179,8 @@ export function dropPendingLine(draft: QuoteDraft): QuoteDraft {
 /**
  * Puts the pieces read off a customer's order on the draft, one cut-glass line for each piece.
  *
- * The glass rates price each piece at cost, as the glass calculator prices a quote line. The margin
- * of the quote makes the price. calculateCost throws for a piece that it cannot price, and the draft
+ * The glass rates price each piece at cost, as the glass calculator prices a quote line. Each line
+ * starts at the default margin. calculateCost throws for a piece that it cannot price, and the draft
  * then gets none of the lines.
  */
 export function addGlassPieces(draft: QuoteDraft, pieces: ExtractedPiece[], pricingData: PricingData): QuoteDraft {
@@ -195,7 +192,7 @@ export function addGlassPieces(draft: QuoteDraft, pieces: ExtractedPiece[], pric
         spec: describeGlassSpecification(piece.spec),
         extras: [],
       },
-      draft.marginPercent
+      DEFAULT_QUOTE_MARGIN_PERCENT
     )
   );
   return { ...draft, lines: [...draft.lines, ...lines] };
